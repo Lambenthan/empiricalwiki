@@ -1,6 +1,6 @@
 ---
 description: Daily arXiv pull, relevance filtering, auto-ingest of high-priority papers, and SOTA update detection
-argument-hint: [--hours 24] [--max-ingest 5] [--dry-run]
+argument-hint: "[--hours 24] [--max-ingest 5] [--dry-run]"
 ---
 
 # /daily-arxiv

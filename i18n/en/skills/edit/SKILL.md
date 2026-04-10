@@ -1,7 +1,7 @@
 ---
 name: edit
 description: Add or remove raw sources, or update wiki content, per user request
-argument-hint: [request]
+argument-hint: "[request]"
 ---
 
 # /edit

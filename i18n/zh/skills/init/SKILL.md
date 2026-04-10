@@ -1,6 +1,6 @@
 ---
 description: 从 raw/ 目录搭建完整的 ΩmegaWiki，包括论文、概念、方向、人物页面，并初始化 ideas/experiments/claims 和 graph
-argument-hint: [topic]
+argument-hint: "[topic]"
 ---
 
 # /init

@@ -1,6 +1,6 @@
 ---
 description: Bootstrap a complete ΩmegaWiki from the raw/ directory, including papers, concepts, topics, and people pages, and initialize ideas/experiments/claims and the graph
-argument-hint: [topic]
+argument-hint: "[topic]"
 ---
 
 # /init

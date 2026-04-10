@@ -1,6 +1,6 @@
 ---
 description: 查看所有运行中实验的状态，可选自动收集已完成实验并推进流水线
-argument-hint: [--pipeline <slug>] [--collect-ready] [--auto-advance]
+argument-hint: "[--pipeline <slug>] [--collect-ready] [--auto-advance]"
 ---
 
 # /exp-status

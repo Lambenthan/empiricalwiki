@@ -1,6 +1,6 @@
 ---
 description: 每日从 arXiv 拉取新论文，过滤相关性，auto-ingest 高优先级论文，检测 SOTA 更新
-argument-hint: [--hours 24] [--max-ingest 5] [--dry-run]
+argument-hint: "[--hours 24] [--max-ingest 5] [--dry-run]"
 ---
 
 # /daily-arxiv
