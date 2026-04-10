@@ -140,11 +140,13 @@ argument-hint: <local-path-or-arXiv-URL>
 
 1. 读取 `wiki/index.md`，提取所有已有 concepts 的 slug 和 tags
 2. 读取每个已有 concept 的 frontmatter，获取 `title` 和 `aliases` 列表
-3. 对论文中提到的每个候选概念，**先检查是否与已有概念重复**：
+3. **同时扫描 `wiki/foundations/*.md`** 的 `title`、`slug` 和 `aliases`。Foundations 是 `/prefill` 沉淀的背景知识页面 — 对于教科书材料，foundations 优先于新建 concept。
+4. 对论文中提到的每个候选概念，**先检查是否与已有概念重复**：
+   - **Foundation 命中**（slug、title 或 alias）：候选属于基础背景知识。**不要新建 concept 页面**。直接在 paper 的 `## Related` 追加 `[[foundation-slug]]`。Foundations 是终端节点 — 不要修改 foundation 页面（不写反向链接）。
    - 与已有概念的 slug 精确匹配 → 是同一概念
    - 与已有概念的 title 或 aliases 中任一项语义相同（别名、子类、具体实现）→ 是同一概念
    - 若是已有概念的**变体或子类**（如 "scaled dot-product attention" vs "attention-mechanism"）→ 不创建新页面，追加到已有概念的 `## Variants` 并将候选名加入 `aliases`
-   - 只有**确实是全新概念**才创建新页面
+   - 只有**确实是全新概念**且未被任何 foundation 覆盖时才创建新页面
 4. 对每个匹配的 concept：
    - 若本文是该概念的核心论文：追加 slug 到 concept 的 `key_papers`
    - 若引入新变体：在 concept 的 `## Variants` 追加，将变体名加入 `aliases`

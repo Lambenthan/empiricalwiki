@@ -121,6 +121,17 @@ ENTITY_SCHEMAS = {
             "Current frontiers", "Key references", "Related",
         ],
     },
+    "foundations": {
+        "heading": r"###\s+foundations/\{slug\}\.md",
+        "required_fields": [
+            "title", "slug", "domain", "status", "aliases",
+            "first_introduced", "date_updated", "source_url",
+        ],
+        "required_sections": [
+            "Definition", "Intuition", "Formal notation", "Key variants",
+            "Known limitations", "Open problems", "Relevance to active research",
+        ],
+    },
 }
 
 # ── Helpers ───────────────────────────────────────────────────────────────

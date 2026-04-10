@@ -20,6 +20,7 @@ wiki/
 ├── experiments/       ← 实验记录（wiki 页面）
 ├── claims/            ← 可验证的研究断言
 ├── Summary/           ← 领域全景综述
+├── foundations/       ← 领域基础知识（终端：只接受入链，不写出链）
 ├── outputs/           ← 生成物（Related Work, 论文草稿）
 └── graph/             ← 自动生成（勿手动编辑）
     ├── edges.jsonl    ← 类型化关系图谱
@@ -40,7 +41,7 @@ config/
 
 ---
 
-## 8 类页面
+## 9 类页面
 
 | 目录 | 文件名 | 职责 |
 |------|--------|------|
@@ -52,6 +53,7 @@ config/
 | `experiments/` | `{experiment-slug}.md` | 实验记录（hypothesis → setup → results → claim updates） |
 | `claims/` | `{claim-slug}.md` | 可验证的研究断言，连接论文、实验与综述 |
 | `Summary/` | `{area-name}.md` | 领域全景综述 |
+| `foundations/` | `{slug}.md` | 领域基础知识（其他页面链入；foundations 不写反向链接） |
 
 ---
 
@@ -84,6 +86,7 @@ config/
 | ideas/I 写 `origin_gaps: [[claim-C]]` | claims/C 的 `## Linked ideas` 追加 I |
 | experiments/E 写 `target_claim: [[claim-C]]` | claims/C 的 `evidence` 追加 `{source: E, type: tested_by}` |
 | claims/C 写 `source_papers: [[paper-P]]` | papers/P 的 `## Related` 追加 C |
+| 任意页面链接到 `[[foundation-X]]` | **不写反向链接** — foundations 是终端节点：接收来自 papers/concepts 等页面的入链，但不写 `key_papers` 或任何反向引用字段 |
 
 ---
 
@@ -173,6 +176,25 @@ date_updated: YYYY-MM-DD
 ```
 
 正文：`## Overview` / `## Core areas` / `## Evolution` / `## Current frontiers` / `## Key references` / `## Related`
+
+### foundations/{slug}.md
+
+```yaml
+---
+title: ""
+slug: ""
+domain: ""               # general / NLP / CV / ML Systems / Robotics
+status: mainstream       # mainstream | historical
+aliases: []              # 别名列表（用于 /ingest 去重匹配）
+first_introduced: ""
+date_updated: YYYY-MM-DD
+source_url: ""           # Wikipedia URL 或留空
+---
+```
+
+正文：`## Definition` / `## Intuition` / `## Formal notation` / `## Key variants` / `## Known limitations` / `## Open problems` / `## Relevance to active research`
+
+Foundations **没有外向链接字段**（无 `key_papers`、无 `related_concepts`）。其他页面可链接到 foundation；foundation 不写反向链接。
 
 ### ideas/{idea-slug}.md
 
@@ -368,7 +390,9 @@ python3 tools/fetch_arxiv.py --hours 24
 | Skill | 文件 | 触发 |
 |-------|------|------|
 | `/setup` | `skills/setup/SKILL.md` | 手动（首次配置） |
+| `/reset` | `skills/reset/SKILL.md` | 手动（`--scope wiki\|raw\|log\|checkpoints\|all`） |
 | `/init` | `skills/init/SKILL.md` | 手动 |
+| `/prefill` | `skills/prefill/SKILL.md` | 手动（`[domain] [--add concept]`） |
 | `/ingest` | `skills/ingest/SKILL.md` | 手动 |
 | `/ask` | `skills/ask/SKILL.md` | 手动 |
 | `/edit` | `skills/edit/SKILL.md` | 手动 |

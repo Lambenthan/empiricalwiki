@@ -34,7 +34,7 @@ WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 
 # All 8 entity directories + Summary
-ENTITY_DIRS = ["papers", "concepts", "topics", "people",
+ENTITY_DIRS = ["papers", "concepts", "topics", "people", "foundations",
                "ideas", "experiments", "claims", "Summary"]
 
 # Required fields per entity type
@@ -47,6 +47,7 @@ REQUIRED_FIELDS = {
     "ideas": ["title", "slug", "status", "origin", "tags", "priority"],
     "experiments": ["title", "slug", "status", "target_claim", "hypothesis", "tags"],
     "claims": ["title", "slug", "status", "confidence", "tags", "source_papers", "evidence"],
+    "foundations": ["title", "slug", "domain", "status"],
 }
 
 # Valid enum values
@@ -58,6 +59,7 @@ VALID_VALUES = {
     "experiments.status": {"planned", "running", "completed", "abandoned"},
     "experiments.outcome": {"succeeded", "failed", "inconclusive", ""},
     "claims.status": {"proposed", "weakly_supported", "supported", "challenged", "deprecated"},
+    "foundations.status": {"mainstream", "historical"},
 }
 
 # Safe default values for --fix mode (only fields where a neutral default is reasonable)
@@ -70,6 +72,7 @@ FIELD_DEFAULTS = {
     "ideas": {"tags": "[]", "priority": "3"},
     "experiments": {"tags": "[]"},
     "claims": {"tags": "[]", "confidence": "0.5"},
+    "foundations": {"status": "mainstream"},
 }
 
 
@@ -213,7 +216,14 @@ def check_broken_links(wiki_dir: Path, pages: dict[str, Path]) -> tuple[list[Lin
 
 def check_orphan_pages(wiki_dir: Path, pages: dict[str, Path],
                        incoming: dict[str, set]) -> list[LintIssue]:
-    """Find pages with zero incoming links."""
+    """Find pages with zero incoming links.
+
+    Foundations are NOT exempt: under correct usage every foundation should
+    receive an inward link from at least one paper or concept (via /ingest
+    dedup). An orphan foundation is a real signal — either /prefill seeded
+    background that no paper references, or /ingest is failing to dedup
+    against it. Orphan is 🔵 (informational), so this stays as a soft hint.
+    """
     issues = []
     for slug, fpath in pages.items():
         if not incoming.get(slug):
@@ -237,6 +247,7 @@ def check_field_values(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIssue
             "ideas": [("status", "ideas.status"), ("priority", "ideas.priority")],
             "experiments": [("status", "experiments.status"), ("outcome", "experiments.outcome")],
             "claims": [("status", "claims.status")],
+            "foundations": [("status", "foundations.status")],
         }
 
         for field, valid_key in enum_checks.get(page_type, []):
@@ -297,7 +308,13 @@ def check_experiment_claim_link(wiki_dir: Path, pages: dict[str, Path]) -> list[
 
 
 def check_xref_asymmetry(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIssue]:
-    """Check cross-reference symmetry for key bidirectional rules."""
+    """Check cross-reference symmetry for key bidirectional rules.
+
+    Note: foundations/ pages are single-direction by design — other pages may
+    link to them, but foundations never write reverse links. Do not add a
+    `foundations` source branch here, and do not target `foundations/` from
+    any reverse-link lookup.
+    """
     issues = []
 
     for slug, fpath in pages.items():

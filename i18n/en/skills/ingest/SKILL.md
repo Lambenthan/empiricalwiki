@@ -140,11 +140,13 @@ For each claim:
 
 1. Read `wiki/index.md`, extract all existing concept slugs and tags
 2. Read each existing concept's frontmatter for `title` and `aliases`
-3. For each candidate concept from the paper, **check for duplicates first**:
+3. **Also scan `wiki/foundations/*.md`** for `title`, `slug`, and `aliases`. Foundations are background-knowledge pages seeded by `/prefill` — they take precedence over creating new concepts for textbook material.
+4. For each candidate concept from the paper, **check for duplicates first**:
+   - **Foundation match** (slug, title, or alias): the candidate is foundational background. **Do not create a concept page.** Reference the foundation directly: append `[[foundation-slug]]` to the paper's `## Related`. Foundations are terminal — do not modify the foundation page (no reverse link).
    - Exact slug match with an existing concept → same concept
    - Semantically equivalent to an existing concept's title or any alias (alternative name, subclass, concrete implementation) → same concept
    - A **variant or subclass** of an existing concept (e.g. "scaled dot-product attention" vs "attention-mechanism") → do not create a new page; append to existing concept's `## Variants` and add candidate name to `aliases`
-   - Only create a new page if it is **genuinely a new concept**
+   - Only create a new page if it is **genuinely a new concept** and not already covered by a foundation
 4. For each matched concept:
    - If this paper is a core paper for the concept: append slug to concept's `key_papers`
    - If introducing a new variant: append to concept's `## Variants`, add variant name to `aliases`

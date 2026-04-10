@@ -32,7 +32,7 @@ import lint as lint_mod
 def wiki_dir(tmp_path):
     """Create a minimal valid wiki directory structure."""
     for d in ["papers", "concepts", "topics", "people",
-              "ideas", "experiments", "claims", "Summary", "graph"]:
+              "ideas", "experiments", "claims", "Summary", "foundations", "graph"]:
         (tmp_path / d).mkdir()
     (tmp_path / "graph" / "edges.jsonl").write_text("")
     return tmp_path
@@ -145,6 +145,30 @@ class TestMissingFields:
                   if "topic1" in i.file]
         assert len(issues) == 0
 
+    def test_foundation_missing_domain(self, wiki_dir):
+        _write_page(wiki_dir, "foundations", "bad-foundation",
+                    ['title: "Bad"', 'slug: bad-foundation', 'status: mainstream'])
+        issues = lint_mod.check_missing_fields(wiki_dir, lint_mod.find_all_pages(wiki_dir))
+        msgs = [i.message for i in issues if "bad-foundation" in i.file]
+        assert any("domain" in m for m in msgs)
+
+    def test_foundation_all_fields(self, wiki_dir):
+        _write_page(wiki_dir, "foundations", "good-foundation",
+                    ['title: "Good"', 'slug: good-foundation',
+                     'domain: general', 'status: mainstream'])
+        pages = lint_mod.find_all_pages(wiki_dir)
+        issues = [i for i in lint_mod.check_missing_fields(wiki_dir, pages)
+                  if "good-foundation" in i.file]
+        assert len(issues) == 0
+
+    def test_foundation_invalid_status(self, wiki_dir):
+        _write_page(wiki_dir, "foundations", "bad-status",
+                    ['title: "B"', 'slug: bad-status',
+                     'domain: general', 'status: legendary'])
+        issues = lint_mod.check_field_values(wiki_dir, lint_mod.find_all_pages(wiki_dir))
+        msgs = [i.message for i in issues if "bad-status" in i.file]
+        assert any("status" in m for m in msgs)
+
 
 # ── Broken Links ─────────────────────────────────────────────────────────────
 
@@ -199,6 +223,32 @@ class TestOrphanPages:
         issues = lint_mod.check_orphan_pages(wiki_dir, pages, incoming)
         orphan_files = [i.file for i in issues]
         assert not any("linked" in f for f in orphan_files)
+
+    def test_foundation_orphan_is_reported(self, wiki_dir):
+        # Foundations are NOT exempt from orphan check. Under correct usage
+        # every foundation receives an inward link via /ingest dedup. An
+        # un-referenced foundation is a real diagnostic signal.
+        _write_page(wiki_dir, "foundations", "gradient-descent",
+                    ['title: "Gradient Descent"', 'slug: gradient-descent',
+                     'domain: general', 'status: mainstream'])
+        pages = lint_mod.find_all_pages(wiki_dir)
+        _, incoming = lint_mod.check_broken_links(wiki_dir, pages)
+        issues = lint_mod.check_orphan_pages(wiki_dir, pages, incoming)
+        assert any("gradient-descent" in i.file for i in issues)
+
+    def test_foundation_with_inward_link_not_orphan(self, wiki_dir):
+        # When a paper or concept links to a foundation, it should NOT be an orphan.
+        _write_page(wiki_dir, "foundations", "transformer",
+                    ['title: "Transformer"', 'slug: transformer',
+                     'domain: NLP', 'status: mainstream'])
+        _write_page(wiki_dir, "papers", "attention-paper",
+                    ['title: "Attention"', 'slug: attention-paper',
+                     'tags: [nlp]', 'importance: 5'],
+                    "Builds on [[transformer]]")
+        pages = lint_mod.find_all_pages(wiki_dir)
+        _, incoming = lint_mod.check_broken_links(wiki_dir, pages)
+        issues = lint_mod.check_orphan_pages(wiki_dir, pages, incoming)
+        assert not any("transformer" in i.file for i in issues)
 
 
 # ── Field Values ─────────────────────────────────────────────────────────────
