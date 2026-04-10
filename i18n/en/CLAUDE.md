@@ -369,6 +369,7 @@ python3 tools/fetch_arxiv.py --hours 24
 
 | Skill | File | Trigger |
 |-------|------|---------|
+| `/setup` | `skills/setup/SKILL.md` | manual (first-time config) |
 | `/init` | `skills/init/SKILL.md` | manual |
 | `/ingest` | `skills/ingest/SKILL.md` | manual |
 | `/ask` | `skills/ask/SKILL.md` | manual |

@@ -10,8 +10,10 @@
 #   1. Checks prerequisites (Python, pip, Claude Code)
 #   2. Creates virtual environment and installs dependencies
 #   3. Copies configuration templates
-#   4. Optionally registers a DeepXiv API token
-#   5. Verifies the installation
+#   4. Verifies the installation
+#
+# API key configuration (Semantic Scholar, DeepXiv, Review LLM) is handled
+# interactively by Claude Code — run /setup after starting Claude Code.
 # ============================================================================
 
 set -e
@@ -167,126 +169,7 @@ cp "$I18N_DIR/shared-references"/*.md ".claude/skills/shared-references/"
 echo "$LANG_CODE" > .claude/.current-lang
 ok "Language files activated ($LANG_CODE)"
 
-# ── Step 4: API Keys ────────────────────────────────────────────────────
-
-echo ""
-info "Configuring API keys..."
-
-# Semantic Scholar
-echo ""
-echo "  Semantic Scholar API Key (optional, recommended)"
-echo "  Get one free at: https://www.semanticscholar.org/product/api"
-echo "  Provides: citation data, paper search (used by /ingest, /novelty)"
-echo ""
-read -p "  Enter S2 API key (or press Enter to skip): " S2_KEY
-if [ -n "$S2_KEY" ]; then
-    # Update .env file
-    if grep -q "^SEMANTIC_SCHOLAR_API_KEY=" .env; then
-        _sed_i "s|^SEMANTIC_SCHOLAR_API_KEY=.*|SEMANTIC_SCHOLAR_API_KEY=$S2_KEY|" .env
-    else
-        echo "SEMANTIC_SCHOLAR_API_KEY=$S2_KEY" >> .env
-    fi
-    ok "Semantic Scholar API key saved to .env"
-else
-    warn "Skipped — S2 will work with rate limiting (1 req / 3 sec)"
-fi
-
-# DeepXiv
-echo ""
-echo "  DeepXiv Token (optional, enables semantic search)"
-echo "  Provides: AI paper summaries, semantic search, trending papers"
-echo ""
-echo "  Options:"
-echo "    1. Auto-register now (recommended, free, instant)"
-echo "    2. Enter existing token"
-echo "    3. Skip (can be set up later)"
-echo ""
-read -p "  Choose [1/2/3]: " DX_CHOICE
-
-case $DX_CHOICE in
-    1)
-        info "Registering DeepXiv token via SDK..."
-        DX_TOKEN=$(python3 -c "
-try:
-    from deepxiv_sdk.cli import auto_register_token
-    token, _ = auto_register_token()
-    print(token if token else 'FAILED')
-except Exception:
-    print('FAILED')
-" 2>/dev/null)
-        if [ "$DX_TOKEN" != "FAILED" ] && [ -n "$DX_TOKEN" ]; then
-            if grep -q "^DEEPXIV_TOKEN=" .env; then
-                _sed_i "s|^DEEPXIV_TOKEN=.*|DEEPXIV_TOKEN=$DX_TOKEN|" .env
-            else
-                echo "DEEPXIV_TOKEN=$DX_TOKEN" >> .env
-            fi
-            ok "DeepXiv token registered and saved to .env"
-        else
-            warn "Auto-registration failed. You can set it manually later in .env"
-        fi
-        ;;
-    2)
-        read -p "  Enter DeepXiv token: " DX_TOKEN
-        if [ -n "$DX_TOKEN" ]; then
-            if grep -q "^DEEPXIV_TOKEN=" .env; then
-                _sed_i "s|^DEEPXIV_TOKEN=.*|DEEPXIV_TOKEN=$DX_TOKEN|" .env
-            else
-                echo "DEEPXIV_TOKEN=$DX_TOKEN" >> .env
-            fi
-            ok "DeepXiv token saved to .env"
-        fi
-        ;;
-    *)
-        warn "Skipped — skills will fall back to arXiv RSS + S2 search"
-        ;;
-esac
-
-# ── Step 4b: Review LLM (optional — for cross-model review) ────────────
-
-echo ""
-echo "  Review LLM (optional — enables cross-model review)"
-echo "  Powers: /review, /novelty, /ideate, /exp-eval, /paper-plan, etc."
-echo "  Works with any OpenAI-compatible API (DeepSeek, OpenAI, Qwen, etc.)"
-echo ""
-echo "  Common providers:"
-echo "    DeepSeek:    https://api.deepseek.com/v1         (model: deepseek-chat)"
-echo "    OpenAI:      https://api.openai.com/v1           (model: gpt-4o)"
-echo "    OpenRouter:  https://openrouter.ai/api/v1        (model: see docs)"
-echo "    Qwen:        https://dashscope.aliyuncs.com/compatible-mode/v1  (model: qwen-max)"
-echo "    SiliconFlow: https://api.siliconflow.cn/v1       (model: see docs)"
-echo ""
-echo "  Options:"
-echo "    1. Configure now (need API key + base URL)"
-echo "    2. Skip (configure later, or let Claude Code guide you on first use)"
-echo ""
-read -p "  Choose [1/2]: " LLM_CHOICE
-
-case $LLM_CHOICE in
-    1)
-        read -p "  Enter API base URL (e.g. https://api.deepseek.com/v1): " LLM_URL
-        read -p "  Enter API key: " LLM_KEY
-        read -p "  Enter model name (e.g. deepseek-chat): " LLM_MDL
-        if [ -n "$LLM_KEY" ] && [ -n "$LLM_URL" ] && [ -n "$LLM_MDL" ]; then
-            for var_pair in "LLM_API_KEY=$LLM_KEY" "LLM_BASE_URL=$LLM_URL" "LLM_MODEL=$LLM_MDL"; do
-                var_name="${var_pair%%=*}"
-                var_val="${var_pair#*=}"
-                if grep -q "^${var_name}=" .env; then
-                    _sed_i "s|^${var_name}=.*|${var_name}=${var_val}|" .env
-                else
-                    echo "${var_name}=${var_val}" >> .env
-                fi
-            done
-            ok "Review LLM configured in .env"
-        else
-            warn "Incomplete input — skipped. You can configure later in .env"
-        fi
-        ;;
-    *)
-        warn "Skipped — Claude Code will guide you when you first use /review"
-        ;;
-esac
-
-# ── Step 5: Verify installation ─────────────────────────────────────────
+# ── Step 4: Verify installation ─────────────────────────────────────────
 
 echo ""
 info "Verifying installation..."
@@ -323,18 +206,19 @@ echo "============================================"
 echo ""
 echo "  Next steps:"
 echo ""
-echo "  1. Log in to Claude Code (if not already):"
+echo "  1. Authenticate Claude Code (if not already):"
 echo "     claude login"
 echo ""
-echo "  2. Put your papers in raw/papers/ (.tex or .pdf)"
-echo ""
-echo "  3. Start Claude Code and build your wiki:"
+echo "  2. Start Claude Code:"
 echo "     claude"
-echo "     Then type: /init <your-research-topic>"
 echo ""
-echo "  4. Or ingest a single paper:"
-echo "     /ingest raw/papers/your-paper.tex"
-echo "     /ingest https://arxiv.org/abs/2106.09685"
+echo "  3. Complete API key configuration (guided):"
+echo "     /setup"
+echo "     Claude Code will walk you through Semantic Scholar,"
+echo "     DeepXiv, and Review LLM — skip any you don't have yet."
+echo ""
+echo "  4. Then initialize your wiki:"
+echo "     /init <your-research-topic>"
 echo ""
 echo "  For more, see README.md"
 echo ""

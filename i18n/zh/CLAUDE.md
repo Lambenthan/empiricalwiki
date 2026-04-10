@@ -367,6 +367,7 @@ python3 tools/fetch_arxiv.py --hours 24
 
 | Skill | 文件 | 触发 |
 |-------|------|------|
+| `/setup` | `skills/setup/SKILL.md` | 手动（首次配置） |
 | `/init` | `skills/init/SKILL.md` | 手动 |
 | `/ingest` | `skills/ingest/SKILL.md` | 手动 |
 | `/ask` | `skills/ask/SKILL.md` | 手动 |
