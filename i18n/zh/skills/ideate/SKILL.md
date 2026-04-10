@@ -1,6 +1,6 @@
 ---
 description: 多阶段研究 idea 生成管道：景观扫描 → 双模型脑暴 → 初筛 → 深度验证 → 写入 wiki
-argument-hint: [research-direction-or-topic] [--max-ideas N] [--skip-validation] [--auto]
+argument-hint: "[research-direction-or-topic] [--max-ideas N] [--skip-validation] [--auto]"
 ---
 
 # /ideate

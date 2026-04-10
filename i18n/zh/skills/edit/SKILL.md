@@ -1,7 +1,7 @@
 ---
 name: edit
 description: 根据用户要求增删 raw sources 或更新 wiki 内容
-argument-hint: [request]
+argument-hint: "[request]"
 ---
 
 # /edit

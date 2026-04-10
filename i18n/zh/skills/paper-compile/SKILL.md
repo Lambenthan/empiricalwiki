@@ -1,6 +1,6 @@
 ---
 description: LaTeX 编译 → PDF：latexmk 编译 + 自动修复 + 页数/匿名/字体/[UNCONFIRMED] 检查 + 提交清单
-argument-hint: [paper-dir] [--fix] [--checklist]
+argument-hint: "[paper-dir] [--fix] [--checklist]"
 ---
 
 # /paper-compile

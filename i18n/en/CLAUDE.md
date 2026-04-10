@@ -22,6 +22,7 @@ wiki/
 ├── experiments/       ← experiment records (wiki pages)
 ├── claims/            ← testable research claims
 ├── Summary/           ← domain-wide surveys
+├── foundations/       ← background knowledge (terminal: receives inward links, writes none)
 ├── outputs/           ← generated artifacts (Related Work, paper drafts)
 └── graph/             ← auto-generated (do not edit)
     ├── edges.jsonl    ← typed relationship graph
@@ -42,7 +43,7 @@ config/
 
 ---
 
-## 8 Page Types
+## 9 Page Types
 
 | Directory | Filename | Purpose |
 |-----------|----------|---------|
@@ -54,6 +55,7 @@ config/
 | `experiments/` | `{experiment-slug}.md` | experiment record (hypothesis → setup → results → claim updates) |
 | `claims/` | `{claim-slug}.md` | testable research claim linking papers, experiments, and reviews |
 | `Summary/` | `{area-name}.md` | domain-wide survey |
+| `foundations/` | `{slug}.md` | foundational background concept (other pages link in; foundations write no reverse link) |
 
 ---
 
@@ -86,6 +88,7 @@ When writing a forward link, **always write the reverse link simultaneously**:
 | ideas/I writes `origin_gaps: [[claim-C]]` | claims/C appends I to `## Linked ideas` |
 | experiments/E writes `target_claim: [[claim-C]]` | claims/C appends `{source: E, type: tested_by}` to `evidence` |
 | claims/C writes `source_papers: [[paper-P]]` | papers/P appends C to `## Related` |
+| any page links to `[[foundation-X]]` | **no reverse link** — foundations are terminal: they receive inward links from papers/concepts/etc. but never write `key_papers` or any back-reference field |
 
 ---
 
@@ -175,6 +178,25 @@ date_updated: YYYY-MM-DD
 ```
 
 Body sections: `## Overview` / `## Core areas` / `## Evolution` / `## Current frontiers` / `## Key references` / `## Related`
+
+### foundations/{slug}.md
+
+```yaml
+---
+title: ""
+slug: ""
+domain: ""               # general / NLP / CV / ML Systems / Robotics
+status: mainstream       # mainstream | historical
+aliases: []              # alias list (for /ingest dedup matching)
+first_introduced: ""
+date_updated: YYYY-MM-DD
+source_url: ""           # Wikipedia URL or empty
+---
+```
+
+Body sections: `## Definition` / `## Intuition` / `## Formal notation` / `## Key variants` / `## Known limitations` / `## Open problems` / `## Relevance to active research`
+
+Foundations have **no outward link fields** (no `key_papers`, no `related_concepts`). Other pages may link to a foundation; foundations write no reverse link.
 
 ### ideas/{idea-slug}.md
 
@@ -370,7 +392,9 @@ python3 tools/fetch_arxiv.py --hours 24
 | Skill | File | Trigger |
 |-------|------|---------|
 | `/setup` | `skills/setup/SKILL.md` | manual (first-time config) |
+| `/reset` | `skills/reset/SKILL.md` | manual (`--scope wiki\|raw\|log\|checkpoints\|all`) |
 | `/init` | `skills/init/SKILL.md` | manual |
+| `/prefill` | `skills/prefill/SKILL.md` | manual (`[domain] [--add concept]`) |
 | `/ingest` | `skills/ingest/SKILL.md` | manual |
 | `/ask` | `skills/ask/SKILL.md` | manual |
 | `/edit` | `skills/edit/SKILL.md` | manual |

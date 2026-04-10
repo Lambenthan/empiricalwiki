@@ -62,6 +62,7 @@ from pathlib import Path
 ENTITY_DIRS = [
     "papers", "concepts", "topics", "people",
     "ideas", "experiments", "claims", "Summary",
+    "foundations",
 ]
 
 DERIVED_DIR = "graph"
@@ -120,7 +121,7 @@ def init_wiki(wiki_root: str) -> None:
     """Initialize wiki directory structure with all entity dirs and graph/.
 
     Creates:
-      - 8 entity directories (papers, concepts, topics, people, ideas, experiments, claims, Summary)
+      - 9 entity directories (papers, concepts, topics, people, ideas, experiments, claims, Summary, foundations)
       - graph/ with empty edges.jsonl, context_brief.md, open_questions.md
       - outputs/
       - index.md, log.md (if they don't exist)
@@ -158,8 +159,7 @@ def _write_if_missing(path: Path, content: str) -> None:
 
 def _initial_index() -> str:
     sections = []
-    for entity in ["papers", "concepts", "topics", "people",
-                   "ideas", "experiments", "claims", "Summary"]:
+    for entity in ENTITY_DIRS:
         sections.append(f"{entity}:")
     return "# Wiki Index\n\n" + "\n".join(sections) + "\n"
 

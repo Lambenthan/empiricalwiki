@@ -103,7 +103,7 @@ def review_workflow_keywords(current_lang):
 
 CLAUDE_MD_MARKERS = {
     "en": {
-        "entity_section": "## 8 Page Types",
+        "entity_section": "## 9 Page Types",
         "graph_section": "graph/ (auto-generated",
         "graph_auto_generated": "auto-generated",
         "graph_no_edit": "do not edit",
@@ -113,7 +113,7 @@ CLAUDE_MD_MARKERS = {
         "body_label": "Body sections:",
     },
     "zh": {
-        "entity_section": "8 类页面",
+        "entity_section": "9 类页面",
         "graph_section": "graph/（自动生成",
         "graph_auto_generated": "自动生成",
         "graph_no_edit": "勿手动编辑",
