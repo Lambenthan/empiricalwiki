@@ -178,29 +178,32 @@ python3 tools/research_wiki.py log wiki/ "init | source expansion: <N> local + <
 **4c — 更新 index.md：**
 - 将 Summary 和 topics 页面条目写入 index.md 对应分类
 
-### Step 5: 通过子代理 Ingest 论文（支持断点续传）
+### Step 5: 通过并行子代理 Ingest 论文（Worktree 隔离）
 
-**每篇论文由独立子代理处理**，确保质量一致。避免上下文窗口压力导致后期论文质量退化。
+所有论文 ingest agent **同时运行**，通过 git worktree 实现文件系统隔离。总耗时 ≈ 最慢的单篇论文耗时（而非所有论文之和）。
 
 **加载 checkpoint**（支持 `--resume`）：
 ```bash
 python3 tools/research_wiki.py checkpoint-load wiki/ "init-session"
 ```
-若 checkpoint 存在，跳过已标记为 completed 的论文，从断点继续。
+若 checkpoint 存在，从剩余未完成的论文继续并行处理。
 
-**排序**：将 `raw_source_list` 按预估 importance 降序排列（高引用量、顶会优先），使后续论文能匹配到更丰富的 concept 和 claim 图谱。
+**合并顺序**：将 `raw_source_list` 按预估 importance 降序排列（高引用量、顶会优先）。重要性最高的论文最先合并，其 concept 定义成为后续合并的"标准基底"。
 
-**对 `raw_source_list` 中的每篇论文**，spawn 一个独立 Agent 子代理。
+#### Phase A — Fan-out：后台 agent
 
-在 spawn 每个子代理前，读取当前 wiki 状态以便传入：
+spawn 前读取一次当前 wiki 状态（已创建的 topics）：
 ```bash
 python3 tools/research_wiki.py find wiki/ --entity topic --field title
-python3 tools/research_wiki.py find wiki/ --entity paper --field title
 ```
+
+对 `raw_source_list` 中的每篇论文，spawn 一个**后台** agent（带 worktree 隔离）：
 
 ```
 Agent({
   description: "ingest <论文简称>",
+  isolation: "worktree",
+  run_in_background: true,
   prompt: "对位于 <论文路径> 的论文执行 /ingest。
 
     INIT 模式 — 以快速批量引导模式运行 ingest。
@@ -212,50 +215,68 @@ Agent({
          跳过 — fetch_s2.py references <arxiv_id>  （同上）
          跳过 — fetch_deepxiv.py head <arxiv_id>   （批量引导不需要章节结构）
          跳过 — 更新 wiki/index.md                 （主流程在 Step 7 末尾执行 rebuild-index）
+         跳过 — 更新 wiki/topics/*.md              （主流程在合并后执行 lint --fix 修复所有 xref）
          执行 — 完整阅读 .tex/.pdf 来源
          执行 — fetch_s2.py paper <arxiv_id>        （元数据：venue, year, 引用量, s2_id）
          执行 — fetch_deepxiv.py brief <arxiv_id>   （快速 TLDR，用于草拟 Key idea）
          执行 — 创建 paper 页面、最多 3 个 claims、最多 3 个 concepts、关键 people（importance >= 4）
-         执行 — 更新 topic + concept 反向引用（交叉引用至关重要）
          执行 — 添加所有 graph edges，追加 log.md
     3. Wiki 根目录：wiki/   工具目录：tools/
     4. 先激活 venv：source .venv/bin/activate
-    5. 当前 wiki 状态（直接信任此列表，无需重新扫描）：
-         已创建的 topics：<逗号分隔的 topic slugs>
-         已 ingest 的 papers：<逗号分隔的 paper slugs>
+    5. 已创建的 topics（不要重复创建）：<逗号分隔的 topic slugs>
     6. 完成后汇报：
        - 创建的页面（papers, concepts, people, claims）
-       - 更新的页面（追加的 key_papers, evidence 等）
        - 添加的 graph edges
        - 遇到的任何问题"
 })
 ```
 
-**每个子代理返回后**，主流程验证：
-1. `wiki/papers/{expected-slug}.md` 存在且 frontmatter 完整
-2. 至少 1 个 claim 被创建或更新（检查 log.md 最后一条）
-3. 日志条目包含更新页面的详情（而非仅 "batch-ingested"）
+**并行的实现方式**：逐一 spawn 每个 agent，但 `run_in_background: true` 使每个 agent 立即开始运行而无需等待前一个完成。所有 N 个 agent 并发运行。spawn 完所有 N 个 agent 后，等待收到每个 agent 的完成通知，再进入 Phase B。
 
-验证失败则记录警告并继续（不重试——列入最终报告）。
+#### Phase B — Fan-in：顺序合并
 
-**记录 checkpoint**：
+所有 agent 完成后，按 importance 顺序（高引用量优先）逐一将各自的 worktree branch 合并到 main。
+
+对每个已完成的 agent branch：
 ```bash
-# 成功
-python3 tools/research_wiki.py checkpoint-save wiki/ "init-session" "{source-file}"
-# 失败
-python3 tools/research_wiki.py checkpoint-save wiki/ "init-session" "{source-file}" --failed
+git merge --no-ff <worktree-branch> --no-edit 2>&1
 ```
 
-**重要约束**：
-- **每篇论文一个子代理** — 绝不将多篇论文合并到一个 agent 调用中
-- **顺序执行** — 等待每个子代理完成后再启动下一个，因为后续论文需要读取前面创建的 wiki 状态
-- **绝不绕过子代理** — 不得在主流程中直接创建 paper 页面；所有论文 ingest 必须通过子代理运行 /ingest 工作流
-- **强制执行 init 模式跳过项** — prompt 中的 SKIP 列表不得移除；它消除了跨 N 篇论文重复的 API 调用，使批量 init 具有可行性
+**当 git 报告合并冲突时**（多篇论文引用同一 concept/claim 文件时属预期行为）：
+- **concept 文件**：union `key_papers`、`aliases`、`related_concepts`；取更完整的 `## Definition` 和 `## Intuition` 正文段落
+- **claim 文件**：union `evidence` 列表；对 `confidence` 取平均；union `source_papers`
+- 解决每个文件冲突后：`git add <file> && git merge --continue`
+
+每成功合并一篇论文后记录 checkpoint：
+```bash
+python3 tools/research_wiki.py checkpoint-save wiki/ "init-session" "<paper-slug>"
+```
+
+若合并彻底失败，放弃该 branch：
+```bash
+git merge --abort
+python3 tools/research_wiki.py checkpoint-save wiki/ "init-session" "<paper-slug>" --failed
+```
+
+#### Phase C — 合并后清理
+
+所有 branch 合并完成后：
+```bash
+# 删除并行 agent 写入的重复 edges
+python3 tools/research_wiki.py dedup-edges wiki/
+```
 
 **全部完成后清理 checkpoint**：
 ```bash
 python3 tools/research_wiki.py checkpoint-clear wiki/ "init-session"
 ```
+
+**重要约束**：
+- **每个 agent 必须设置 `run_in_background: true`** — 并行执行的前提；可以逐一 spawn，但所有 agent 必须并发运行
+- **每个 agent 使用 `isolation: "worktree"`** — 防止并行执行期间的文件系统冲突
+- **spawn 完所有 N 个 agent 后，等待所有 N 个完成通知**，再进入 Phase B
+- **绝不绕过子代理** — 所有论文 ingest 必须通过子代理运行 /ingest 工作流
+- **强制执行 init 模式跳过项** — SKIP 列表不得移除；`lint --fix`（Step 7）负责修复所有跳过的 xref
 
 ### Step 6: 生成初始 Ideas（可选）
 
@@ -340,6 +361,7 @@ python3 tools/research_wiki.py checkpoint-clear wiki/ "init-session"
 - `python3 tools/research_wiki.py init wiki/` — 初始化目录结构
 - `python3 tools/research_wiki.py slug "<title>"` — slug 生成
 - `python3 tools/research_wiki.py add-edge wiki/ ...` — 添加 graph edge
+- `python3 tools/research_wiki.py dedup-edges wiki/` — 删除并行 ingest 合并后的重复 edges（Step 5，Phase C）
 - `python3 tools/research_wiki.py rebuild-index wiki/` — 从 entity frontmatter 重建 index.md（Step 7，所有子代理完成后）
 - `python3 tools/research_wiki.py rebuild-context-brief wiki/` — 重建压缩上下文
 - `python3 tools/research_wiki.py rebuild-open-questions wiki/` — 重建知识缺口地图

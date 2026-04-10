@@ -251,6 +251,44 @@ def load_edges(wiki_root: str) -> list[dict]:
     return edges
 
 
+def dedup_edges(wiki_root: str) -> None:
+    """Deduplicate edges.jsonl by (from, to, type), keeping first occurrence.
+
+    Intended for use after parallel ingest: multiple agents may have added
+    identical edges in their isolated worktrees, resulting in duplicates after
+    the worktree branches are merged.
+    """
+    edges_path = Path(wiki_root) / DERIVED_DIR / "edges.jsonl"
+    if not edges_path.exists():
+        print(json.dumps({"status": "ok", "kept": 0, "removed": 0}))
+        return
+
+    lines = edges_path.read_text(encoding="utf-8").splitlines()
+    seen: set[tuple[str, str, str]] = set()
+    kept: list[str] = []
+    removed = 0
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            e = json.loads(stripped)
+            triple = (e.get("from", ""), e.get("to", ""), e.get("type", ""))
+            if triple not in seen:
+                seen.add(triple)
+                kept.append(stripped)
+            else:
+                removed += 1
+        except json.JSONDecodeError:
+            kept.append(stripped)  # preserve malformed lines
+
+    edges_path.write_text(
+        "\n".join(kept) + ("\n" if kept else ""), encoding="utf-8"
+    )
+    print(json.dumps({"status": "ok", "kept": len(kept), "removed": removed}))
+
+
 # ---------------------------------------------------------------------------
 # Query pack generation
 # ---------------------------------------------------------------------------
@@ -1769,6 +1807,11 @@ def main():
     p = sub.add_parser("batch-edges", help="Create edges from stdin JSON array")
     p.add_argument("wiki_root")
 
+    # dedup-edges
+    p = sub.add_parser("dedup-edges",
+                       help="Deduplicate edges.jsonl after parallel ingest merge")
+    p.add_argument("wiki_root")
+
     # rebuild-index
     p = sub.add_parser("rebuild-index", help="Regenerate index.md from entity dirs")
     p.add_argument("wiki_root")
@@ -1854,6 +1897,8 @@ def main():
         transition(args.path, args.new_status, args.reason)
     elif args.command == "batch-edges":
         batch_edges(args.wiki_root)
+    elif args.command == "dedup-edges":
+        dedup_edges(args.wiki_root)
     elif args.command == "rebuild-index":
         rebuild_index(args.wiki_root)
     elif args.command == "checkpoint-save":

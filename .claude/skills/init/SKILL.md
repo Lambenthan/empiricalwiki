@@ -178,29 +178,32 @@ Create the following pages per the CLAUDE.md templates (the parts not handled by
 **4c — Update index.md:**
 - Write Summary and topics page entries into the corresponding sections of index.md
 
-### Step 5: Ingest Papers via Subagents (with checkpoint resume)
+### Step 5: Ingest Papers via Parallel Subagents with Worktree Isolation
 
-**Each paper is ingested by an independent subagent** to ensure consistent quality. This prevents context-window pressure from degrading later papers.
+All paper ingest agents run **simultaneously** using git worktrees for filesystem isolation. Total time ≈ slowest single paper (not sum of all papers).
 
 **Load checkpoint** (supports `--resume`):
 ```bash
 python3 tools/research_wiki.py checkpoint-load wiki/ "init-session"
 ```
-If a checkpoint exists, skip papers already marked as completed and resume from where it left off.
+If a checkpoint exists, exclude already-completed papers from the parallel batch and resume with the remaining ones.
 
-**Ordering**: sort `raw_source_list` by estimated importance (high citation count, top-tier venue first), so subsequent papers match against a richer concept and claim graph.
+**Ordering for merge**: rank `raw_source_list` by estimated importance (citation count, venue tier). The highest-importance paper is merged first — its concept definitions become the canonical base that later merges extend.
 
-**For each paper in `raw_source_list`**, spawn one Agent subagent.
+#### Phase A — Fan-out: background agents
 
-Before spawning each subagent, read the current wiki state to pass it in:
+Read current wiki state once before spawning (topics already created):
 ```bash
 python3 tools/research_wiki.py find wiki/ --entity topic --field title
-python3 tools/research_wiki.py find wiki/ --entity paper --field title
 ```
+
+For each paper in `raw_source_list`, spawn a **background** agent with worktree isolation:
 
 ```
 Agent({
   description: "ingest <paper-short-name>",
+  isolation: "worktree",
+  run_in_background: true,
   prompt: "Execute /ingest for the paper at <path-to-source>.
 
     INIT MODE — run ingest in fast-bootstrap mode.
@@ -212,50 +215,68 @@ Agent({
          SKIP — fetch_s2.py references <arxiv_id>  (same reason)
          SKIP — fetch_deepxiv.py head <arxiv_id>   (section structure not needed for batch bootstrap)
          SKIP — updating wiki/index.md              (orchestrator runs rebuild-index at end of Step 7)
+         SKIP — updating wiki/topics/*.md           (orchestrator runs lint --fix after merge to repair all xrefs)
          DO   — read .tex/.pdf source thoroughly
          DO   — fetch_s2.py paper <arxiv_id>        (metadata: venue, year, citation count, s2_id)
          DO   — fetch_deepxiv.py brief <arxiv_id>   (fast TLDR for key idea draft)
          DO   — create paper page, up to 3 claims, up to 3 concepts, key people (importance >= 4)
-         DO   — update topic + concept back-references (cross-refs are essential)
          DO   — add all graph edges, append to log.md
     3. Wiki root: wiki/   Tools: tools/
     4. Activate venv first: source .venv/bin/activate
-    5. Current wiki state (trust this list, do not re-scan):
-         topics already created: <comma-separated topic slugs>
-         papers already ingested: <comma-separated paper slugs>
+    5. Topics already created (do not recreate): <comma-separated topic slugs>
     6. After completion, report back:
-       - Created pages (papers, concepts, people, claims)
-       - Updated pages (appended key_papers, evidence, etc.)
+       - Pages created (papers, concepts, people, claims)
        - Graph edges added
        - Any issues encountered"
 })
 ```
 
-**After each subagent returns**, the orchestrator validates:
-1. `wiki/papers/{expected-slug}.md` exists and has complete frontmatter
-2. At least 1 claim was created or updated (check log.md last entry)
-3. Log entry includes detail of updated pages (not just "batch-ingested")
+**How this achieves parallelism**: spawn each agent sequentially, but `run_in_background: true` means each agent runs immediately without waiting for the previous one to finish. All N agents run concurrently. After spawning all N, wait until you receive completion notifications for every agent before proceeding to Phase B.
 
-If validation fails, log a warning and continue (do not retry — list in final report).
+#### Phase B — Fan-in: sequential merge
 
-**Record checkpoint** after each paper:
+After all agents complete, merge their worktree branches into main **one by one**, in importance order (highest citation count first).
+
+For each completed agent branch:
 ```bash
-# Success
-python3 tools/research_wiki.py checkpoint-save wiki/ "init-session" "{source-file}"
-# Failure
-python3 tools/research_wiki.py checkpoint-save wiki/ "init-session" "{source-file}" --failed
+git merge --no-ff <worktree-branch> --no-edit 2>&1
 ```
 
-**IMPORTANT constraints**:
-- **One subagent per paper** — never combine multiple papers into one agent call
-- **Sequential execution** — wait for each subagent to finish before starting the next, because later papers need to read the wiki state created by earlier ones
-- **Never bypass subagents** — do not create paper pages directly in the orchestrator; all paper ingestion goes through subagents running the /ingest workflow
-- **Enforce init-mode skips** — the SKIP list in the prompt above must not be removed; it eliminates redundant API calls that multiply across N papers and makes bulk init feasible
+**When git reports merge conflicts** (expected for concept/claim files referenced by multiple papers):
+- **concept files**: union `key_papers`, `aliases`, `related_concepts`; take the more complete `## Definition` and `## Intuition` body sections
+- **claim files**: union `evidence` list; average `confidence`; union `source_papers`
+- After resolving each file: `git add <file> && git merge --continue`
+
+Record checkpoint after each successfully merged paper:
+```bash
+python3 tools/research_wiki.py checkpoint-save wiki/ "init-session" "<paper-slug>"
+```
+
+If a merge fails irrecoverably, abort and skip that branch:
+```bash
+git merge --abort
+python3 tools/research_wiki.py checkpoint-save wiki/ "init-session" "<paper-slug>" --failed
+```
+
+#### Phase C — Post-merge cleanup
+
+After all branches are merged:
+```bash
+# Remove duplicate edges introduced by parallel agents writing the same edge
+python3 tools/research_wiki.py dedup-edges wiki/
+```
 
 **Clear checkpoint after all done**:
 ```bash
 python3 tools/research_wiki.py checkpoint-clear wiki/ "init-session"
 ```
+
+**IMPORTANT constraints**:
+- **`run_in_background: true` on every agent** — required for parallel execution; agents may be spawned one by one but must all run concurrently
+- **Each agent uses `isolation: "worktree"`** — required to prevent filesystem conflicts during parallel execution
+- **Wait for all N completion notifications** before starting Phase B
+- **Never bypass subagents** — all paper ingestion goes through subagents running the /ingest workflow
+- **Enforce init-mode skips** — the SKIP list above eliminates redundant API calls; `lint --fix` in Step 7 repairs all skipped xrefs
 
 ### Step 6: Generate Initial Ideas (optional)
 
@@ -340,6 +361,7 @@ Output a summary including:
 - `python3 tools/research_wiki.py init wiki/` — initialize directory structure
 - `python3 tools/research_wiki.py slug "<title>"` — slug generation
 - `python3 tools/research_wiki.py add-edge wiki/ ...` — add graph edge
+- `python3 tools/research_wiki.py dedup-edges wiki/` — remove duplicate edges after parallel ingest merge (Step 5, Phase C)
 - `python3 tools/research_wiki.py rebuild-index wiki/` — regenerate index.md from entity frontmatter (Step 7, after all subagents complete)
 - `python3 tools/research_wiki.py rebuild-context-brief wiki/` — rebuild compressed context
 - `python3 tools/research_wiki.py rebuild-open-questions wiki/` — rebuild knowledge gap map

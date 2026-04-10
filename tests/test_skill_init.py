@@ -240,7 +240,7 @@ class TestSmartExpansion:
 # ── Subagent Ingest (Step 5) ────────────────────────────────────────────────
 
 class TestSubagentIngest:
-    """Step 5 uses independent subagents for each paper."""
+    """Step 5 uses parallel subagents with worktree isolation for each paper."""
 
     def test_subagent_mentioned(self, skill_content):
         """Subagent/Agent is the mechanism for ingest."""
@@ -248,23 +248,26 @@ class TestSubagentIngest:
                 or "子代理" in skill_content), \
             "Must use Agent subagents for paper ingest"
 
-    def test_one_agent_per_paper(self, skill_content):
-        """Each paper gets its own agent."""
-        assert ("one subagent per paper" in skill_content.lower()
-                or "one agent per paper" in skill_content.lower()
-                or "每篇论文一个子代理" in skill_content
-                or "每篇论文一个" in skill_content), \
-            "Must enforce one subagent per paper"
+    def test_parallel_execution(self, skill_content):
+        """Papers are ingested in parallel via background agents."""
+        assert ("run_in_background" in skill_content or "parallel" in skill_content.lower()
+                or "后台" in skill_content or "并行" in skill_content), \
+            "Must use run_in_background or parallel execution for agents"
 
-    def test_sequential_execution(self, skill_content):
-        """Papers are ingested sequentially for cross-ref consistency."""
-        assert ("sequential" in skill_content.lower() or "顺序执行" in skill_content), \
-            "Must enforce sequential execution"
+    def test_worktree_isolation(self, skill_content):
+        """Each agent runs in an isolated git worktree."""
+        assert ("worktree" in skill_content.lower() or "isolation" in skill_content.lower()), \
+            "Must use worktree isolation for parallel agents"
 
-    def test_validation_after_ingest(self, skill_content):
-        """Orchestrator validates subagent output."""
-        assert ("validat" in skill_content.lower() or "验证" in skill_content), \
-            "Must validate subagent output after each ingest"
+    def test_merge_phase_described(self, skill_content):
+        """After parallel fan-out, a merge phase brings results together."""
+        assert ("merge" in skill_content.lower() or "合并" in skill_content), \
+            "Must describe the fan-in merge phase after parallel ingest"
+
+    def test_dedup_edges_after_merge(self, skill_content):
+        """dedup-edges must be run after merging parallel worktrees."""
+        assert "dedup-edges" in skill_content, \
+            "Must run dedup-edges after parallel merge to remove duplicate edges"
 
     def test_no_bypass(self, skill_content):
         """Must not bypass subagents to create pages directly."""

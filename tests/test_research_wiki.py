@@ -954,6 +954,97 @@ class TestBatchEdges:
         assert len(out["warnings"]) >= 1
 
 
+# ── dedup_edges ───────────────────────────────────────────────────────────
+
+class TestDedupEdges:
+    def test_no_edges_file(self, wiki, capsys):
+        capsys.readouterr()
+        rw.dedup_edges(str(wiki))
+        out = json.loads(capsys.readouterr().out)
+        assert out["status"] == "ok"
+        assert out["kept"] == 0
+        assert out["removed"] == 0
+
+    def test_no_duplicates_unchanged(self, wiki, capsys):
+        rw.add_edge(str(wiki), "papers/a", "claims/b", "supports")
+        rw.add_edge(str(wiki), "papers/a", "concepts/c", "extends")
+        capsys.readouterr()
+        rw.dedup_edges(str(wiki))
+        out = json.loads(capsys.readouterr().out)
+        assert out["kept"] == 2
+        assert out["removed"] == 0
+        assert len(rw.load_edges(str(wiki))) == 2
+
+    def test_removes_exact_duplicates(self, wiki, capsys):
+        # Simulate parallel agents writing the same edge to separate worktrees,
+        # then having both appended after merging
+        edges_path = wiki / "graph" / "edges.jsonl"
+        import json as _json
+        edge = {"from": "papers/a", "to": "claims/b", "type": "supports",
+                "evidence": "", "date": "2026-04-10"}
+        edges_path.write_text(
+            _json.dumps(edge) + "\n" + _json.dumps(edge) + "\n",
+            encoding="utf-8",
+        )
+        capsys.readouterr()
+        rw.dedup_edges(str(wiki))
+        out = json.loads(capsys.readouterr().out)
+        assert out["kept"] == 1
+        assert out["removed"] == 1
+        assert len(rw.load_edges(str(wiki))) == 1
+
+    def test_different_type_not_deduped(self, wiki, capsys):
+        rw.add_edge(str(wiki), "papers/a", "claims/b", "supports")
+        rw.add_edge(str(wiki), "papers/a", "claims/b", "contradicts")
+        capsys.readouterr()
+        rw.dedup_edges(str(wiki))
+        out = json.loads(capsys.readouterr().out)
+        assert out["kept"] == 2
+        assert out["removed"] == 0
+
+    def test_preserves_first_occurrence(self, wiki, capsys):
+        import json as _json
+        edges_path = wiki / "graph" / "edges.jsonl"
+        e1 = {"from": "papers/a", "to": "claims/b", "type": "supports",
+              "evidence": "first", "date": "2026-04-09"}
+        e2 = {"from": "papers/a", "to": "claims/b", "type": "supports",
+              "evidence": "second", "date": "2026-04-10"}
+        edges_path.write_text(
+            _json.dumps(e1) + "\n" + _json.dumps(e2) + "\n",
+            encoding="utf-8",
+        )
+        capsys.readouterr()
+        rw.dedup_edges(str(wiki))
+        capsys.readouterr()
+        kept = rw.load_edges(str(wiki))
+        assert len(kept) == 1
+        assert kept[0]["evidence"] == "first"
+
+    def test_many_duplicates(self, wiki, capsys):
+        import json as _json
+        edges_path = wiki / "graph" / "edges.jsonl"
+        lines = []
+        # 5 unique edges, each duplicated 3 times = 15 lines total
+        pairs = [
+            ("papers/p1", "claims/c1", "supports"),
+            ("papers/p2", "claims/c2", "supports"),
+            ("papers/p3", "concepts/k1", "extends"),
+            ("papers/p1", "concepts/k1", "extends"),
+            ("papers/p2", "concepts/k2", "inspired_by"),
+        ]
+        for from_id, to_id, etype in pairs:
+            e = {"from": from_id, "to": to_id, "type": etype, "evidence": "", "date": "2026-04-10"}
+            for _ in range(3):
+                lines.append(_json.dumps(e))
+        edges_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        capsys.readouterr()
+        rw.dedup_edges(str(wiki))
+        out = json.loads(capsys.readouterr().out)
+        assert out["kept"] == 5
+        assert out["removed"] == 10
+        assert len(rw.load_edges(str(wiki))) == 5
+
+
 # ── rebuild_index ─────────────────────────────────────────────────────────
 
 class TestRebuildIndex:
