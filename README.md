@@ -12,8 +12,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9+-yellow.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/Tests-2125_passing-brightgreen.svg)](#testing)
-[![Skills](https://img.shields.io/badge/Skills-20-purple.svg)](#skills)
+[![Tests](https://img.shields.io/badge/Tests-2263_passing-brightgreen.svg)](#testing)
+[![Skills](https://img.shields.io/badge/Skills-23-purple.svg)](#skills)
 [![Claude Code](https://img.shields.io/badge/Powered_by-Claude_Code-d97706.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![Bilingual](https://img.shields.io/badge/i18n-EN_|_中文-orange.svg)](#bilingual-support)
 
@@ -27,7 +27,7 @@
 
 Andrej Karpathy proposed [LLM-Wiki](https://x.com/karpathy/status/1909372692069236775): an LLM that **builds and maintains a persistent, structured wiki** from your sources — not a throwaway RAG answer, but compounding knowledge that grows smarter with every paper you feed it.
 
-**ΩmegaWiki takes that idea and runs the full distance.** It's not just a wiki builder — it's a complete research lifecycle platform: from paper ingestion → knowledge graph → gap detection → idea generation → experiment design → paper writing → peer review response. All driven by 20 Claude Code skills, all centered on one wiki as the single source of truth.
+**ΩmegaWiki takes that idea and runs the full distance.** It's not just a wiki builder — it's a complete research lifecycle platform: from paper ingestion → knowledge graph → gap detection → idea generation → experiment design → paper writing → peer review response. All driven by 23 Claude Code skills, all centered on one wiki as the single source of truth.
 
 Drop your `.tex` / `.pdf` files in a folder. Run one command. Get a fully cross-referenced knowledge base — and then use it to **generate novel research ideas, design experiments, write papers, and respond to reviewers**.
 
@@ -36,7 +36,7 @@ Drop your `.tex` / `.pdf` files in a folder. Run one command. Get a fully cross-
 | | RAG | ΩmegaWiki |
 |---|---|---|
 | **Knowledge persistence** | Rediscovered on every query | Compiled once, maintained forever |
-| **Structure** | Flat chunk store | 8 typed entities with relationships |
+| **Structure** | Flat chunk store | 9 typed entities with relationships |
 | **Cross-references** | None — chunks are isolated | Bidirectional wikilinks + typed graph |
 | **Knowledge gaps** | Invisible | Explicitly tracked, drive research |
 | **Failed experiments** | Lost | First-class anti-repetition memory |
@@ -99,12 +99,20 @@ cp config/settings.local.json.example .claude/settings.local.json
 
 ## Skills
 
-20 slash commands spanning the full research lifecycle:
+23 slash commands spanning the full research lifecycle:
+
+### Phase 0: Setup
+
+| Command | What it does |
+|---------|-------------|
+| `/setup` | First-time configuration (API keys, language, dependencies) |
+| `/reset <scope>` | Destructive cleanup: `wiki \| raw \| log \| checkpoints \| all` |
 
 ### Phase 1: Knowledge Foundation
 
 | Command | What it does |
 |---------|-------------|
+| `/prefill <domain>` | Seed `foundations/` with background knowledge (suggested before `/init`) |
 | `/init <topic>` | Bootstrap a full wiki from `raw/` |
 | `/ingest <source>` | Parse a paper → wiki pages + cross-references |
 | `/edit <request>` | Add/remove sources or update wiki content |
@@ -138,7 +146,7 @@ cp config/settings.local.json.example .claude/settings.local.json
 
 ## Wiki Structure
 
-### 8 Entity Types
+### 9 Entity Types
 
 | Type | Directory | Purpose |
 |------|-----------|---------|
@@ -150,6 +158,7 @@ cp config/settings.local.json.example .claude/settings.local.json
 | **Experiment** | `experiments/` | Full record: hypothesis → setup → results → claim updates |
 | **Claim** | `claims/` | Testable claim with evidence list and confidence score |
 | **Summary** | `Summary/` | Domain-wide survey across topics |
+| **Foundation** | `foundations/` | Background knowledge (terminal: receives inward links, writes none) |
 
 ### Knowledge Graph
 
@@ -180,6 +189,7 @@ OmegaWiki/
 │   ├── experiments/             #   Experiment records
 │   ├── claims/                  #   Testable research claims
 │   ├── Summary/                 #   Domain-wide surveys
+│   ├── foundations/             #   Background knowledge (terminal pages)
 │   ├── outputs/                 #   Generated artifacts
 │   ├── graph/                   #   Auto-generated: edges, context, gaps
 │   ├── index.md                 #   Content catalog
@@ -190,15 +200,17 @@ OmegaWiki/
 │   └── web/                     #   HTML / Markdown
 ├── tools/                       # Deterministic Python helpers
 │   ├── research_wiki.py         #   Wiki engine (20 CLI commands)
-│   ├── lint.py                  #   Structural validation (9 checks)
+│   ├── lint.py                  #   Structural validation (10 checks)
+│   ├── reset_wiki.py            #   Scoped destructive cleanup helper
 │   ├── fetch_arxiv.py           #   arXiv RSS fetcher
 │   ├── fetch_s2.py              #   Semantic Scholar API
 │   ├── fetch_deepxiv.py         #   DeepXiv semantic search
+│   ├── fetch_wikipedia.py       #   Wikipedia fetcher (used by /prefill)
 │   └── remote.py                #   SSH ops for remote experiments
-├── .claude/skills/              # 20 Claude Code skill definitions
+├── .claude/skills/              # 23 Claude Code skill definitions
 ├── i18n/                        # Bilingual: en/ (canonical) + zh/
 ├── config/                      # Configuration templates
-├── tests/                       # 2125 tests
+├── tests/                       # 2263 tests
 ├── mcp-servers/                 # Cross-model review server
 └── .github/workflows/           # Daily arXiv cron
 ```
@@ -210,7 +222,7 @@ source .venv/bin/activate
 python -m pytest tests/ -v
 ```
 
-2125 tests covering all tools, skills, and shared references.
+2263 tests covering all tools, skills, and shared references.
 
 ## Bilingual Support
 
@@ -225,8 +237,8 @@ python -m pytest tests/ -v
 
 ## Roadmap
 
-- [x] Wiki knowledge engine (20 CLI commands, 8 entity types, 9 edge types)
-- [x] 20 Claude Code skills (full research lifecycle)
+- [x] Wiki knowledge engine (20 CLI commands, 9 entity types, 9 edge types)
+- [x] 23 Claude Code skills (full research lifecycle)
 - [x] Cross-model review (any OpenAI-compatible API)
 - [x] Daily arXiv automation (GitHub Actions)
 - [x] Remote GPU experiment support
@@ -263,14 +275,14 @@ Scan to join the ΩmegaWiki WeChat group / 扫码加入微信交流群
 
 Andrej Karpathy 提出了 [LLM-Wiki](https://x.com/karpathy/status/1909372692069236775) 概念：让 LLM **构建并维护一个持久的、结构化的 wiki**，而不是一次性的 RAG 回答。知识持续积累，每一篇新论文都让整个知识图谱更强。
 
-**ΩmegaWiki 将这个理念完整实现。** 它不仅是 wiki 构建器，更是完整的研究全流程平台：从论文摄入 → 知识图谱 → 缺口检测 → 想法生成 → 实验设计 → 论文写作 → 同行评审回复。20 个 Claude Code Skills 驱动，一个 wiki 作为唯一的知识中枢。
+**ΩmegaWiki 将这个理念完整实现。** 它不仅是 wiki 构建器，更是完整的研究全流程平台：从论文摄入 → 知识图谱 → 缺口检测 → 想法生成 → 实验设计 → 论文写作 → 同行评审回复。23 个 Claude Code Skills 驱动，一个 wiki 作为唯一的知识中枢。
 
 ### 为什么选择 Wiki 而不是 RAG？
 
 | | RAG | ΩmegaWiki |
 |---|---|---|
 | **知识持久性** | 每次查询都重新发现 | 编译一次，持续维护 |
-| **结构** | 扁平的 chunk 存储 | 8 种实体类型 + 关系图 |
+| **结构** | 扁平的 chunk 存储 | 9 种实体类型 + 关系图 |
 | **交叉引用** | 无 — chunk 彼此孤立 | 双向 wikilink + 类型化边 |
 | **知识缺口** | 不可见 | 显式追踪，驱动研究方向 |
 | **失败实验** | 丢失 | 一等公民，防止重复探索 |
@@ -306,10 +318,13 @@ claude
 | `DEEPXIV_TOKEN` | 可选 | `setup.sh` 自动注册 | 语义搜索、热门趋势 |
 | `LLM_API_KEY` + `LLM_BASE_URL` + `LLM_MODEL` | 可选 | 任意 OpenAI 兼容 API | 跨模型评审 |
 
-### 20 个 Skill 命令
+### 23 个 Skill 命令
 
 | 命令 | 功能 |
 |------|------|
+| `/setup` | 首次配置（API key、语言、依赖） |
+| `/reset` | 按范围销毁性清理：`wiki \| raw \| log \| checkpoints \| all` |
+| `/prefill` | 预填 `foundations/` 背景知识（建议在 `/init` 之前运行） |
 | `/init` | 从 raw/ 搭建完整 wiki |
 | `/ingest` | 消化论文，创建页面 + 交叉引用 |
 | `/edit` | 增删 raw 或更新 wiki |
