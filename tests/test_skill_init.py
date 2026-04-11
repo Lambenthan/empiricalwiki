@@ -141,6 +141,20 @@ class TestWorkflow:
         assert "Summary" in skill_content
         assert "topics" in skill_content.lower()
 
+    def test_step4_5_scaffold_commit(self, skill_content):
+        """Step 4.5 must commit the scaffold AND stash unrelated dirty files
+        before fan-out — both are required to keep Phase B merge from failing."""
+        assert "### Step 4.5" in skill_content
+        assert "git stash" in skill_content
+        assert "init-unrelated-dirty" in skill_content
+        assert 'commit -m "init: scaffold' in skill_content
+
+    def test_step4_5_verifies_gitattributes(self, skill_content):
+        """Step 4.5 must verify .gitattributes is present with merge=union
+        for the three append-only files, otherwise Phase B merges conflict."""
+        assert ".gitattributes" in skill_content
+        assert "merge=union" in skill_content
+
     def test_step5_batch_ingest(self, skill_content):
         assert "### Step 5" in skill_content
         assert "/ingest" in skill_content
@@ -202,6 +216,32 @@ class TestToolReferences:
     def test_references_s2_citations(self, skill_content):
         assert "fetch_s2.py references" in skill_content or "fetch_s2.py citations" in skill_content, \
             "Must reference fetch_s2.py references/citations for citation-chain expansion"
+
+
+class TestGitattributes:
+    """The repo must ship a .gitattributes that turns wiki append-only files into
+    union-merge files. Without this, /init Phase B fails on every parallel merge
+    because git's default line-based merge sees concurrent appends as conflicts."""
+
+    GITATTRIBUTES = PROJECT_ROOT / ".gitattributes"
+
+    REQUIRED_UNION_PATHS = [
+        "wiki/log.md",
+        "wiki/graph/edges.jsonl",
+        "wiki/index.md",
+    ]
+
+    def test_gitattributes_exists(self):
+        assert self.GITATTRIBUTES.exists(), \
+            ".gitattributes is required at the project root for /init Phase B to work"
+
+    @pytest.mark.parametrize("path", REQUIRED_UNION_PATHS)
+    def test_path_uses_merge_union(self, path):
+        content = self.GITATTRIBUTES.read_text()
+        import re
+        pat = re.compile(rf"^{re.escape(path)}\s+.*merge=union", re.MULTILINE)
+        assert pat.search(content), \
+            f"{path} must be declared with merge=union in .gitattributes"
 
 
 # ── Smart Expansion (Step 2) ────────────────────────────────────────────────
