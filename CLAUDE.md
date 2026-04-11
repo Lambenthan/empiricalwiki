@@ -371,7 +371,7 @@ python3 tools/fetch_arxiv.py --hours 24
 
 ## Constraints
 
-- **raw/ is read-only**: never modify files under `raw/`.
+- **raw/ is append-only, and only for `/init`**: `/init` Step 2 may download newly-discovered sources into `raw/papers/` (additions only — never overwrite an existing file). Every other skill, tool, and subagent (including `/ingest`, `/daily-arxiv`, and all `/init` subagents running `/ingest` in INIT MODE) treats `raw/` as strictly read-only: never modify, overwrite, or delete anything under `raw/`.
 - **graph/ is auto-generated**: never manually edit files in `graph/` — only via `tools/research_wiki.py`.
 - **Bidirectional links**: always write the reverse link when writing a forward link.
 - **tex priority**: .tex > .pdf; fallback chain: tex fails → PDF parse, PDF fails → vision API.

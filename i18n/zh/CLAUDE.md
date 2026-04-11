@@ -369,7 +369,7 @@ python3 tools/fetch_arxiv.py --hours 24
 
 ## 约束
 
-- **raw/ 只读**：不得修改 `raw/` 下的文件。
+- **raw/ 仅 `/init` 可追加写，其它一律只读**：`/init` Step 2 可以把新发现的源文件下载到 `raw/papers/`（只允许新增，绝不覆盖已有文件）。其它所有 skill、tool、subagent（包括 `/ingest`、`/daily-arxiv`、以及 `/init` 在 INIT MODE 下 fan-out 的 `/ingest` subagents）都必须把 `raw/` 视为严格只读：不得修改、覆盖或删除 `raw/` 下的任何内容。
 - **graph/ 自动生成**：不得手动编辑 `graph/` 下的文件，仅通过 `tools/research_wiki.py` 维护。
 - **双向链接**：写正向链接时同步写反向链接。
 - **tex 优先**：.tex > .pdf，fallback 链：tex 失败 → PDF 解析，PDF 失败 → vision API。
