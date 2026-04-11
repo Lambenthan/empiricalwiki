@@ -460,13 +460,19 @@ After all papers are ingested:
 
 ```bash
 STASH_REF=$(python3 tools/research_wiki.py checkpoint-get-meta wiki/ init-session stash_ref)
-if [ -n "$STASH_REF" ]; then
-  git stash pop "$STASH_REF" || echo "⚠ stash pop failed — check 'git stash list' and resolve manually"
+if [ -z "$STASH_REF" ]; then
+  # Nothing was stashed in 4.5.b (working tree was clean) — just clear the checkpoint.
+  python3 tools/research_wiki.py checkpoint-clear wiki/ init-session
+elif git stash pop "$STASH_REF"; then
+  python3 tools/research_wiki.py checkpoint-clear wiki/ init-session
+else
+  echo "⚠ stash pop failed — checkpoint preserved at .checkpoints/init-session.json"
+  echo "  Run 'git stash list' and resolve manually, then:"
+  echo "    python3 tools/research_wiki.py checkpoint-clear wiki/ init-session"
 fi
-python3 tools/research_wiki.py checkpoint-clear wiki/ init-session
 ```
 
-`checkpoint-get-meta` with a key prints the raw value (empty string if absent), so `[ -n "$STASH_REF" ]` is the correct guard. Only clear the checkpoint after the pop succeeds; a failed pop should leave the checkpoint intact so the user can re-run the pop sequence manually.
+`checkpoint-get-meta` with a key prints the raw value (empty string if absent), so `[ -z "$STASH_REF" ]` cleanly distinguishes "nothing to pop" from "pop succeeded" from "pop failed". Only clear the checkpoint after a successful pop — a failed pop MUST leave the checkpoint (and its `stash_ref` metadata) intact so the user can recover manually. Do not collapse this into `pop || echo`: `echo` always exits 0, which would swallow the pop failure and run `checkpoint-clear` unconditionally, losing the stash ref.
 
 Then output a summary including:
 - Page creation counts (broken down by all 8 entity types)

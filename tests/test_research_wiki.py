@@ -104,10 +104,17 @@ class TestInitWiki:
         assert (wiki / "index.md").read_text() == "custom content"
 
     def test_log_entry_written(self, tmp_path):
+        """init_wiki must append exactly one `init | wiki initialized` line to log.md.
+
+        /init SKILL.md Step 1 deliberately does NOT call `log` manually and relies
+        on this internal append — if this test breaks, revisit init/SKILL.md Step 1.
+        """
         wiki = tmp_path / "wiki"
         rw.init_wiki(str(wiki))
         log = (wiki / "log.md").read_text()
-        assert "init" in log
+        assert "init | wiki initialized" in log
+        # Exactly one init line — guards against accidental double-logging.
+        assert log.count("init | wiki initialized") == 1
 
 
 # ── add_edge ──────────────────────────────────────────────────────────────
@@ -1619,6 +1626,56 @@ class TestCheckpoint:
 
         rw.checkpoint_get_meta(str(wiki), "no-such-task", "")
         assert capsys.readouterr().out.strip() == "{}"
+
+    def test_load_corrupt_checkpoint_reports_error(self, wiki, capsys):
+        """Corrupt JSON must surface as exists:false + error — not silently become an empty checkpoint."""
+        cp_dir = wiki / ".checkpoints"
+        cp_dir.mkdir(parents=True, exist_ok=True)
+        (cp_dir / "corrupt.json").write_text("{not valid json,,,")
+
+        rw.checkpoint_load(str(wiki), "corrupt")
+        out = json.loads(capsys.readouterr().out.strip())
+        assert out["exists"] is False
+        assert out.get("error") == "corrupt checkpoint"
+        assert out["completed"] == []
+        assert out["metadata"] == {}
+
+    def test_load_non_dict_json_reports_error(self, wiki, capsys):
+        """Top-level JSON that isn't a dict (e.g. a list) is also corruption."""
+        cp_dir = wiki / ".checkpoints"
+        cp_dir.mkdir(parents=True, exist_ok=True)
+        (cp_dir / "bad-shape.json").write_text("[]")
+
+        rw.checkpoint_load(str(wiki), "bad-shape")
+        out = json.loads(capsys.readouterr().out.strip())
+        assert out["exists"] is False
+        assert out.get("error") == "corrupt checkpoint"
+
+    def test_set_meta_repairs_corrupt_file(self, wiki):
+        """Writers are permissive: set-meta on a corrupt file silently rewrites it fresh.
+
+        This is intentional — we don't want a one-byte corruption to permanently wedge
+        a long-running /init. The read path (checkpoint_load) still reports the
+        corruption for one call, then the next write repairs it.
+        """
+        cp_dir = wiki / ".checkpoints"
+        cp_dir.mkdir(parents=True, exist_ok=True)
+        (cp_dir / "recover.json").write_text("garbage")
+
+        rw.checkpoint_set_meta(str(wiki), "recover", "stash_ref", "stash@{0}")
+
+        data = json.loads((cp_dir / "recover.json").read_text())
+        assert data["metadata"] == {"stash_ref": "stash@{0}"}
+        assert data["completed"] == []
+        assert data["failed"] == []
+
+    def test_set_meta_unicode_roundtrip(self, wiki, capsys):
+        """ensure_ascii=False should preserve non-ASCII values end-to-end."""
+        rw.checkpoint_set_meta(str(wiki), "i18n", "note", "初始化已完成 ✓")
+        capsys.readouterr()
+
+        rw.checkpoint_get_meta(str(wiki), "i18n", "note")
+        assert capsys.readouterr().out.strip() == "初始化已完成 ✓"
 
     def test_load_old_checkpoint_without_metadata_field(self, wiki, capsys):
         """Backward compat: pre-metadata checkpoints load cleanly."""

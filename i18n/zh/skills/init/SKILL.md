@@ -458,13 +458,19 @@ python3 tools/research_wiki.py checkpoint-clear wiki/ "init-session"
 
 ```bash
 STASH_REF=$(python3 tools/research_wiki.py checkpoint-get-meta wiki/ init-session stash_ref)
-if [ -n "$STASH_REF" ]; then
-  git stash pop "$STASH_REF" || echo "⚠ stash pop 失败 — 请 'git stash list' 查看并手工处理"
+if [ -z "$STASH_REF" ]; then
+  # 4.5.b 没有 stash 任何东西（工作树本来就干净）——直接清理 checkpoint。
+  python3 tools/research_wiki.py checkpoint-clear wiki/ init-session
+elif git stash pop "$STASH_REF"; then
+  python3 tools/research_wiki.py checkpoint-clear wiki/ init-session
+else
+  echo "⚠ stash pop 失败 — checkpoint 已保留在 .checkpoints/init-session.json"
+  echo "  请运行 'git stash list' 查看并手工处理，然后再："
+  echo "    python3 tools/research_wiki.py checkpoint-clear wiki/ init-session"
 fi
-python3 tools/research_wiki.py checkpoint-clear wiki/ init-session
 ```
 
-`checkpoint-get-meta` 带 key 时会直接把原始值写到 stdout（不存在时写空字符串），因此 `[ -n "$STASH_REF" ]` 可以安全守护。仅在 pop 成功后才清理 checkpoint；pop 失败应保留 checkpoint 以便用户后续重试。
+`checkpoint-get-meta` 带 key 时会直接把原始值写到 stdout（不存在时写空字符串），因此 `[ -z "$STASH_REF" ]` 能干净地区分"无需 pop"、"pop 成功"、"pop 失败"三种情况。**仅在** pop 成功后才清理 checkpoint——pop 失败**必须**保留 checkpoint（含 `stash_ref` metadata），以便用户手工恢复。不要把这段压缩成 `pop || echo`：`echo` 永远返回 0，会把 pop 的非零退出码吞掉，导致 `checkpoint-clear` 无条件执行并丢失 stash ref。
 
 然后输出摘要，包含：
 - 创建的页面统计（按 8 种 entity 分类）

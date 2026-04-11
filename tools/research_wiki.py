@@ -1941,21 +1941,32 @@ def _checkpoint_path(wiki_root: str, task_id: str) -> Path:
     return Path(wiki_root) / ".checkpoints" / f"{task_id}.json"
 
 
-def _checkpoint_read(wiki_root: str, task_id: str) -> dict:
+def _checkpoint_read(wiki_root: str, task_id: str, strict: bool = False) -> dict:
     """Load a checkpoint file and normalize it to the current schema.
 
     Backward-compat: old checkpoints written before the `metadata` field existed
     load cleanly — the missing key is filled with an empty dict on next write.
+
+    strict=False (default, used by writers like checkpoint_save / checkpoint_set_meta):
+        Corrupt files are silently treated as empty so the next write repairs them.
+        A non-dict top-level JSON (e.g. `[]` or `"null"`) is also ignored.
+    strict=True (used by checkpoint_load):
+        Re-raises json.JSONDecodeError and raises ValueError on non-dict top-level JSON.
+        Lets checkpoint_load surface an explicit corruption report to the caller.
     """
     cp_file = _checkpoint_path(wiki_root, task_id)
     data = {"task_id": task_id, "completed": [], "failed": [], "metadata": {}}
     if cp_file.exists():
         try:
             loaded = json.loads(cp_file.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                data.update(loaded)
         except json.JSONDecodeError:
-            pass
+            if strict:
+                raise
+            loaded = None
+        if isinstance(loaded, dict):
+            data.update(loaded)
+        elif loaded is not None and strict:
+            raise ValueError("checkpoint top-level JSON is not an object")
     data.setdefault("completed", [])
     data.setdefault("failed", [])
     data.setdefault("metadata", {})
@@ -2018,7 +2029,13 @@ def checkpoint_get_meta(wiki_root: str, task_id: str, key: str = "") -> None:
 
 
 def checkpoint_load(wiki_root: str, task_id: str) -> None:
-    """Load checkpoint state for a task. Returns JSON with completed/failed/metadata."""
+    """Load checkpoint state for a task. Returns JSON with completed/failed/metadata.
+
+    A missing file reports `exists: false` with empty lists/dict.
+    A corrupt or non-dict file reports `exists: false` with `error: "corrupt checkpoint"`
+    — the writers (checkpoint_save / checkpoint_set_meta) will silently repair it on
+    the next write, but the read path surfaces the corruption so tooling can flag it.
+    """
     cp_file = _checkpoint_path(wiki_root, task_id)
 
     if not cp_file.exists():
@@ -2027,13 +2044,15 @@ def checkpoint_load(wiki_root: str, task_id: str) -> None:
         return
 
     try:
-        data = _checkpoint_read(wiki_root, task_id)
-        data["exists"] = True
-        print(json.dumps(data))
-    except json.JSONDecodeError:
+        data = _checkpoint_read(wiki_root, task_id, strict=True)
+    except (json.JSONDecodeError, ValueError):
         print(json.dumps({"task_id": task_id, "completed": [], "failed": [],
                           "metadata": {}, "exists": False,
                           "error": "corrupt checkpoint"}))
+        return
+
+    data["exists"] = True
+    print(json.dumps(data))
 
 
 def checkpoint_clear(wiki_root: str, task_id: str) -> None:
