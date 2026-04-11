@@ -178,6 +178,69 @@ python3 tools/research_wiki.py log wiki/ "init | source expansion: <N> local + <
 **4c — 更新 index.md：**
 - 将 Summary 和 topics 页面条目写入 index.md 对应分类
 
+### Step 4.5: 提交骨架 + stash 无关脏文件（fan-out 前强制）
+
+在 spawn 任何子代理之前，工作树必须处于这样的状态：(a) `/init` 至此产生的一切都已 commit；(b) `/init` 没有产生的任何文件全部离开工作树。这是 Phase B 顺序合并的硬性前提 — git 拒绝在 dirty 工作树上合并，而 `git stash` 是把无关用户改动临时挪开的唯一安全方式。
+
+#### 4.5.a — 检查工作树
+
+```bash
+git status --short
+```
+
+把看到的内容分成两类：
+
+- **骨架文件** — 一切位于 `wiki/` 或 `raw/papers/` 下的文件。它们要么是 Step 1（`research_wiki.py init`）或 Step 4（Summary / topics / 初始 index.md）创建的，要么是用户放在 `raw/papers/` 下的论文源。它们**必须**进入骨架 commit，这样 worktree branch 才会继承这些文件。
+- **无关脏文件** — 一切位于 `wiki/` 和 `raw/papers/` 之外的文件。常见情况：上一个 session 没改完的 SKILL.md、`tools/`/`i18n/`/`tests/` 中正在改的内容。它们与 `/init` 毫无关系，**绝不可**被包含进骨架 commit，但也**不能**留在工作树中，否则 Phase B 合并会被它们阻塞。
+
+#### 4.5.b — stash 无关脏文件（如果有）
+
+如果 `git status --short` 显示 `wiki/` 和 `raw/papers/` 之外还有任何内容，先 stash 再继续：
+
+```bash
+UNRELATED=$(git status --short | awk '{print $2}' | grep -Ev '^(wiki/|raw/papers/)' || true)
+
+if [ -n "$UNRELATED" ]; then
+  echo "检测到无关脏文件 — 在 /init 前先 stash："
+  echo "$UNRELATED"
+  git stash push -u -m "init-unrelated-dirty-$(date +%Y%m%d-%H%M%S)" -- $UNRELATED
+fi
+```
+
+**记录 stash ref**（`git stash list | head -1`）到 `init-session` checkpoint metadata，供 Step 8 在末尾自动 pop 回来。如果无法持久化存储，至少要打印给用户并提醒他们 `/init` 结束后自己 `git stash pop`。
+
+**为什么是 stash 而不是"问用户"**：上一个版本曾要求问用户，而不是自动 stash。那会把脏文件留在工作树里，Phase B 第一次 `git merge` 就会报 `your local changes ... would be overwritten by merge` — 即使那些文件跟合并毫无关系，git 的安全检查也会拒绝在 dirty 工作树上合并。stash → init → pop 才是标准工作流，用户的修改不会丢失。
+
+#### 4.5.c — commit 骨架
+
+4.5.b 之后，剩下的脏文件应当全部位于 `wiki/` 和 `raw/papers/` 下。验证，然后 commit：
+
+```bash
+git status --short
+git add wiki/ raw/papers/
+git commit -m "init: scaffold wiki skeleton (Summary, topics, index, graph stubs)" --no-gpg-sign
+```
+
+如果 `git status --short` 仍显示 `wiki/` / `raw/papers/` 以外的文件，说明 4.5.b 的 stash 不完整 — 先排查再重新 stash 后再 commit。**绝对不要**在这里用 `git add -A`；那会让前面的 stash 步骤完全失去意义。
+
+commit 之后，每个子代理的 worktree 都会从一个"骨架已就绪"的干净基底分叉，因此 agent 只会新增文件（`wiki/papers/{slug}.md`、新的 concepts/claims/people），Phase B 合并时也只会在真正重叠的 concept/claim 上出现冲突（Phase B 用 union 策略处理）。
+
+#### 4.5.d — 确认 `.gitattributes` 已就绪
+
+仓库在项目根附带了一个 `.gitattributes` 文件，声明 `wiki/log.md`、`wiki/graph/edges.jsonl`、`wiki/index.md` 使用 `merge=union`。这些是每个并行 agent 都会追加写入的只追加文件；没有 `merge=union`，每次 Phase B 合并都会在它们上面冲突。核查文件是否存在且包含全部三条：
+
+```bash
+test -f .gitattributes && grep -E '^wiki/(log\.md|graph/edges\.jsonl|index\.md)' .gitattributes
+```
+
+若文件缺失或任一条目缺失，**停止**并在继续之前补齐 — 否则 Phase B 必失败。期望内容：
+
+```
+wiki/log.md             merge=union
+wiki/graph/edges.jsonl  merge=union
+wiki/index.md           merge=union
+```
+
 ### Step 5: 通过并行子代理 Ingest 论文（Worktree 隔离）
 
 所有论文 ingest agent **同时运行**，通过 git worktree 实现文件系统隔离。总耗时 ≈ 最慢的单篇论文耗时（而非所有论文之和）。
@@ -189,6 +252,22 @@ python3 tools/research_wiki.py checkpoint-load wiki/ "init-session"
 若 checkpoint 存在，从剩余未完成的论文继续并行处理。
 
 **合并顺序**：将 `raw_source_list` 按预估 importance 降序排列（高引用量、顶会优先）。重要性最高的论文最先合并，其 concept 定义成为后续合并的"标准基底"。
+
+#### 🚨 关键：Prompt 构造规则（Phase A 之前必读）
+
+构造每个子代理的 prompt 时，**主流程绝不可在 prompt 中包含项目根目录的绝对路径**。worktree 隔离的工作原理是给子代理分配其专属 cwd（worktree 目录），但如果 prompt 里出现类似 `Working directory: /home/user/project/...` 这样的行，子代理就会把这个绝对路径用于所有 `Read`/`Write`/`Edit` 操作，**悄无声息地绕过 worktree**，直接写入主仓库。这是已经发生过的真实生产 bug — 并行 ingest 全部写入 main，Phase B 无 branch 可合，concept/claim 冲突完全未被解决。
+
+**反模式（绝不要这样写）**：
+```
+prompt: "对 ... 执行 /ingest
+    Working directory: /home/user/project/OmegaWiki    ← BUG: 绕过 worktree
+    ..."
+```
+
+**正确模式**：
+- prompt 中只使用相对路径（如 `raw/papers/...`、`wiki/`、`tools/`）
+- 显式提醒子代理当前在独立 worktree 中运行
+- 信任 Claude Code worktree 机制已正确设置了子代理的 cwd
 
 #### Phase A — Fan-out：后台 agent
 
@@ -204,29 +283,49 @@ Agent({
   description: "ingest <论文简称>",
   isolation: "worktree",
   run_in_background: true,
-  prompt: "对位于 <论文路径> 的论文执行 /ingest。
+  prompt: "🚨 ISOLATION NOTICE：你正运行在项目的临时 git worktree 中 —
+    你的 cwd 是你自己的 worktree 目录，而不是主仓库。
+    在每一次 Read/Write/Edit 调用中只能使用相对路径（如 wiki/papers/foo.md、
+    raw/papers/<slug>/main.tex、tools/fetch_s2.py）。绝对不要在任何路径前
+    拼接 /home/... 这类绝对路径 — 那会绕过 worktree 隔离、破坏并行合并流程。
+    如果你正准备用一个绝对路径，立即停下，把它重写为相对 cwd 的路径。
+
+    对位于 raw/papers/<相对路径> 的论文执行 /ingest。
 
     INIT 模式 — 以快速批量引导模式运行 ingest。
     引用发现已在 /init Step 2 完成，因此跳过对应 API 调用。
 
     1. 读取 .claude/skills/ingest/SKILL.md 获取完整工作流
     2. 按以下 INIT 模式覆盖执行工作流：
-         跳过 — fetch_s2.py citations <arxiv_id>   （引用链扩展已在 /init Step 2 完成）
-         跳过 — fetch_s2.py references <arxiv_id>  （同上）
-         跳过 — fetch_deepxiv.py head <arxiv_id>   （批量引导不需要章节结构）
-         跳过 — 更新 wiki/index.md                 （主流程在 Step 7 末尾执行 rebuild-index）
-         跳过 — 更新 wiki/topics/*.md              （主流程在合并后执行 lint --fix 修复所有 xref）
+         跳过 — fetch_s2.py citations <arxiv_id>            （引用链扩展已在 /init Step 2 完成）
+         跳过 — fetch_s2.py references <arxiv_id>           （同上）
+         跳过 — fetch_deepxiv.py head <arxiv_id>            （批量引导不需要章节结构）
+         跳过 — 更新 wiki/index.md                           （主流程合并后执行 rebuild-index）
+         跳过 — 更新 wiki/topics/*.md                        （主流程在合并后执行 lint --fix 修复所有 xref）
+         跳过 — research_wiki.py rebuild-context-brief       （graph/ 文件是派生的；由主流程在所有合并完成后统一重建一次。在 worktree 中并行重建必然导致 context_brief.md / open_questions.md 的合并冲突。）
+         跳过 — research_wiki.py rebuild-open-questions      （同上 — 子代理绝不可写 wiki/graph/*.md）
          执行 — 完整阅读 .tex/.pdf 来源
-         执行 — fetch_s2.py paper <arxiv_id>        （元数据：venue, year, 引用量, s2_id）
-         执行 — fetch_deepxiv.py brief <arxiv_id>   （快速 TLDR，用于草拟 Key idea）
-         执行 — 创建 paper 页面、最多 3 个 claims、最多 3 个 concepts、关键 people（importance >= 4）
-         执行 — 添加所有 graph edges，追加 log.md
-    3. Wiki 根目录：wiki/   工具目录：tools/
+         执行 — fetch_s2.py paper <arxiv_id>                 （元数据：venue, year, 引用量, s2_id）
+         执行 — fetch_deepxiv.py brief <arxiv_id>            （快速 TLDR，用于草拟 Key idea）
+         执行 — 创建 paper 页面、在硬上限内创建 claims/concepts、关键 people（importance >= 4）
+         执行 — 对每个候选 concept/claim 强制调用 find-similar-concept 和 find-similar-claim（见 /ingest Step 4 / Step 5 Part A；同时扫描 concepts/ 和 foundations/）
+         执行 — 通过 add-edge 添加所有 graph edges，追加 log.md
+    3. Wiki 根目录：wiki/   工具目录：tools/   （均为相对 cwd 的路径）
     4. 先激活 venv：source .venv/bin/activate
     5. 已创建的 topics（不要重复创建）：<逗号分隔的 topic slugs>
-    6. 完成后汇报：
+    6. **强制最后一步 — 在汇报前把工作 commit 到 worktree branch**：
+       ```bash
+       git add wiki/
+       git status --short
+       git commit -m \"ingest: <paper-slug>\" --no-gpg-sign
+       ```
+       没有这个 commit，主流程 Phase B 合并时就没有东西可合 — 你的全部 ingest 成果都会丢失。
+       如果 `git status --short` 在 wiki/ 下显示为空，说明出了问题（你可能使用了绝对路径绕过
+       worktree），此时应在汇报中说明，不要 commit 一个空结果。
+    7. commit 后汇报：
        - 创建的页面（papers, concepts, people, claims）
        - 添加的 graph edges
+       - 第 6 步的 commit hash
        - 遇到的任何问题"
 })
 ```
@@ -236,6 +335,24 @@ Agent({
 #### Phase B — Fan-in：顺序合并
 
 所有 agent 完成后，按 importance 顺序（高引用量优先）逐一将各自的 worktree branch 合并到 main。
+
+**合并前的 sanity check**：确认 worktree branch 确实存在，并且每个 branch 都至少有一个超出 `HEAD` 的 commit：
+```bash
+git branch -a | grep worktree
+git worktree list
+# 对每个 branch，验证确实有 ingest commit（而非空）：
+for b in $(git branch --list 'worktree-agent-*' | tr -d ' *+'); do
+  echo "=== $b ==="
+  git log --oneline "$(git merge-base HEAD "$b")".."$b" | head -5
+done
+```
+
+**需要在此处检测的两种失败模式：**
+
+1. **根本没有 worktree branch**，但 `wiki/` 已经被写入 → 子代理绕过了 worktree 隔离（很可能是 prompt 里含有绝对路径，见上面 🚨 关键 区块）。立即停止，不要进入合并循环。
+2. **有 worktree branch 但 0 commit**（超出 `HEAD`）→ 子代理写了文件但没 commit。直接进入 Phase B 合并会"成功"但什么都没带入。立即停止 — 要么重新 spawn 受影响的 agent，要么手工 commit 每个 worktree 再合并：`for w in .claude/worktrees/agent-*; do (cd "$w" && git add wiki/ && git commit -m "ingest: recovered" --no-gpg-sign); done`。
+
+只有两项检查都通过后才能进入合并循环。
 
 对每个已完成的 agent branch：
 ```bash
@@ -274,6 +391,8 @@ python3 tools/research_wiki.py checkpoint-clear wiki/ "init-session"
 **重要约束**：
 - **每个 agent 必须设置 `run_in_background: true`** — 并行执行的前提；可以逐一 spawn，但所有 agent 必须并发运行
 - **每个 agent 使用 `isolation: "worktree"`** — 防止并行执行期间的文件系统冲突
+- **prompt 中只能使用相对路径** — 绝不可在子代理 prompt 中写项目根绝对路径；绝对路径会悄然绕过 worktree 隔离，破坏合并阶段（见上面 🚨 关键 区块）
+- **子代理必须在汇报前 commit** — 每个 agent prompt 都强制要求最后一步 `git add wiki/ && git commit`，否则 Phase B 会合入空结果。Phase B sanity check 必须验证每个 branch 都有 commit。
 - **spawn 完所有 N 个 agent 后，等待所有 N 个完成通知**，再进入 Phase B
 - **绝不绕过子代理** — 所有论文 ingest 必须通过子代理运行 /ingest 工作流
 - **强制执行 init 模式跳过项** — SKIP 列表不得移除；`lint --fix`（Step 7）负责修复所有跳过的 xref
@@ -354,6 +473,8 @@ python3 tools/research_wiki.py checkpoint-clear wiki/ "init-session"
 - **中途中断**：下次运行 `/init` 时自动检测 checkpoint，从断点继续（跳过已完成的论文）
 - **wiki/ 已存在内容**：检测已有页面，跳过已存在的 entity，仅补充新内容（幂等性）
 - **topic 生成不确定**：优先少而准，2-3 个高质量 topic 优于 5 个模糊 topic
+- **worktree 隔离明显失效**（Phase A 后没有 worktree branch 但 `wiki/` 已被写入）：子代理 prompt 很可能含有绝对路径。停止、审计 prompt、修正主流程行为，从干净的 checkpoint 重跑。**绝不可**在缺少 Phase B 合并的情况下进入 Phase C — 这会导致 wiki 含大量重复 concept 和 claim。
+- **worktree branch 存在但无 commit**（Phase B sanity check 显示超出 merge-base 0 commit）：子代理跳过了强制最后一步 commit。要么重新 spawn 受影响的 agent（若支持 resume 则成本低），要么手工 commit 每个 worktree 再合并：`for w in .claude/worktrees/agent-*; do (cd "$w" && git add wiki/ && git commit -m "ingest: recovered" --no-gpg-sign); done`。之后按正常流程进入 Phase B。
 
 ## Dependencies
 

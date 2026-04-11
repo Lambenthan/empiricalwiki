@@ -106,62 +106,213 @@ argument-hint: <local-path-or-arXiv-URL>
 - frontmatter：title, slug, arxiv, venue, year, tags, importance, date_added, source_type, s2_id, keywords, domain, code_url, cited_by
 - 正文各节：Problem, Key idea, Method, Results, Limitations, Open questions, My take, Related
 
-### Step 4: 提取 claims
+### Step 4: 识别 Claims（先找已有，确认没有才新建）
 
-从论文内容中提取 1-3 个核心 claims（论文的主要贡献断言）。
+> 🚨 **关键 — Step 4 开始前必读。**
+> Claims 在多篇论文之间是**共享**的。多篇论文通常以不同证据支持**同一个命题**。你的任务是找到每篇论文所支持的已有 claim，而**不是**每篇论文都新建一个 claim。在生产（test6 OmegaWiki，15 篇论文）中，这一步此前被随意执行，产生了 45 个 claim — 其中 4 个 claim 都在表达"方法 X 产生的 prompt 超越人工/手写 prompt"。这浪费了大量时间，并破坏了 claim-graph 推理。**下面的去重工具就是为了防止这种情况。请使用它。**
 
-对每个 claim：
-1. 生成 claim slug：`python3 tools/research_wiki.py slug "<claim-title>"`
-2. 检查 `wiki/claims/` 是否已有匹配的 claim（语义匹配，非仅 slug 匹配）
-3. **若 claim 已存在**：
-   - 在 claim 页面的 `evidence` 列表追加新 evidence entry：
-     ```yaml
-     - source: <paper-slug>
-       type: supports    # supports | contradicts
-       strength: moderate  # weak | moderate | strong（根据论文证据强度）
-       detail: "..."
-     ```
-   - 根据新 evidence 重新评估 `confidence` 和 `status`
-   - 添加 graph edge：
-     ```bash
-     python3 tools/research_wiki.py add-edge wiki/ --from papers/<paper-slug> --to claims/<claim-slug> --type supports --evidence "<detail>"
-     ```
-4. **若 claim 不存在**：
-   - 按 CLAUDE.md claim 模板创建 `wiki/claims/{claim-slug}.md`
-   - status: proposed 或 weakly_supported（取决于论文 evidence 强度）
-   - source_papers: [<paper-slug>]
-   - evidence 初始化为该论文的 evidence entry
-   - 添加 graph edge：同上
-5. 在 paper 页面的 `## Related` 中追加 claim 链接：`supports: [[claim-slug]]`
+**每篇论文的硬上限：**
+- importance < 5：**最多 1 个新 claim**
+- importance == 5（seminal）：**最多 2 个新 claim**
+- 该论文支持的所有其他 claim 必须与已有 claim 匹配（见下面 Branch A 或 B）
+
+#### Step 4.1: 识别候选 claims
+
+阅读论文的贡献部分和摘要。列出论文明确断言的 1-3 个主要实证或概念性命题。每个候选包含：
+- 一个简短标题（命题本身，例如 "LLM-optimized prompts outperform human-written prompts"）
+- 若干 tag（例如 `prompt-optimization,llm`）
+
+#### Step 4.2: 对每个候选，搜索已有等价项 — 强制调用工具
+
+```bash
+python3 tools/research_wiki.py find-similar-claim wiki/ "<候选 claim 标题>" --tags "<逗号分隔的 tags>"
+```
+
+这是一个确定性工具，使用规范化 token 匹配 + tag 加权 Jaccard。它返回一个按相似度降序排序的 JSON 列表，例如：
+
+```json
+[
+  {
+    "slug": "llm-prompts-beat-human",
+    "title": "LLM-optimized prompts outperform human-written prompts",
+    "tags": ["prompt-optimization", "llm"],
+    "status": "weakly_supported",
+    "confidence": 0.7,
+    "source_papers": ["opro"],
+    "score": 0.62,
+    "match_reason": "canonicalized token Jaccard 0.56; tags shared: ['prompt-optimization']"
+  }
+]
+```
+
+空列表 `[]` 表示没有相似 claim，可以进入 Branch C。
+
+#### Step 4.3: 基于 JSON 结果分支处理
+
+**Branch A — top 结果 score >= 0.80**（或精确标题匹配 score == 1.0）：
+这是**同一个 claim**。**不要**新建文件。请执行：
+1. 读取已有 claim 文件：`wiki/claims/<top-slug>.md`
+2. 在其 `evidence` 列表追加新 entry：
+   ```yaml
+   - source: <paper-slug>
+     type: supports        # 或 contradicts
+     strength: moderate    # weak | moderate | strong
+     detail: "<来自本文的一句话证据摘要>"
+   ```
+3. 将 `<paper-slug>` 追加到 claim 的 `source_papers`（若不存在）
+4. 重新评估 `confidence` 和 `status`：更多强证据 ⇒ 更高 confidence；证据混杂 ⇒ `weakly_supported`
+5. 添加 graph edge：
+   ```bash
+   python3 tools/research_wiki.py add-edge wiki/ --from papers/<paper-slug> --to claims/<top-slug> --type supports --evidence "<detail>"
+   ```
+6. 在 paper 页面的 `## Related` 追加 `supports: [[<top-slug>]]`
+
+**Branch B — top 结果 score 0.40-0.80**（相似但不完全一致）：
+读取已有 claim 的标题和 `## Statement` 段落。做出判断：
+- 如果两者表达**同一命题**但措辞不同 → 按 Branch A 处理
+- 如果两者是**真正不同的命题**只是共享词汇 → 按 Branch C 处理
+
+**不确定时默认走 Branch A。** 过度合并的代价远小于过度创建：错误合并的 claim 以后可以拆分，但大量近似重复的 claim 会毒化所有下游推理。若选择 Branch C，必须指出命题中具体哪个方面是真正新颖的。
+
+**Branch C — top 结果 score < 0.40 或列表为空**：
+没有已有 claim 覆盖该命题。
+1. **先检查硬上限。** 清点你已为本文创建了多少个新 claim。若达到上限（importance < 5 时为 1，importance == 5 时为 2），**停止创建新 claim**。强制将剩余候选转入 Branch A — 从刚才的 `find-similar-claim` 结果中选最接近的已有 claim 合并，即使 score < 0.40。
+2. 否则，按 CLAUDE.md 模板创建 `wiki/claims/{claim-slug}.md`：
+   - 生成 slug：`python3 tools/research_wiki.py slug "<claim-title>"`
+   - status：`proposed` 或 `weakly_supported`（取决于论文证据强度）
+   - source_papers：`[<paper-slug>]`
+   - 用本文的 entry 初始化 `evidence`
+3. 添加 graph edge + 更新 paper 的 `## Related`（与 Branch A 的第 5-6 步相同）
+
+#### Step 4.4: Step 4 末尾的强制自检
+
+记录本次 ingest 匹配和新建了多少 claim：
+```bash
+python3 tools/research_wiki.py log wiki/ "ingest | claims for <paper-slug>: N matched existing, M new"
+```
+
+**如果 M 超过硬上限**，说明你违反了约束。停止、撤销多余的新 claim 文件，将它们转换为 Branch A 的追加操作。
+
+#### 反模式（绝不要这样做）
+
+- ❌ **跳过 `find-similar-claim`**，理由是"我已经知道这是新 claim" — 你不知道，test6 事故已经证明了
+- ❌ **对每个主要贡献都创建一个新 claim**，不检查是否已被已有 claim 覆盖
+- ❌ **仅用 slug 对比**（"slug 不同所以 claim 不同"）— slug 是由标题自动生成的，paraphrase 即使表达同一命题也会得到不同 slug
+- ❌ **把 Branch B 当成"默认新建"** — 默认动作是合并，不是拆分
 
 ### Step 5: 处理交叉引用
 
-**Part A — Concepts 匹配与创建（含语义去重）：**
+**Part A — Concepts 匹配与创建（先找已有，确认没有才新建）**
 
-1. 读取 `wiki/index.md`，提取所有已有 concepts 的 slug 和 tags
-2. 读取每个已有 concept 的 frontmatter，获取 `title` 和 `aliases` 列表
-3. **同时扫描 `wiki/foundations/*.md`** 的 `title`、`slug` 和 `aliases`。Foundations 是 `/prefill` 沉淀的背景知识页面 — 对于教科书材料，foundations 优先于新建 concept。
-4. 对论文中提到的每个候选概念，**先检查是否与已有概念重复**：
-   - **Foundation 命中**（slug、title 或 alias）：候选属于基础背景知识。**不要新建 concept 页面**。直接在 paper 的 `## Related` 追加 `[[foundation-slug]]`。Foundations 是终端节点 — 不要修改 foundation 页面（不写反向链接）。
-   - 与已有概念的 slug 精确匹配 → 是同一概念
-   - 与已有概念的 title 或 aliases 中任一项语义相同（别名、子类、具体实现）→ 是同一概念
-   - 若是已有概念的**变体或子类**（如 "scaled dot-product attention" vs "attention-mechanism"）→ 不创建新页面，追加到已有概念的 `## Variants` 并将候选名加入 `aliases`
-   - 只有**确实是全新概念**且未被任何 foundation 覆盖时才创建新页面
-4. 对每个匹配的 concept：
-   - 若本文是该概念的核心论文：追加 slug 到 concept 的 `key_papers`
-   - 若引入新变体：在 concept 的 `## Variants` 追加，将变体名加入 `aliases`
-   - 若有矛盾：在 concept 页面记录 contradiction note
-   - 反向：在 paper 的 `## Related` 追加 `[[concept-slug]]`
-   - 添加 graph edge：
-     ```bash
-     python3 tools/research_wiki.py add-edge wiki/ --from papers/<paper-slug> --to concepts/<concept-slug> --type supports --evidence "..."
-     ```
-5. 若论文引入了全新概念（经过上述去重检查确认 wiki 中无匹配）：
-   - 按 CLAUDE.md concept 模板创建 `wiki/concepts/{concept-slug}.md`
-   - maturity: emerging
-   - key_papers: [<paper-slug>]
-   - aliases: [常见别名]（在创建时就收集该概念的已知别名）
-   - 在 paper 的 `## Related` 追加 `[[concept-slug]]`
+> 🚨 **关键 — 新建任何 concept 页面前必读。**
+> Concepts 在多篇论文之间是**共享**的。多篇论文通常是在深化已有概念，而不是引入新概念。你的任务是找到每篇论文所扩展的已有 concept，把该论文追加到其 `key_papers`，而**不是**每篇论文都新建一个 concept。在生产（test6 OmegaWiki，15 篇论文）中，这一步此前产生了 37 个 concept，其中包括 3 个表达"LLM 作为梯度"的 concept（`textual-gradient-descent`、`textual-gradient-optimization`、`verbal-gradient`）以及 2 个表达"LLM 作为进化算子"的 concept（`llm-driven-evolutionary-operators`、`llms-evolutionary-operators`）。**下面的去重工具就是为了防止这种情况。请使用它。**
+
+**每篇论文的硬上限（只统计新建的 concept 页面）：**
+- importance < 5：**最多 1 个新 concept**
+- importance == 5（seminal）：**最多 3 个新 concept**
+- 该论文涉及的所有其他 concept 必须匹配到已有 concept，或引用已有 foundation（见下面 Branch 0 / Branch A / Branch B）
+- Foundation 引用（Branch 0）**不计入**硬上限 — 引用背景知识是零成本操作
+
+#### Step 5.A.1: 识别候选 concepts
+
+阅读论文的 method/approach 部分。列出论文引入或显著扩展的 1-3 个技术概念。每个候选包含：
+- 一个标题（例如 "Textual Gradient Descent"）
+- 若干论文中使用的别名（例如 `["natural language gradient", "text gradient", "APO gradient"]`）
+
+#### Step 5.A.2: 对每个候选，搜索已有等价项 — 强制调用工具
+
+```bash
+python3 tools/research_wiki.py find-similar-concept wiki/ "<候选 concept 标题>" --aliases "<逗号分隔的别名>"
+```
+
+这是一个确定性工具，通过精确标题、别名重叠、短语包含、token Jaccard 进行匹配。它**同时扫描 `wiki/concepts/` 和 `wiki/foundations/`**，每个结果带有 `entity_type: "concept"` 或 `entity_type: "foundation"` 标签。结果会让 foundation 命中优先排在最前面，然后按 score 降序返回 concepts。例如：
+
+```json
+[
+  {
+    "entity_type": "foundation",
+    "slug": "attention-mechanism",
+    "title": "Attention Mechanism",
+    "aliases": ["scaled dot-product attention", "self-attention"],
+    "score": 0.85,
+    "match_reason": "phrase containment: 'self-attention' ↔ 'attention mechanism'"
+  },
+  {
+    "entity_type": "concept",
+    "slug": "textual-gradient-descent",
+    "title": "Textual Gradient Descent",
+    "aliases": ["natural language gradient", "text gradient"],
+    "key_papers": ["protegi"],
+    "maturity": "emerging",
+    "score": 1.0,
+    "match_reason": "exact normalized match: 'Natural Language Gradient' == 'natural language gradient'"
+  }
+]
+```
+
+空列表 `[]` 表示没有相似 concept 或 foundation；可以进入 Branch C。
+
+#### Step 5.A.3: 基于 JSON 结果分支处理
+
+**Branch 0 — 任意结果 `entity_type: "foundation"` 且 score >= 0.80**（**在评估 Branch A 之前先判断此分支**）：
+候选属于基础背景知识。**不要新建 concept 页面，也不要修改 foundation 页面（foundations 是终端节点 — 不写反向链接）。**
+1. 在 paper 的 `## Related` 追加 `[[<foundation-slug>]]`（直接引用 foundation）
+2. 添加 graph edge：
+   ```bash
+   python3 tools/research_wiki.py add-edge wiki/ --from papers/<paper-slug> --to foundations/<foundation-slug> --type derived_from --evidence "<一句话摘要>"
+   ```
+3. **绝不**把该论文写入 foundation 的 frontmatter — foundations 不写反向链接。
+4. 该候选**不计入**每篇论文的硬上限。
+
+如果 top 结果是 foundation 但 score 在 0.40-0.80 之间，读 foundation 的 `## Definition`。如果确实是同一个教科书概念，按 Branch 0 处理；如果论文是在该背景之上提出了具体的新技术机制，则继续评估 Branch A/B/C — 但在引用相应 concept 的同时，也向 foundation 写一条 `derived_from` 边。
+
+**Branch A — top concept 结果（entity_type "concept"）score >= 0.85**（精确、别名或短语包含）：
+这是**同一概念**。**不要**新建文件。请执行：
+1. 读取已有 concept 文件：`wiki/concepts/<top-slug>.md`
+2. 将 `<paper-slug>` 追加到其 `key_papers`（若已存在则跳过）
+3. 若论文使用了一个不在该 concept `aliases` 中的新别名，追加进去
+4. 若论文引入了值得记录的 variant，在该 concept 的 `## Variants` 追加一个条目
+5. 添加 graph edge：
+   ```bash
+   python3 tools/research_wiki.py add-edge wiki/ --from papers/<paper-slug> --to concepts/<top-slug> --type supports --evidence "<一句话摘要>"
+   ```
+6. 在 paper 页面的 `## Related` 追加 `[[<top-slug>]]`
+
+**Branch B — top concept 结果 score 0.40-0.85**（相似但不完全一致）：
+读取已有 concept 的 `## Definition` 和 `## Intuition`。做判断：
+- 若两者指**同一技术思想**（一个是更具体的名称、替换措辞或子类）→ 按 Branch A 处理。若候选是有意义的子类，也追加到 `## Variants`。
+- 若两者是**真正不同的技术思想**只是共享词汇 → 按 Branch C 处理。
+
+**不确定时默认走 Branch A。** 过度合并的代价远小于过度创建：错误合并的 concept 以后可以拆分（`## Variants` 历史会保留），但大量近似重复的 concept 会毒化 gap 检测、引用图和 survey 生成。若选择 Branch C，必须指出具体的技术区别（不同机制、不同数学形式化、不同应用类别）。
+
+**Branch C — top 结果 score < 0.40 或列表为空**：
+没有已有 concept 或 foundation 覆盖该想法。
+1. **先检查硬上限。** 清点你已为本文新建的 concept 页面数量（Branch 0 的 foundation 引用不计入）。若达到上限（importance < 5 时为 1，importance == 5 时为 3），**停止创建新 concept**。强制将剩余候选转入 Branch A — 从 `find-similar-concept` 结果中选最接近的已有 concept 合并，即使 score < 0.40。
+2. 否则，按 CLAUDE.md 模板创建 `wiki/concepts/{concept-slug}.md`：
+   - 生成 slug：`python3 tools/research_wiki.py slug "<concept-title>"`
+   - maturity：`emerging`
+   - key_papers：`[<paper-slug>]`
+   - aliases：列出论文中找到的所有别名（尽量齐全 — 这个列表决定了未来 ingest 能否匹配到）
+3. 在 paper 页面的 `## Related` 追加 `[[<concept-slug>]]`
+4. 添加 graph edge（与 Branch A 第 5 步相同）
+
+#### Step 5.A.4: Part A 末尾的强制自检
+
+记录本次 ingest 匹配、新建、foundation-引用 的 concept 数量：
+```bash
+python3 tools/research_wiki.py log wiki/ "ingest | concepts for <paper-slug>: N matched existing, M new, F foundation-refs"
+```
+
+**如果 M 超过硬上限**，说明你违反了约束。停止、撤销多余的新 concept 文件，将它们转换为 Branch A 的追加操作。
+
+#### 反模式（绝不要这样做）
+
+- ❌ **跳过 `find-similar-concept`**，理由是"我在 /ingest 开始时已经把所有 concept 页面都读过了" — 即使你读了，test6 事故已证明人眼去重会漏掉 paraphrase；而且你还需要 foundations 扫描
+- ❌ **对论文中每个技术思想都新建一个 concept**，不检查是否已被已有 concept 或 foundation 覆盖
+- ❌ **仅用 slug 对比** — slug 是由标题自动生成的，同一思想换个措辞就会得到不同 slug（test6：`llm-driven-evolutionary-operators` vs `llms-evolutionary-operators`）
+- ❌ **把 Branch B 当成"默认新建"** — 默认动作是合并，不是拆分
+- ❌ **把已有 concept 的"更一般"或"更具体"版本作为新页面创建** — 改为用 `## Variants` 扩展已有 concept
+- ❌ **向 foundation 页面写反向引用** — foundations 是终端节点；它们根本没有 `key_papers` 这类字段，任何反向链接都违反不变量。只允许 paper → foundation 的 edge 以及 paper `## Related` 中的 `[[foundation-slug]]`。
 
 **Part B — Topics 匹配：**
 
@@ -238,7 +389,9 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 - **log.md append-only**：通过 `python3 tools/research_wiki.py log` 追加
 - **importance 评分标准**：1=niche, 2=useful, 3=field-standard, 4=influential, 5=seminal
 - **claim 提取保守**：仅提取论文明确主张的核心贡献，不过度推断
-- **重复检查**：创建任何页面前先检查是否已存在
+- **去重是强制的，不是可选的**：创建任何新 claim 或 concept 页面前，必须运行 `find-similar-claim` / `find-similar-concept` 并遵循 Step 4 / Step 5.A 的分支逻辑。`find-similar-concept` 同时扫描 `concepts/` 和 `foundations/`；foundation 命中走 Branch 0（仅引用，绝不新建）。跳过去重工具是 wiki 膨胀的头号原因。
+- **每篇论文硬上限**：最多 1 个新 claim + 1 个新 concept（importance == 5 时为 2 个 claim + 3 个 concept）。其余候选必须通过 Branch A 匹配到已有 entity，或通过 Branch 0 引用 foundation。不确定时合并。
+- **Foundations 是终端节点**：绝不从 paper 向 foundation 的 frontmatter 写反向链接。Foundation 引用只存在于 paper 的 `## Related` 和 `edges.jsonl` 中。
 
 ## Error Handling
 
@@ -253,6 +406,8 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 
 ### Tools（via Bash）
 - `python3 tools/research_wiki.py slug "<title>"` — slug 生成
+- `python3 tools/research_wiki.py find-similar-concept wiki/ "<title>" --aliases "<a,b,c>"` — **新建任何 concept 前强制调用**（Step 5 Part A）。同时扫描 `concepts/` 和 `foundations/`；foundation 命中优先排在最前。
+- `python3 tools/research_wiki.py find-similar-claim wiki/ "<title>" --tags "<a,b,c>"` — **新建任何 claim 前强制调用**（Step 4）。规范化 token Jaccard + tag 加权阈值。
 - `python3 tools/research_wiki.py add-edge wiki/ --from <id> --to <id> --type <type> --evidence "<text>"` — 添加 graph edge
 - `python3 tools/research_wiki.py rebuild-context-brief wiki/` — 重建压缩上下文
 - `python3 tools/research_wiki.py rebuild-open-questions wiki/` — 重建知识缺口地图

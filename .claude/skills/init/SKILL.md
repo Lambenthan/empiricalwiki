@@ -178,6 +178,69 @@ Create the following pages per the CLAUDE.md templates (the parts not handled by
 **4c — Update index.md:**
 - Write Summary and topics page entries into the corresponding sections of index.md
 
+### Step 4.5: Commit skeleton + stash unrelated dirty files (MANDATORY before fan-out)
+
+Before spawning any subagent, the working tree must be in a state where (a) everything `/init` produced so far is committed, and (b) anything `/init` did NOT produce is out of the working tree entirely. This is a hard requirement for the Phase B sequential merge — git refuses to merge into a dirty working tree, and `git stash` is the only safe way to get an unrelated user edit out of the way temporarily.
+
+#### 4.5.a — Inspect the working tree
+
+```bash
+git status --short
+```
+
+Sort what you see into two buckets:
+
+- **Scaffold files** — anything under `wiki/` or `raw/papers/`. These were either created by Step 1 (`research_wiki.py init`) or Step 4 (Summary / topics / initial index.md), or they are user-provided source papers under `raw/papers/`. They MUST be in the scaffold commit so that worktree branches inherit them.
+- **Unrelated dirty files** — anything outside `wiki/` and `raw/papers/`. Common cases: an unfinished SKILL.md edit from a previous session, in-progress changes to `tools/`, `i18n/`, `tests/`. These have nothing to do with `/init` and MUST NOT be in the scaffold commit, but they ALSO must not be left in the working tree, because Phase B merges will be blocked by them.
+
+#### 4.5.b — Stash unrelated dirty files (if any)
+
+If `git status --short` showed anything outside `wiki/` and `raw/papers/`, stash it before proceeding:
+
+```bash
+UNRELATED=$(git status --short | awk '{print $2}' | grep -Ev '^(wiki/|raw/papers/)' || true)
+
+if [ -n "$UNRELATED" ]; then
+  echo "Unrelated dirty files detected — stashing before /init:"
+  echo "$UNRELATED"
+  git stash push -u -m "init-unrelated-dirty-$(date +%Y%m%d-%H%M%S)" -- $UNRELATED
+fi
+```
+
+**Record the stash ref** (`git stash list | head -1`) into `init-session` checkpoint metadata so Step 8 can pop it back at the end. If you cannot record it durably, at minimum print it to the user and remind them to `git stash pop` themselves after `/init` completes.
+
+**Why stash and not "ask the user"**: a previous version of this step asked the user instead of stashing automatically. That left dirty files in the working tree, and Phase B's first `git merge` then failed with `your local changes ... would be overwritten by merge` even when those files had nothing to do with the merge — git's safety check is conservative and refuses any merge while the work tree is dirty. Stash → init → pop is the standard workflow; the user's work is never lost.
+
+#### 4.5.c — Commit the scaffold
+
+After 4.5.b, the only dirty files left should be under `wiki/` and `raw/papers/`. Verify, then commit:
+
+```bash
+git status --short
+git add wiki/ raw/papers/
+git commit -m "init: scaffold wiki skeleton (Summary, topics, index, graph stubs)" --no-gpg-sign
+```
+
+If `git status --short` still shows files outside `wiki/` / `raw/papers/`, the stash in 4.5.b was incomplete — investigate and re-stash before committing. NEVER use `git add -A` here; it would defeat the whole point of the stash step.
+
+After this commit, every subagent worktree will branch from a clean base where the skeleton already exists, so agents will only add new files (`wiki/papers/{slug}.md`, new concepts/claims/people) and Phase B merges will only conflict on genuine concept/claim overlaps (which Phase B handles via union).
+
+#### 4.5.d — Verify `.gitattributes` is in place
+
+The repo ships with a `.gitattributes` file at the project root that declares `merge=union` for `wiki/log.md`, `wiki/graph/edges.jsonl`, and `wiki/index.md`. These are append-only files that every parallel agent writes to; without `merge=union`, every Phase B merge would conflict on them. Verify the file exists and contains all three entries:
+
+```bash
+test -f .gitattributes && grep -E '^wiki/(log\.md|graph/edges\.jsonl|index\.md)' .gitattributes
+```
+
+If the file is missing or any entry is absent, **STOP** and create it before proceeding — Phase B will fail without it. The expected content is:
+
+```
+wiki/log.md             merge=union
+wiki/graph/edges.jsonl  merge=union
+wiki/index.md           merge=union
+```
+
 ### Step 5: Ingest Papers via Parallel Subagents with Worktree Isolation
 
 All paper ingest agents run **simultaneously** using git worktrees for filesystem isolation. Total time ≈ slowest single paper (not sum of all papers).
@@ -189,6 +252,22 @@ python3 tools/research_wiki.py checkpoint-load wiki/ "init-session"
 If a checkpoint exists, exclude already-completed papers from the parallel batch and resume with the remaining ones.
 
 **Ordering for merge**: rank `raw_source_list` by estimated importance (citation count, venue tier). The highest-importance paper is merged first — its concept definitions become the canonical base that later merges extend.
+
+#### 🚨 CRITICAL: Prompt Construction Rules (read before Phase A)
+
+When constructing each subagent's prompt, **the orchestrator MUST NOT include any absolute path to the project root**. Worktree isolation works by giving the subagent its own cwd (the worktree), but if the prompt contains a line like `Working directory: /home/user/project/...`, the subagent will use that absolute path for all `Read`/`Write`/`Edit` calls and **silently bypass the worktree**, writing directly to the main repo. This was a real production bug — every parallel ingest then writes to main, Phase B has nothing to merge, and concept/claim conflicts go unresolved.
+
+**Anti-pattern (NEVER do this)**:
+```
+prompt: "Execute /ingest for ...
+    Working directory: /home/user/project/OmegaWiki    ← BUG: bypasses worktree
+    ..."
+```
+
+**Correct pattern**:
+- Use only relative paths in the prompt (e.g., `raw/papers/...`, `wiki/`, `tools/`)
+- Include an explicit reminder that the agent is in an isolated worktree
+- Trust that the subagent's cwd is set correctly by Claude Code's worktree mechanism
 
 #### Phase A — Fan-out: background agents
 
@@ -204,29 +283,51 @@ Agent({
   description: "ingest <paper-short-name>",
   isolation: "worktree",
   run_in_background: true,
-  prompt: "Execute /ingest for the paper at <path-to-source>.
+  prompt: "🚨 ISOLATION NOTICE: You are running in a temporary git worktree
+    of the project — your cwd is YOUR OWN worktree, NOT the main repo.
+    Use ONLY relative paths in every Read/Write/Edit call (e.g. wiki/papers/foo.md,
+    raw/papers/<slug>/main.tex, tools/fetch_s2.py). NEVER prepend an absolute
+    path like /home/... — that bypasses worktree isolation and corrupts the
+    parallel merge phase. If you find yourself about to use an absolute path,
+    stop and rewrite it as a path relative to your cwd.
+
+    Execute /ingest for the paper at raw/papers/<source-relative-path>.
 
     INIT MODE — run ingest in fast-bootstrap mode.
     Citation discovery was already done by /init Step 2, so skip those API calls.
 
     1. Read .claude/skills/ingest/SKILL.md for the complete workflow
     2. Follow the workflow with these INIT MODE overrides:
-         SKIP — fetch_s2.py citations <arxiv_id>   (citation-chain expansion done in /init Step 2)
-         SKIP — fetch_s2.py references <arxiv_id>  (same reason)
-         SKIP — fetch_deepxiv.py head <arxiv_id>   (section structure not needed for batch bootstrap)
-         SKIP — updating wiki/index.md              (orchestrator runs rebuild-index at end of Step 7)
-         SKIP — updating wiki/topics/*.md           (orchestrator runs lint --fix after merge to repair all xrefs)
+         SKIP — fetch_s2.py citations <arxiv_id>            (citation-chain expansion done in /init Step 2)
+         SKIP — fetch_s2.py references <arxiv_id>           (same reason)
+         SKIP — fetch_deepxiv.py head <arxiv_id>            (section structure not needed for batch bootstrap)
+         SKIP — updating wiki/index.md                       (orchestrator runs rebuild-index after merge)
+         SKIP — updating wiki/topics/*.md                    (orchestrator runs lint --fix after merge to repair all xrefs)
+         SKIP — research_wiki.py rebuild-context-brief       (graph/ files are derived; orchestrator rebuilds ONCE after all merges. Parallel rebuilds in worktrees create guaranteed merge conflicts on context_brief.md / open_questions.md.)
+         SKIP — research_wiki.py rebuild-open-questions      (same reason — never touch wiki/graph/*.md inside a subagent)
          DO   — read .tex/.pdf source thoroughly
-         DO   — fetch_s2.py paper <arxiv_id>        (metadata: venue, year, citation count, s2_id)
-         DO   — fetch_deepxiv.py brief <arxiv_id>   (fast TLDR for key idea draft)
-         DO   — create paper page, up to 3 claims, up to 3 concepts, key people (importance >= 4)
-         DO   — add all graph edges, append to log.md
-    3. Wiki root: wiki/   Tools: tools/
+         DO   — fetch_s2.py paper <arxiv_id>                 (metadata: venue, year, citation count, s2_id)
+         DO   — fetch_deepxiv.py brief <arxiv_id>            (fast TLDR for key idea draft)
+         DO   — create paper page, claims/concepts within hard limits, key people (importance >= 4)
+         DO   — call find-similar-concept and find-similar-claim for every candidate (mandatory dedup — see /ingest Step 4 / Step 5 Part A; scans both concepts/ and foundations/)
+         DO   — add all graph edges via add-edge, append to log.md
+    3. Wiki root: wiki/   Tools dir: tools/   (both relative to your cwd)
     4. Activate venv first: source .venv/bin/activate
     5. Topics already created (do not recreate): <comma-separated topic slugs>
-    6. After completion, report back:
+    6. **MANDATORY FINAL STEP — commit your work to the worktree branch before reporting back**:
+       ```bash
+       git add wiki/
+       git status --short
+       git commit -m \"ingest: <paper-slug>\" --no-gpg-sign
+       ```
+       Without this commit, the orchestrator's Phase B merge has nothing to merge — your
+       entire ingest result will be lost. If `git status --short` shows nothing under wiki/,
+       something is wrong (you may have written to absolute paths bypassing the worktree);
+       report this in your final message instead of committing an empty result.
+    7. After committing, report back:
        - Pages created (papers, concepts, people, claims)
        - Graph edges added
+       - Commit hash from step 6
        - Any issues encountered"
 })
 ```
@@ -236,6 +337,24 @@ Agent({
 #### Phase B — Fan-in: sequential merge
 
 After all agents complete, merge their worktree branches into main **one by one**, in importance order (highest citation count first).
+
+**Sanity check before merging**: confirm the worktree branches exist AND each one has at least one commit beyond `HEAD`:
+```bash
+git branch -a | grep worktree
+git worktree list
+# For each branch, verify it actually has an ingest commit (not empty):
+for b in $(git branch --list 'worktree-agent-*' | tr -d ' *+'); do
+  echo "=== $b ==="
+  git log --oneline "$(git merge-base HEAD "$b")".."$b" | head -5
+done
+```
+
+**Two failure modes to detect here:**
+
+1. **No worktree branches at all**, but `wiki/` is already populated → the agents bypassed worktree isolation (likely the prompt contained an absolute path, see CRITICAL section above). STOP and investigate — do NOT proceed to the merge loop.
+2. **Worktree branches exist but show 0 commits** beyond `HEAD` → the agents wrote files but never committed. The Phase B merges will appear to "succeed" but bring in nothing. STOP — re-spawn the affected agents, OR manually commit each worktree before merging: `for w in .claude/worktrees/agent-*; do (cd "$w" && git add wiki/ && git commit -m "ingest: recovered" --no-gpg-sign); done`.
+
+Only proceed to the merge loop after both checks pass.
 
 For each completed agent branch:
 ```bash
@@ -274,6 +393,8 @@ python3 tools/research_wiki.py checkpoint-clear wiki/ "init-session"
 **IMPORTANT constraints**:
 - **`run_in_background: true` on every agent** — required for parallel execution; agents may be spawned one by one but must all run concurrently
 - **Each agent uses `isolation: "worktree"`** — required to prevent filesystem conflicts during parallel execution
+- **Prompt must contain only relative paths** — never include absolute paths to the project root in the agent prompt; absolute paths silently bypass worktree isolation and break the merge phase (see 🚨 CRITICAL section above)
+- **Subagents must commit before reporting back** — every agent prompt mandates a final `git add wiki/ && git commit` step. Without it, Phase B merges produce empty results. Verify each branch has a commit during the Phase B sanity check.
 - **Wait for all N completion notifications** before starting Phase B
 - **Never bypass subagents** — all paper ingestion goes through subagents running the /ingest workflow
 - **Enforce init-mode skips** — the SKIP list above eliminates redundant API calls; `lint --fix` in Step 7 repairs all skipped xrefs
@@ -354,6 +475,8 @@ Output a summary including:
 - **Interrupted mid-run**: next time `/init` runs, it automatically detects the checkpoint and resumes from where it left off (skipping already-completed papers)
 - **wiki/ already has content**: detect existing pages, skip entities that already exist, only supplement new content (idempotent)
 - **Topic generation uncertain**: prefer fewer and more precise; 2–3 high-quality topics beats 5 vague ones
+- **Worktree isolation appears to have failed** (no worktree branches after Phase A, but `wiki/` is already populated): the subagent prompts likely contained absolute paths. Stop, audit the prompts, fix the orchestrator behavior, and re-run from a clean checkpoint. Do NOT proceed to Phase C without Phase B merge — the wiki will end up with many duplicate concepts and claims.
+- **Worktree branches exist but contain no commits** (Phase B sanity check shows 0 commits beyond merge-base): the subagents skipped the mandatory final commit step. Either re-spawn the affected agents (cheap if they support resume) or recover by manually committing each worktree before merging: `for w in .claude/worktrees/agent-*; do (cd "$w" && git add wiki/ && git commit -m "ingest: recovered" --no-gpg-sign); done`. Then proceed with Phase B as normal.
 
 ## Dependencies
 

@@ -109,7 +109,7 @@ Write each file to `wiki/foundations/{slug}.md`.
 ### Step 5: Refresh navigation and log
 
 ```bash
-python3 tools/research_wiki.py rebuild-index --wiki-root wiki/
+python3 tools/research_wiki.py rebuild-index wiki/
 python3 tools/research_wiki.py log wiki/ "prefill | {N} foundations created for {domain}"
 ```
 
@@ -143,7 +143,7 @@ Remind the user that subsequent `/ingest` runs will dedup against these foundati
 
 ## Error Handling
 
-- **`wiki/foundations/` does not exist**: run `python3 tools/research_wiki.py init --wiki-root wiki/` first.
+- **`wiki/foundations/` does not exist**: run `python3 tools/research_wiki.py init wiki/` first.
 - **Wikipedia 404**: log the missing page, fall back to LLM knowledge for that seed (`source_url: ""`).
 - **Network failure**: print which seeds failed and continue with the remainder; do not abort the whole batch.
 - **Catalog file missing**: print error pointing to `.claude/skills/prefill/foundations-catalog.yaml`.
@@ -153,7 +153,7 @@ Remind the user that subsequent `/ingest` runs will dedup against these foundati
 ### Tools (via Bash)
 - `python3 tools/fetch_wikipedia.py summary|sections|section|wikitext "<title>" [--index N]`
 - `python3 tools/research_wiki.py slug "<title>"`
-- `python3 tools/research_wiki.py rebuild-index --wiki-root wiki/`
+- `python3 tools/research_wiki.py rebuild-index wiki/`
 - `python3 tools/research_wiki.py log wiki/ "<message>"`
 
 ### Catalog

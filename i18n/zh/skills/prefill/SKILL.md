@@ -109,7 +109,7 @@ source_url: "{Wikipedia URL，404 时留空}"
 ### Step 5: 刷新导航和日志
 
 ```bash
-python3 tools/research_wiki.py rebuild-index --wiki-root wiki/
+python3 tools/research_wiki.py rebuild-index wiki/
 python3 tools/research_wiki.py log wiki/ "prefill | {N} foundations created for {domain}"
 ```
 
@@ -143,7 +143,7 @@ python3 tools/research_wiki.py log wiki/ "prefill | {N} foundations created for 
 
 ## Error Handling
 
-- **`wiki/foundations/` 不存在**：先运行 `python3 tools/research_wiki.py init --wiki-root wiki/`。
+- **`wiki/foundations/` 不存在**：先运行 `python3 tools/research_wiki.py init wiki/`。
 - **Wikipedia 404**：记录缺失页面，该种子回退 LLM 知识（`source_url: ""`）。
 - **网络失败**：打印失败的种子，继续处理其余种子，不中断整个批次。
 - **catalog 文件缺失**：报错并指向 `.claude/skills/prefill/foundations-catalog.yaml`。
@@ -153,7 +153,7 @@ python3 tools/research_wiki.py log wiki/ "prefill | {N} foundations created for 
 ### 工具（通过 Bash）
 - `python3 tools/fetch_wikipedia.py summary|sections|section|wikitext "<title>" [--index N]`
 - `python3 tools/research_wiki.py slug "<title>"`
-- `python3 tools/research_wiki.py rebuild-index --wiki-root wiki/`
+- `python3 tools/research_wiki.py rebuild-index wiki/`
 - `python3 tools/research_wiki.py log wiki/ "<message>"`
 
 ### Catalog

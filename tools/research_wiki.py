@@ -439,6 +439,289 @@ def find_entities(wiki_root: str, entity_type: str,
 
 
 # ---------------------------------------------------------------------------
+# Semantic dedup: find-similar-concept / find-similar-claim
+# ---------------------------------------------------------------------------
+#
+# These two queries answer the question: "before I create a new concept/claim
+# with this title, does the wiki already have one that means the same thing?"
+#
+# They are deterministic (no LLM) and use only token-level matching, but they
+# are tuned for high recall — the LLM caller does the final semantic judgment
+# from a small ranked list. Designed to be invoked from /ingest BEFORE any
+# concept or claim is created, to prevent the "subagent A and subagent B both
+# create textual-gradient-descent under different slugs" failure mode.
+#
+# find-similar-concept ALSO scans wiki/foundations/ so that /ingest cannot
+# accidentally create a concept that duplicates an existing foundation page
+# (foundations are seeded by /prefill with their own title + aliases). A
+# foundation hit is marked with entity_type="foundation" in the output so the
+# caller can route to "reference instead of create" rather than merging.
+#
+# Score calibration:
+#   1.00  exact normalized match (case + stop-words ignored)
+#   0.85  one phrase fully contains the other (after normalization)
+#   0.40-0.84  Jaccard similarity of content tokens, scaled
+#   < 0.40  not returned
+#
+# Both functions return a JSON list sorted descending by score so the LLM can
+# scan the top-k. Empty list means "safe to create a new entity".
+
+
+def _normalize_text(text: str) -> str:
+    """Lowercase + strip punctuation + collapse whitespace. Used for phrase match."""
+    text = re.sub(r"[^a-z0-9\s]", " ", text.lower())
+    return " ".join(text.split())
+
+
+def _content_tokens(text: str) -> set[str]:
+    """Tokenize text into a set of content words (drop stop words and short tokens).
+
+    Used for Jaccard similarity. The same tokenizer is used on both sides of
+    each comparison so the result is symmetric.
+    """
+    if not text:
+        return set()
+    text = re.sub(r"[^a-z0-9\s]", " ", text.lower())
+    tokens = set()
+    for w in text.split():
+        if len(w) >= 3 and w not in STOP_WORDS:
+            tokens.add(w)
+    return tokens
+
+
+_CLAIM_CANONICAL_MAP = {
+    "outperform": "beat", "outperforms": "beat", "outperformed": "beat",
+    "outperforming": "beat", "beats": "beat", "beaten": "beat",
+    "exceed": "beat", "exceeds": "beat", "exceeded": "beat",
+    "surpass": "beat", "surpasses": "beat", "surpassed": "beat",
+    "improve": "beat", "improves": "beat", "improved": "beat",
+    "improvement": "beat", "improvements": "beat",
+    "better": "beat", "best": "beat",
+    "achieve": "beat", "achieves": "beat", "achieved": "beat",
+    "produce": "produce", "produces": "produce", "produced": "produce",
+    "producing": "produce", "production": "produce",
+    "generate": "produce", "generates": "produce", "generated": "produce",
+    "generating": "produce", "generation": "produce",
+    "optimize": "produce", "optimizes": "produce", "optimized": "produce",
+    "optimizing": "produce", "optimization": "produce",
+    "discover": "produce", "discovers": "produce", "discovered": "produce",
+    "create": "produce", "creates": "produce", "created": "produce",
+    "human": "human", "humans": "human",
+    "manual": "human", "manually": "human",
+    "expert": "human", "experts": "human", "expertly": "human",
+    "handwritten": "human", "handcrafted": "human",
+    "prompts": "prompt", "instructions": "instruction",
+    "models": "model", "papers": "paper", "methods": "method",
+    "results": "result", "tasks": "task", "datasets": "dataset",
+    "benchmarks": "benchmark", "experiments": "experiment",
+    "claims": "claim", "concepts": "concept",
+    "llms": "llm", "lms": "llm",
+}
+
+
+def _claim_tokens(text: str) -> set[str]:
+    """Tokenize a claim title with synonym canonicalization (claims only)."""
+    return {_CLAIM_CANONICAL_MAP.get(t, t) for t in _content_tokens(text)}
+
+
+def _phrase_match_score(a: str, b: str) -> float:
+    """Score two short phrases (titles, aliases) for semantic similarity.
+
+    Returns 0.0 - 1.0. Score floor for return is 0.4 (lower → caller drops it).
+    """
+    if not a or not b:
+        return 0.0
+    na, nb = _normalize_text(a), _normalize_text(b)
+    if not na or not nb:
+        return 0.0
+    if na == nb:
+        return 1.0
+    if na in nb or nb in na:
+        shorter = na if len(na) < len(nb) else nb
+        if len(shorter.split()) >= 2:
+            return 0.85
+    ta, tb = _content_tokens(a), _content_tokens(b)
+    if not ta or not tb:
+        return 0.0
+    inter = len(ta & tb)
+    union = len(ta | tb)
+    if union == 0:
+        return 0.0
+    j = inter / union
+    if j >= 0.7:
+        return j
+    if j >= 0.4:
+        return 0.4 + (j - 0.4) * 0.5
+    return 0.0
+
+
+def _scan_entity_dir_for_similar(entity_dir: Path, entity_type: str,
+                                 candidate_names: list[str]) -> list[dict]:
+    """Scan one directory for concept-shaped entities similar to the candidate.
+
+    Works for both concepts/ and foundations/ because both carry title + aliases.
+    Returns match dicts tagged with entity_type so the caller can branch on it.
+    """
+    if not entity_dir.exists():
+        return []
+    matches: list[dict] = []
+    for f in sorted(entity_dir.glob("*.md")):
+        fm = _parse_frontmatter(f)
+        if not fm:
+            continue
+        existing_title = fm.get("title", "") or ""
+        existing_aliases = fm.get("aliases", []) or []
+        if not isinstance(existing_aliases, list):
+            existing_aliases = []
+        existing_names = [existing_title] + [str(a) for a in existing_aliases]
+
+        best_score = 0.0
+        best_pair: tuple[str, str] | None = None
+        for cn in candidate_names:
+            for en in existing_names:
+                s = _phrase_match_score(cn, en)
+                if s > best_score:
+                    best_score = s
+                    best_pair = (cn, en)
+
+        if best_score >= 0.40:
+            reason = ""
+            if best_pair:
+                cn, en = best_pair
+                if best_score >= 1.0:
+                    reason = f"exact normalized match: '{cn}' == '{en}'"
+                elif best_score >= 0.85:
+                    reason = f"phrase containment: '{cn}' ↔ '{en}'"
+                else:
+                    reason = f"token overlap (Jaccard): '{cn}' ↔ '{en}'"
+            matches.append({
+                "entity_type": entity_type,
+                "slug": f.stem,
+                "title": existing_title,
+                "aliases": [str(a) for a in existing_aliases],
+                "key_papers": fm.get("key_papers", []) or [],
+                "maturity": fm.get("maturity", ""),
+                "score": round(best_score, 3),
+                "match_reason": reason,
+            })
+    return matches
+
+
+def find_similar_concept(wiki_root: str, candidate_title: str,
+                         candidate_aliases: list[str] | None = None) -> None:
+    """Find existing concepts AND foundations that overlap with the candidate.
+
+    Scans both wiki/concepts/ and wiki/foundations/. Results include an
+    entity_type field so the caller can distinguish:
+      - entity_type == "foundation" → reference the foundation, do not create
+      - entity_type == "concept"    → merge with existing concept
+
+    Output: JSON list of {entity_type, slug, title, aliases, score, match_reason}.
+    Empty list means "safe to create a new concept page".
+    """
+    root = Path(wiki_root)
+    candidate_aliases = candidate_aliases or []
+    candidate_names = [candidate_title] + [a for a in candidate_aliases if a]
+
+    matches: list[dict] = []
+    matches.extend(_scan_entity_dir_for_similar(
+        root / "foundations", "foundation", candidate_names))
+    matches.extend(_scan_entity_dir_for_similar(
+        root / "concepts", "concept", candidate_names))
+
+    # Sort: foundations with high score first (they're terminal — prefer them),
+    # then by score descending.
+    def sort_key(m: dict) -> tuple:
+        is_found = 0 if m["entity_type"] == "foundation" else 1
+        return (is_found, -m["score"])
+    matches.sort(key=sort_key)
+    print(json.dumps(matches, ensure_ascii=False, indent=2))
+
+
+def find_similar_claim(wiki_root: str, candidate_title: str,
+                       candidate_tags: list[str] | None = None) -> None:
+    """Find existing claims that semantically overlap with the candidate.
+
+    Claims are full propositions; uses canonicalized token Jaccard with a
+    tag-overlap tiebreaker. Claims live only in wiki/claims/ (not foundations).
+
+    Output: JSON list of {slug, title, tags, status, confidence, score, match_reason}.
+    """
+    root = Path(wiki_root)
+    claims_dir = root / "claims"
+    if not claims_dir.exists():
+        print(json.dumps([]))
+        return
+
+    candidate_tags_set = {t.strip().lower() for t in (candidate_tags or []) if t.strip()}
+    cand_tokens = _claim_tokens(candidate_title)
+    cand_norm = _normalize_text(candidate_title)
+
+    matches: list[dict] = []
+    for f in sorted(claims_dir.glob("*.md")):
+        fm = _parse_frontmatter(f)
+        if not fm:
+            continue
+        existing_title = fm.get("title", "") or ""
+        if not existing_title:
+            continue
+
+        ex_tokens = _claim_tokens(existing_title)
+        ex_tags = fm.get("tags", []) or []
+        ex_tags_set = {str(t).strip().lower() for t in ex_tags if str(t).strip()}
+        shared_tags = candidate_tags_set & ex_tags_set if candidate_tags_set else set()
+
+        score = 0.0
+        reason = ""
+        if cand_norm == _normalize_text(existing_title):
+            score = 1.0
+            reason = "exact title match"
+        elif cand_tokens and ex_tokens:
+            ex_norm = _normalize_text(existing_title)
+            if len(cand_norm) < len(ex_norm):
+                shorter, longer = cand_norm, ex_norm
+            else:
+                shorter, longer = ex_norm, cand_norm
+            if shorter in longer and len(shorter.split()) >= 3:
+                score = 0.80
+                reason = f"phrase containment: '{shorter}' ⊂ '{longer}'"
+            else:
+                inter = len(cand_tokens & ex_tokens)
+                union = len(cand_tokens | ex_tokens)
+                j = inter / union if union else 0.0
+                jaccard_floor = 0.30 if shared_tags else 0.45
+                if j >= 0.7:
+                    score = j
+                    reason = f"canonicalized token Jaccard {j:.2f}"
+                elif j >= jaccard_floor:
+                    score = 0.40 + (j - jaccard_floor) * 0.6
+                    reason = f"canonicalized token Jaccard {j:.2f}"
+
+        if score < 0.40:
+            continue
+
+        if shared_tags:
+            tag_boost = min(0.05 + 0.02 * len(shared_tags), 0.10)
+            if score < 1.0:
+                score = min(score + tag_boost, 0.95)
+            reason += f"; tags shared: {sorted(shared_tags)}"
+
+        matches.append({
+            "slug": f.stem,
+            "title": existing_title,
+            "tags": [str(t) for t in ex_tags],
+            "status": fm.get("status", ""),
+            "confidence": fm.get("confidence", ""),
+            "source_papers": fm.get("source_papers", []) or [],
+            "score": round(score, 3),
+            "match_reason": reason,
+        })
+
+    matches.sort(key=lambda m: -m["score"])
+    print(json.dumps(matches, ensure_ascii=False, indent=2))
+
+
+# ---------------------------------------------------------------------------
 # Named queries: cross-entity knowledge state
 # ---------------------------------------------------------------------------
 
@@ -1770,6 +2053,22 @@ def main():
     p.add_argument("wiki_root")
     p.add_argument("entity_type", choices=ENTITY_DIRS)
 
+    # find-similar-concept
+    p = sub.add_parser("find-similar-concept",
+                       help="Detect existing concepts/foundations that semantically overlap with a candidate (call this BEFORE creating a new concept page)")
+    p.add_argument("wiki_root")
+    p.add_argument("title", help="Candidate concept title")
+    p.add_argument("--aliases", default="",
+                   help="Comma-separated list of candidate aliases / alternative names")
+
+    # find-similar-claim
+    p = sub.add_parser("find-similar-claim",
+                       help="Detect existing claims that semantically overlap with a candidate (call this BEFORE creating a new claim page)")
+    p.add_argument("wiki_root")
+    p.add_argument("title", help="Candidate claim title (the proposition itself)")
+    p.add_argument("--tags", default="",
+                   help="Comma-separated list of candidate tags (used as tiebreaker)")
+
     # query
     p = sub.add_parser("query", help="Cross-entity knowledge queries")
     p.add_argument("wiki_root")
@@ -1870,6 +2169,12 @@ def main():
                     break
                 filters.append((field_name, val))
         find_entities(args.wiki_root, args.entity_type, filters)
+    elif args.command == "find-similar-concept":
+        aliases = [a.strip() for a in args.aliases.split(",") if a.strip()]
+        find_similar_concept(args.wiki_root, args.title, aliases)
+    elif args.command == "find-similar-claim":
+        tags = [t.strip() for t in args.tags.split(",") if t.strip()]
+        find_similar_claim(args.wiki_root, args.title, tags)
     elif args.command == "query":
         if args.subquery == "weak-claims":
             query_weak_claims(args.wiki_root, args.threshold)

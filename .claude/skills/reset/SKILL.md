@@ -109,4 +109,4 @@ Next steps:
 ### Tools (via Bash)
 - `python3 tools/reset_wiki.py --scope <scope> [--yes] [--project-root .]` — deterministic destructive helper
 - `python3 tools/research_wiki.py log wiki/ "<message>"` — append log
-- `python3 tools/research_wiki.py checkpoint-clear --wiki-root wiki/` — invoked indirectly via `reset_wiki.py` for `checkpoints` scope
+- `reset_wiki.py` clears `wiki/.checkpoints/*.json` directly for `checkpoints` scope (no CLI dispatch — the `checkpoint-clear` subcommand requires a specific `task_id`, while `/reset --scope checkpoints` semantics is "clear everything")

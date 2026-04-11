@@ -1,0 +1,26 @@
+# Append-only / accumulator files written by parallel ingest subagents during /init.
+#
+# These files have a single shared structure that every paper appends to:
+#   - wiki/log.md            : every ingest appends a "## [date] ingest | ..." line
+#   - wiki/graph/edges.jsonl : every add-edge appends a JSON line
+#   - wiki/index.md          : every paper/concept/claim adds a YAML entry
+#
+# When 10 parallel subagents (one per paper) write to these files in their own
+# git worktrees and we then merge the worktree branches sequentially, git's
+# default line-based merge sees concurrent appends to the same region and
+# reports add/add or content conflicts on EVERY merge — even though the
+# resolution is always "keep both sides".
+#
+# `merge=union` is git's built-in driver for exactly this case: on conflict,
+# both sides are concatenated (no manual resolution, no merge marker). The
+# orchestrator then runs a Phase C cleanup that deduplicates edges.jsonl by
+# (from, to, type) tuple and rebuilds index.md from entity frontmatter via
+# `research_wiki.py rebuild-index`, so any duplicate lines introduced by
+# `merge=union` are removed by the time Step 7 finishes.
+#
+# Without this driver, /init's Phase B fan-in fails on the first merge and
+# cascades into manual cherry-pick recovery (see init/SKILL.md error handling
+# entries for the failure modes this prevents).
+wiki/log.md             merge=union
+wiki/graph/edges.jsonl  merge=union
+wiki/index.md           merge=union

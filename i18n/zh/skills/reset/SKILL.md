@@ -109,4 +109,4 @@ Next steps:
 ### 工具（通过 Bash）
 - `python3 tools/reset_wiki.py --scope <scope> [--yes] [--project-root .]` — 确定性破坏性辅助工具
 - `python3 tools/research_wiki.py log wiki/ "<message>"` — 追加日志
-- `python3 tools/research_wiki.py checkpoint-clear --wiki-root wiki/` — `checkpoints` scope 时由 `reset_wiki.py` 间接调用
+- `reset_wiki.py` 在 `checkpoints` scope 下直接删除 `wiki/.checkpoints/*.json`(不走 CLI — `checkpoint-clear` 子命令需指定具体的 `task_id`,而 `/reset --scope checkpoints` 的语义是"全部清除")

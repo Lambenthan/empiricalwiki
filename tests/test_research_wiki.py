@@ -658,6 +658,314 @@ class TestFindEntities:
         assert results[0]["slug"] == "a"
 
 
+
+# ── find-similar-concept ──────────────────────────────────────────────────
+
+class TestFindSimilarConcept:
+    """Detect existing concepts that overlap with a candidate before creating a new one.
+
+    The matcher must catch the failure modes observed in test6 OmegaWiki:
+      - identical concept created by different parallel subagents under different slugs
+        ("LLM-Driven Evolutionary Operators" vs "LLMs as Evolutionary Operators")
+      - candidate matches an existing concept's alias (different official name)
+      - close paraphrase ("Textual Gradient Descent" vs "Textual Gradient Optimization")
+    while NOT generating false positives for unrelated concepts that happen to share a word.
+    """
+
+    def test_empty_wiki_returns_empty(self, wiki, capsys):
+        capsys.readouterr()
+        rw.find_similar_concept(str(wiki), "Some New Concept")
+        assert json.loads(capsys.readouterr().out) == []
+
+    def test_exact_title_match(self, wiki, capsys):
+        _write_page(wiki, "concepts", "textual-gradient-descent",
+                    'title: "Textual Gradient Descent"\naliases: []\nmaturity: emerging\nkey_papers: []')
+        capsys.readouterr()
+        rw.find_similar_concept(str(wiki), "Textual Gradient Descent")
+        results = json.loads(capsys.readouterr().out)
+        assert len(results) == 1
+        assert results[0]["slug"] == "textual-gradient-descent"
+        assert results[0]["score"] == 1.0
+        assert "exact" in results[0]["match_reason"]
+
+    def test_alias_match_returns_existing_concept(self, wiki, capsys):
+        """Candidate name equals an alias of an existing concept."""
+        _write_page(wiki, "concepts", "textual-gradient-descent",
+                    'title: "Textual Gradient Descent"\naliases: ["natural language gradient", "text gradient"]\nmaturity: emerging\nkey_papers: []')
+        capsys.readouterr()
+        rw.find_similar_concept(str(wiki), "Natural Language Gradient")
+        results = json.loads(capsys.readouterr().out)
+        assert len(results) == 1
+        assert results[0]["slug"] == "textual-gradient-descent"
+        assert results[0]["score"] >= 0.95
+
+    def test_candidate_alias_matches_existing_title(self, wiki, capsys):
+        """Candidate has aliases; one of them matches an existing concept's title."""
+        _write_page(wiki, "concepts", "textual-gradient-descent",
+                    'title: "Textual Gradient Descent"\naliases: []\nmaturity: emerging\nkey_papers: []')
+        capsys.readouterr()
+        rw.find_similar_concept(str(wiki), "Brand New Concept",
+                                ["something else", "Textual Gradient Descent"])
+        results = json.loads(capsys.readouterr().out)
+        assert len(results) == 1
+        assert results[0]["score"] == 1.0
+
+    def test_real_test6_evolutionary_operators_pair(self, wiki, capsys):
+        """Detect the specific duplicate pair seen in test6: 'LLMs as Evolutionary Operators'
+        vs 'LLM-Driven Evolutionary Operators' (created by different subagents)."""
+        _write_page(wiki, "concepts", "llms-evolutionary-operators",
+                    'title: "LLMs as Evolutionary Operators"\naliases: ["LLM mutation operator", "language model evolutionary operators"]\nmaturity: emerging\nkey_papers: []')
+        capsys.readouterr()
+        rw.find_similar_concept(str(wiki), "LLM-Driven Evolutionary Operators",
+                                ["LLM as evolutionary operator", "LLM crossover and mutation"])
+        results = json.loads(capsys.readouterr().out)
+        assert len(results) >= 1
+        assert results[0]["slug"] == "llms-evolutionary-operators"
+        assert results[0]["score"] >= 0.40
+
+    def test_phrase_containment_with_3plus_tokens(self, wiki, capsys):
+        """Substring containment matches when the shorter side has 2+ content tokens."""
+        _write_page(wiki, "concepts", "scaled-dot-product-attention",
+                    'title: "Scaled Dot-Product Attention"\naliases: []\nmaturity: stable\nkey_papers: []')
+        capsys.readouterr()
+        rw.find_similar_concept(str(wiki), "Multi-Head Scaled Dot-Product Attention")
+        results = json.loads(capsys.readouterr().out)
+        assert len(results) == 1
+        assert results[0]["score"] >= 0.80
+
+    def test_unrelated_concept_returns_empty(self, wiki, capsys):
+        _write_page(wiki, "concepts", "textual-gradient-descent",
+                    'title: "Textual Gradient Descent"\naliases: []\nmaturity: emerging\nkey_papers: []')
+        capsys.readouterr()
+        rw.find_similar_concept(str(wiki), "Bayesian Optimization with Gaussian Processes")
+        assert json.loads(capsys.readouterr().out) == []
+
+    def test_single_token_substring_does_not_trigger(self, wiki, capsys):
+        """Avoid 'lora' matching 'lora-low-rank-adaptation' just because it's a substring.
+        Phrase containment requires the shorter side to have 2+ tokens."""
+        _write_page(wiki, "concepts", "lora",
+                    'title: "LoRA"\naliases: []\nmaturity: stable\nkey_papers: []')
+        capsys.readouterr()
+        rw.find_similar_concept(str(wiki), "LoRA Low-Rank Adaptation of Large Language Models")
+        results = json.loads(capsys.readouterr().out)
+        # Score allowed but should not be a containment 0.85; the single-token "lora"
+        # cannot trigger the substring rule.
+        for r in results:
+            assert "phrase containment" not in r["match_reason"]
+
+    def test_results_sorted_descending_by_score(self, wiki, capsys):
+        """When multiple matches exist, the highest-score one comes first."""
+        _write_page(wiki, "concepts", "textual-gradient-descent",
+                    'title: "Textual Gradient Descent"\naliases: []\nmaturity: emerging\nkey_papers: []')
+        _write_page(wiki, "concepts", "textual-gradient-optimization",
+                    'title: "Textual Gradient Optimization"\naliases: ["text gradient"]\nmaturity: active\nkey_papers: []')
+        capsys.readouterr()
+        rw.find_similar_concept(str(wiki), "Textual Gradient Descent")
+        results = json.loads(capsys.readouterr().out)
+        assert len(results) >= 1
+        scores = [r["score"] for r in results]
+        assert scores == sorted(scores, reverse=True)
+        assert results[0]["slug"] == "textual-gradient-descent"  # exact wins
+
+    def test_empty_candidate_aliases_optional(self, wiki, capsys):
+        _write_page(wiki, "concepts", "foo",
+                    'title: "Foo"\naliases: []\nmaturity: emerging\nkey_papers: []')
+        capsys.readouterr()
+        rw.find_similar_concept(str(wiki), "Bar", None)
+        assert json.loads(capsys.readouterr().out) == []
+
+    def test_concepts_dir_missing(self, tmp_path, capsys):
+        """No concepts dir at all → return empty (don't crash)."""
+        capsys.readouterr()
+        rw.find_similar_concept(str(tmp_path), "Anything")
+        assert json.loads(capsys.readouterr().out) == []
+
+    def test_foundation_match_outranks_concept(self, wiki, capsys):
+        """Foundation hits are tagged entity_type='foundation' and appear before concept hits."""
+        _write_page(wiki, "concepts", "selfattn-variant",
+                    'title: "Self-Attention Variant X"\naliases: []\nmaturity: emerging\nkey_papers: []')
+        _write_page(wiki, "foundations", "attention-mechanism",
+                    'title: "Attention Mechanism"\nslug: attention-mechanism\ndomain: NLP\nstatus: mainstream\naliases: ["self-attention", "scaled dot-product attention"]')
+        capsys.readouterr()
+        rw.find_similar_concept(str(wiki), "Self-Attention")
+        results = json.loads(capsys.readouterr().out)
+        assert len(results) >= 1
+        assert results[0]["entity_type"] == "foundation"
+        assert results[0]["slug"] == "attention-mechanism"
+
+    def test_entity_type_tag_present_on_concept_results(self, wiki, capsys):
+        _write_page(wiki, "concepts", "textual-gradient-descent",
+                    'title: "Textual Gradient Descent"\naliases: []\nmaturity: emerging\nkey_papers: []')
+        capsys.readouterr()
+        rw.find_similar_concept(str(wiki), "Textual Gradient Descent")
+        results = json.loads(capsys.readouterr().out)
+        assert len(results) == 1
+        assert results[0]["entity_type"] == "concept"
+
+
+# ── find-similar-claim ────────────────────────────────────────────────────
+
+class TestFindSimilarClaim:
+    """Detect semantically equivalent claims, including paraphrased versions
+    that use different research-vocabulary verbs (the test6 failure mode where
+    4 separate claims all expressed 'LLM method beats human prompts')."""
+
+    def test_empty_wiki_returns_empty(self, wiki, capsys):
+        capsys.readouterr()
+        rw.find_similar_claim(str(wiki), "Some Claim")
+        assert json.loads(capsys.readouterr().out) == []
+
+    def test_exact_title_match(self, wiki, capsys):
+        _write_page(wiki, "claims", "lora-preserves-quality",
+                    'title: "LoRA preserves quality at low rank"\ntags: [peft, fine-tuning]\nstatus: supported\nconfidence: 0.85\nsource_papers: []')
+        capsys.readouterr()
+        rw.find_similar_claim(str(wiki), "LoRA preserves quality at low rank", ["peft"])
+        results = json.loads(capsys.readouterr().out)
+        assert len(results) == 1
+        assert results[0]["score"] == 1.0
+
+    def test_synonym_paraphrase_matches(self, wiki, capsys):
+        """The CRITICAL test: paraphrased claims with synonym verbs should match.
+        Without canonicalization this returns empty; with canonicalization it should match."""
+        _write_page(wiki, "claims", "llm-prompts-beat-human",
+                    'title: "LLM-optimized prompts outperform human-written prompts"\ntags: [prompt-optimization, llm]\nstatus: weakly_supported\nconfidence: 0.7\nsource_papers: []')
+        capsys.readouterr()
+        rw.find_similar_claim(str(wiki),
+                              "LLM-generated prompts beat human prompts on diverse NLP tasks",
+                              ["prompt-optimization", "nlp"])
+        results = json.loads(capsys.readouterr().out)
+        assert len(results) >= 1, "Synonym paraphrase ('generated/optimized', 'beat/outperform') must match"
+        assert results[0]["slug"] == "llm-prompts-beat-human"
+        assert results[0]["score"] >= 0.40
+
+    def test_test6_real_duplicate_pair(self, wiki, capsys):
+        """Reproduce one of the actual duplicate claim pairs from test6 OmegaWiki."""
+        _write_page(wiki, "claims", "llm-optimized-prompts-outperform-human-prompts",
+                    'title: "LLM-optimized prompts outperform human-written prompts"\ntags: [prompt-optimization, llm]\nstatus: weakly_supported\nconfidence: 0.7\nsource_papers: [opro]')
+        capsys.readouterr()
+        # The candidate that should have been deduped against the existing one
+        rw.find_similar_claim(str(wiki),
+                              "LLM-driven evolutionary prompt optimization outperforms manual baselines",
+                              ["prompt-optimization", "llm", "evolutionary"])
+        results = json.loads(capsys.readouterr().out)
+        assert len(results) >= 1
+        assert results[0]["slug"] == "llm-optimized-prompts-outperform-human-prompts"
+
+    def test_substring_containment(self, wiki, capsys):
+        _write_page(wiki, "claims", "base-claim",
+                    'title: "LLM-optimized prompts outperform human-written prompts"\ntags: [prompt-optimization]\nstatus: supported\nconfidence: 0.8\nsource_papers: []')
+        capsys.readouterr()
+        rw.find_similar_claim(str(wiki),
+                              "EvoPrompt: LLM-optimized prompts outperform human-written prompts on GSM8K",
+                              ["prompt-optimization"])
+        results = json.loads(capsys.readouterr().out)
+        assert len(results) == 1
+        assert results[0]["score"] >= 0.80
+
+    def test_unrelated_claim_returns_empty(self, wiki, capsys):
+        _write_page(wiki, "claims", "lora-preserves-quality",
+                    'title: "LoRA preserves quality at low rank"\ntags: [peft]\nstatus: supported\nconfidence: 0.85\nsource_papers: []')
+        capsys.readouterr()
+        rw.find_similar_claim(str(wiki), "FlashAttention reduces GPU memory usage", ["systems"])
+        assert json.loads(capsys.readouterr().out) == []
+
+    def test_same_area_different_proposition(self, wiki, capsys):
+        """Same research area (shared tags) but different propositions should NOT match."""
+        _write_page(wiki, "claims", "llm-prompts-beat-human",
+                    'title: "LLM-optimized prompts outperform human-written prompts"\ntags: [prompt-optimization, llm]\nstatus: weakly_supported\nconfidence: 0.7\nsource_papers: []')
+        capsys.readouterr()
+        rw.find_similar_claim(str(wiki),
+                              "Prompts longer than 200 tokens degrade GPT-4 performance",
+                              ["prompt-optimization"])
+        results = json.loads(capsys.readouterr().out)
+        assert results == [], "Same tag but different proposition must not match"
+
+    def test_tag_overlap_loosens_threshold(self, wiki, capsys):
+        """When tags overlap, lower-score matches are returned that would otherwise be filtered."""
+        _write_page(wiki, "claims", "fine-tune-quality",
+                    'title: "Parameter-efficient fine-tuning preserves model quality"\ntags: [peft, fine-tuning]\nstatus: supported\nconfidence: 0.85\nsource_papers: []')
+        capsys.readouterr()
+        # Without shared tags: score below 0.45 floor → empty
+        rw.find_similar_claim(str(wiki),
+                              "PEFT methods preserve quality on downstream tasks",
+                              [])
+        no_tags = json.loads(capsys.readouterr().out)
+        # With shared tag: looser 0.30 floor → may include
+        capsys.readouterr()
+        rw.find_similar_claim(str(wiki),
+                              "PEFT methods preserve quality on downstream tasks",
+                              ["peft"])
+        with_tags = json.loads(capsys.readouterr().out)
+        # Tag-aware version should not be more conservative than tag-blind
+        assert len(with_tags) >= len(no_tags)
+
+    def test_results_sorted_descending(self, wiki, capsys):
+        _write_page(wiki, "claims", "claim-a",
+                    'title: "LLM-optimized prompts outperform human prompts"\ntags: [prompt-optimization]\nstatus: supported\nconfidence: 0.8\nsource_papers: []')
+        _write_page(wiki, "claims", "claim-b",
+                    'title: "Manual prompts perform worse than LLM-generated ones"\ntags: [prompt-optimization]\nstatus: supported\nconfidence: 0.7\nsource_papers: []')
+        capsys.readouterr()
+        rw.find_similar_claim(str(wiki),
+                              "LLM-generated prompts beat human prompts",
+                              ["prompt-optimization"])
+        results = json.loads(capsys.readouterr().out)
+        scores = [r["score"] for r in results]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_claims_dir_missing(self, tmp_path, capsys):
+        capsys.readouterr()
+        rw.find_similar_claim(str(tmp_path), "Anything", [])
+        assert json.loads(capsys.readouterr().out) == []
+
+
+# ── helpers used by find-similar-* ────────────────────────────────────────
+
+class TestSemanticDedupHelpers:
+
+    def test_normalize_text_lowercases_and_strips_punct(self):
+        assert rw._normalize_text("LLM-Optimized Prompts!") == "llm optimized prompts"
+
+    def test_content_tokens_drops_stop_words(self):
+        toks = rw._content_tokens("the lora adaptation of large language models")
+        assert "the" not in toks
+        assert "lora" in toks
+        assert "language" in toks
+
+    def test_content_tokens_drops_short_tokens(self):
+        toks = rw._content_tokens("a is on the of in")
+        assert toks == set()
+
+    def test_phrase_match_score_exact(self):
+        assert rw._phrase_match_score("LoRA", "lora") == 1.0
+
+    def test_phrase_match_score_unrelated(self):
+        assert rw._phrase_match_score("LoRA", "FlashAttention") == 0.0
+
+    def test_phrase_match_score_substring_requires_2_tokens(self):
+        # Single shared word → no substring boost
+        assert rw._phrase_match_score("LoRA", "LoRA Adapter Layer") < 0.85
+        # Two-word shared phrase → substring boost
+        score = rw._phrase_match_score("LoRA Adapter", "LoRA Adapter Layer")
+        assert score >= 0.85
+
+    def test_claim_tokens_canonicalizes_synonyms(self):
+        a = rw._claim_tokens("LLM-optimized prompts outperform human-written prompts")
+        b = rw._claim_tokens("LLM-generated prompts beat human prompts")
+        # After canonicalization, both should share the canonical verbs/nouns:
+        # produce (optimized/generated), beat (outperform/beat), human, prompt, llm
+        shared = a & b
+        assert "beat" in shared
+        assert "produce" in shared
+        assert "human" in shared
+        assert "prompt" in shared
+
+    def test_claim_tokens_does_not_destroy_unrelated(self):
+        a = rw._claim_tokens("LoRA preserves quality at low rank")
+        b = rw._claim_tokens("FlashAttention reduces GPU memory usage")
+        # Should have minimal overlap (no shared canonical token)
+        assert len(a & b) <= 1
+
+
 # ── query: weak-claims ────────────────────────────────────────────────────
 
 class TestQueryWeakClaims:

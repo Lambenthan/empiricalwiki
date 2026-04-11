@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -127,15 +126,11 @@ def execute(project_root: Path, scopes: list[str]) -> dict:
         reset += 1
 
     if "checkpoints" in scopes:
-        rw = project_root / "tools" / "research_wiki.py"
-        if rw.exists():
-            try:
-                subprocess.run(
-                    [sys.executable, str(rw), "checkpoint-clear", "--wiki-root", str(wiki)],
-                    check=False, capture_output=True,
-                )
-            except OSError:
-                pass
+        cp_dir = wiki / ".checkpoints"
+        if cp_dir.exists():
+            for cp_file in cp_dir.glob("*.json"):
+                cp_file.unlink()
+                deleted += 1
 
     return {"deleted_files": deleted, "reset_files": reset}
 

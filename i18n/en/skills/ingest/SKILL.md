@@ -106,62 +106,213 @@ Fill all fields per the CLAUDE.md paper template and write `wiki/papers/{slug}.m
 - frontmatter: title, slug, arxiv, venue, year, tags, importance, date_added, source_type, s2_id, keywords, domain, code_url, cited_by
 - body sections: Problem, Key idea, Method, Results, Limitations, Open questions, My take, Related
 
-### Step 4: Extract Claims
+### Step 4: Identify Claims (FIND existing first, CREATE only as last resort)
 
-Extract 1-3 core claims from the paper (the paper's main contribution assertions).
+> 🚨 **CRITICAL — read this before doing anything in Step 4.**
+> Claims are **shared** across papers. Multiple papers usually support the **same proposition** with different evidence. Your job is to find the existing claim each paper supports, not to create a new claim per paper. In production (test6 OmegaWiki, 15 papers), this step was previously done casually and produced 45 claims — including 4 separate claims all expressing "method X produces prompts that beat human/manual prompts". This wasted everyone's time and broke claim-graph reasoning. **The dedup tool below was built specifically to prevent this. Use it.**
 
-For each claim:
-1. Generate claim slug: `python3 tools/research_wiki.py slug "<claim-title>"`
-2. Check `wiki/claims/` for a semantically matching claim (semantic match, not just slug match)
-3. **If claim already exists**:
-   - Append a new evidence entry to the claim's `evidence` list:
-     ```yaml
-     - source: <paper-slug>
-       type: supports    # supports | contradicts
-       strength: moderate  # weak | moderate | strong (based on paper's evidence strength)
-       detail: "..."
-     ```
-   - Re-evaluate `confidence` and `status` based on new evidence
-   - Add graph edge:
-     ```bash
-     python3 tools/research_wiki.py add-edge wiki/ --from papers/<paper-slug> --to claims/<claim-slug> --type supports --evidence "<detail>"
-     ```
-4. **If claim does not exist**:
-   - Create `wiki/claims/{claim-slug}.md` per the CLAUDE.md claim template
-   - status: proposed or weakly_supported (based on paper's evidence strength)
-   - source_papers: [<paper-slug>]
-   - initialize evidence with the paper's evidence entry
-   - Add graph edge: same as above
-5. Append claim link to the paper page's `## Related`: `supports: [[claim-slug]]`
+**Hard limit per paper:**
+- importance < 5: **at most 1 new claim**
+- importance == 5 (seminal): **at most 2 new claims**
+- All other claims this paper supports MUST be matched against existing claims (Branch A or B below)
+
+#### Step 4.1: Identify candidate claims
+
+Read the paper's contributions section and abstract. List 1-3 propositions the paper explicitly asserts as its main empirical or conceptual claims. Each candidate has:
+- A short title (the proposition itself, e.g. "LLM-optimized prompts outperform human-written prompts")
+- A few tags (e.g. `prompt-optimization,llm`)
+
+#### Step 4.2: For each candidate, search for an existing equivalent — MANDATORY tool call
+
+```bash
+python3 tools/research_wiki.py find-similar-claim wiki/ "<candidate claim title>" --tags "<comma-separated tags>"
+```
+
+This is a deterministic tool that uses canonicalized token matching plus tag-aware Jaccard. It returns a JSON list of existing claims sorted by similarity score, e.g.:
+
+```json
+[
+  {
+    "slug": "llm-prompts-beat-human",
+    "title": "LLM-optimized prompts outperform human-written prompts",
+    "tags": ["prompt-optimization", "llm"],
+    "status": "weakly_supported",
+    "confidence": 0.7,
+    "source_papers": ["opro"],
+    "score": 0.62,
+    "match_reason": "canonicalized token Jaccard 0.56; tags shared: ['prompt-optimization']"
+  }
+]
+```
+
+An empty list `[]` means no similar claim exists; you may proceed to Branch C.
+
+#### Step 4.3: Branch on the JSON result
+
+**Branch A — top result has score >= 0.80** (or exact title match, score == 1.0):
+This is the **same claim**. Do NOT create a new file. Instead:
+1. Read the existing claim file: `wiki/claims/<top-slug>.md`
+2. Append a new entry to its `evidence` list:
+   ```yaml
+   - source: <paper-slug>
+     type: supports        # or contradicts
+     strength: moderate    # weak | moderate | strong
+     detail: "<one-sentence evidence summary from this paper>"
+   ```
+3. Append `<paper-slug>` to the claim's `source_papers` list (if not already there)
+4. Re-evaluate `confidence` and `status`: more strong evidence ⇒ higher confidence; mixed evidence ⇒ `weakly_supported`
+5. Add graph edge:
+   ```bash
+   python3 tools/research_wiki.py add-edge wiki/ --from papers/<paper-slug> --to claims/<top-slug> --type supports --evidence "<detail>"
+   ```
+6. Append `supports: [[<top-slug>]]` to the paper page's `## Related`
+
+**Branch B — top result has score 0.40-0.80** (similar but not identical):
+Read the existing claim's title and `## Statement` section. Make the call:
+- If both express the **same proposition** with different wording → treat as Branch A
+- If they express **genuinely different propositions** that just share vocabulary → treat as Branch C
+
+**Default to Branch A when uncertain.** Over-merging is a much smaller mistake than over-creating: a wrongly-merged claim can be split later, but a sea of near-duplicate claims poisons every downstream reasoning step. If you choose Branch C here, your reasoning must mention what specific aspect of the proposition is genuinely novel.
+
+**Branch C — top result has score < 0.40, OR list is empty**:
+No existing claim covers this proposition.
+1. **Check the hard limit first.** Count how many new claims you have already created for this paper. If you are at the limit (1 for importance < 5, 2 for importance == 5), **STOP creating new claims**. Force the remaining candidates into Branch A by picking the closest existing match from your earlier `find-similar-claim` results, even with score < 0.40.
+2. Otherwise, create `wiki/claims/{claim-slug}.md` per the CLAUDE.md template:
+   - Generate slug: `python3 tools/research_wiki.py slug "<claim-title>"`
+   - status: `proposed` or `weakly_supported` (based on this paper's evidence strength)
+   - source_papers: `[<paper-slug>]`
+   - initialize `evidence` with this paper's entry
+3. Add graph edge + paper `## Related` append (same as Branch A steps 5-6)
+
+#### Step 4.4: Self-check at end of Step 4 — MANDATORY
+
+Log how many claims this ingest created vs. matched:
+```bash
+python3 tools/research_wiki.py log wiki/ "ingest | claims for <paper-slug>: N matched existing, M new"
+```
+
+**If M > the hard limit**, you violated the constraint. STOP, undo the extra new claim files, convert them to Branch A appends.
+
+#### Anti-patterns (do NOT do these)
+
+- ❌ **Skipping `find-similar-claim`** because "I already know this is a new claim" — you don't, and the test6 incident proves it
+- ❌ **Creating one new claim per main contribution** without checking if existing claims already cover it
+- ❌ **Slug-only matching** ("the slugs are different so they must be different claims") — slugs are autogenerated from titles, paraphrases get different slugs even when the proposition is identical
+- ❌ **Treating Branch B as "default to create"** — the default is merge, not split
 
 ### Step 5: Cross-References
 
-**Part A — Concept matching and creation (with semantic dedup):**
+**Part A — Concept matching and creation (FIND existing first, CREATE only as last resort)**
 
-1. Read `wiki/index.md`, extract all existing concept slugs and tags
-2. Read each existing concept's frontmatter for `title` and `aliases`
-3. **Also scan `wiki/foundations/*.md`** for `title`, `slug`, and `aliases`. Foundations are background-knowledge pages seeded by `/prefill` — they take precedence over creating new concepts for textbook material.
-4. For each candidate concept from the paper, **check for duplicates first**:
-   - **Foundation match** (slug, title, or alias): the candidate is foundational background. **Do not create a concept page.** Reference the foundation directly: append `[[foundation-slug]]` to the paper's `## Related`. Foundations are terminal — do not modify the foundation page (no reverse link).
-   - Exact slug match with an existing concept → same concept
-   - Semantically equivalent to an existing concept's title or any alias (alternative name, subclass, concrete implementation) → same concept
-   - A **variant or subclass** of an existing concept (e.g. "scaled dot-product attention" vs "attention-mechanism") → do not create a new page; append to existing concept's `## Variants` and add candidate name to `aliases`
-   - Only create a new page if it is **genuinely a new concept** and not already covered by a foundation
-4. For each matched concept:
-   - If this paper is a core paper for the concept: append slug to concept's `key_papers`
-   - If introducing a new variant: append to concept's `## Variants`, add variant name to `aliases`
-   - If contradicting: record contradiction note on the concept page
-   - Reverse: append `[[concept-slug]]` to paper's `## Related`
-   - Add graph edge:
-     ```bash
-     python3 tools/research_wiki.py add-edge wiki/ --from papers/<paper-slug> --to concepts/<concept-slug> --type supports --evidence "..."
-     ```
-5. If the paper introduces a genuinely new concept (confirmed by the dedup check above):
-   - Create `wiki/concepts/{concept-slug}.md` per the CLAUDE.md concept template
-   - maturity: emerging
-   - key_papers: [<paper-slug>]
-   - aliases: [known alternative names] (collect on creation)
-   - Append `[[concept-slug]]` to paper's `## Related`
+> 🚨 **CRITICAL — read this before creating any concept page.**
+> Concepts are **shared** across papers. Multiple papers usually deepen the same concept rather than introducing new ones. Your job is to find the existing concept each paper extends and append this paper to its `key_papers`, not to create a new concept per paper. In production (test6 OmegaWiki, 15 papers), this step previously produced 37 concepts including 3 separate concepts for "LLM as gradient" (`textual-gradient-descent`, `textual-gradient-optimization`, `verbal-gradient`) and 2 separate concepts for "LLM as evolutionary operator" (`llm-driven-evolutionary-operators`, `llms-evolutionary-operators`). **The dedup tool below was built specifically to prevent this. Use it.**
+
+**Hard limit per paper (counts NEW concept pages only):**
+- importance < 5: **at most 1 new concept**
+- importance == 5 (seminal): **at most 3 new concepts**
+- All other concepts this paper relates to MUST be matched to an existing concept OR referenced from an existing foundation (Branch 0 / Branch A / Branch B below)
+- Foundation references (Branch 0) do **not** count against the limit — referencing background knowledge is zero-cost
+
+#### Step 5.A.1: Identify candidate concepts
+
+Read the paper's method/approach sections. List 1-3 technical concepts the paper either introduces or substantially extends. Each candidate has:
+- A title (e.g. "Textual Gradient Descent")
+- A few alternative names / aliases the paper uses (e.g. `["natural language gradient", "text gradient", "APO gradient"]`)
+
+#### Step 5.A.2: For each candidate, search for an existing equivalent — MANDATORY tool call
+
+```bash
+python3 tools/research_wiki.py find-similar-concept wiki/ "<candidate concept title>" --aliases "<comma-separated alternative names>"
+```
+
+This is a deterministic tool that matches by exact title, alias overlap, phrase containment, and token Jaccard. It scans **both `wiki/concepts/` and `wiki/foundations/`** and tags each result with `entity_type: "concept"` or `entity_type: "foundation"`. Results are returned as a JSON list sorted so that foundation hits come first, then concepts by score. Example:
+
+```json
+[
+  {
+    "entity_type": "foundation",
+    "slug": "attention-mechanism",
+    "title": "Attention Mechanism",
+    "aliases": ["scaled dot-product attention", "self-attention"],
+    "score": 0.85,
+    "match_reason": "phrase containment: 'self-attention' ↔ 'attention mechanism'"
+  },
+  {
+    "entity_type": "concept",
+    "slug": "textual-gradient-descent",
+    "title": "Textual Gradient Descent",
+    "aliases": ["natural language gradient", "text gradient"],
+    "key_papers": ["protegi"],
+    "maturity": "emerging",
+    "score": 1.0,
+    "match_reason": "exact normalized match: 'Natural Language Gradient' == 'natural language gradient'"
+  }
+]
+```
+
+An empty list `[]` means no similar concept or foundation exists; you may proceed to Branch C.
+
+#### Step 5.A.3: Branch on the JSON result
+
+**Branch 0 — any result has `entity_type: "foundation"` and score >= 0.80** (evaluate this FIRST, before Branch A):
+The candidate is foundational background knowledge. **Do not create a concept page, and do not modify the foundation page (foundations are terminal — no reverse link).**
+1. Append `[[<foundation-slug>]]` to the paper page's `## Related` (reference the foundation directly)
+2. Add a graph edge:
+   ```bash
+   python3 tools/research_wiki.py add-edge wiki/ --from papers/<paper-slug> --to foundations/<foundation-slug> --type derived_from --evidence "<one-line summary>"
+   ```
+3. Do NOT add the paper to the foundation's frontmatter — foundations write no reverse links.
+4. This candidate does **not** count toward the per-paper hard limit.
+
+If the top result is a foundation with score 0.40-0.80, read the foundation's `## Definition`. If it's truly the same textbook concept, treat as Branch 0. If the paper is proposing a specifically new technical mechanism on top of that background, fall through to Branch A/B/C — but link `derived_from` to the foundation in addition to whatever concept you end up referencing.
+
+**Branch A — top concept result (entity_type "concept") has score >= 0.85** (exact, alias, or phrase containment):
+This is the **same concept**. Do NOT create a new file. Instead:
+1. Read the existing concept file: `wiki/concepts/<top-slug>.md`
+2. Append `<paper-slug>` to its `key_papers` list (skip if already present)
+3. If the paper uses a new alternative name not in the concept's `aliases`, append it
+4. If the paper introduces a notable variant, append a bullet to the concept's `## Variants` section
+5. Add graph edge:
+   ```bash
+   python3 tools/research_wiki.py add-edge wiki/ --from papers/<paper-slug> --to concepts/<top-slug> --type supports --evidence "<one-line summary>"
+   ```
+6. Append `[[<top-slug>]]` to the paper page's `## Related`
+
+**Branch B — top concept result has score 0.40-0.85** (similar but not identical):
+Read the existing concept's `## Definition` and `## Intuition` sections. Make the call:
+- If both refer to the **same technical idea** (one is a more specific name, alternative phrasing, or subclass) → treat as Branch A. If the candidate is a meaningful subclass, also append it to the existing concept's `## Variants`.
+- If they are **genuinely distinct technical ideas** that share vocabulary → treat as Branch C.
+
+**Default to Branch A when uncertain.** Over-merging is a much smaller mistake than over-creating: a wrongly-merged concept can be split later (with `## Variants` history preserved), but a sea of near-duplicate concepts poisons gap detection, citation graphs, and survey generation. If you choose Branch C here, your reasoning must point to a specific technical distinction (different mechanism, different mathematical formulation, different application class).
+
+**Branch C — top result has score < 0.40, OR list is empty**:
+No existing concept or foundation covers this idea.
+1. **Check the hard limit first.** Count how many NEW concept pages you have already created for this paper (Branch 0 foundation references do not count). If you are at the limit (1 for importance < 5, 3 for importance == 5), **STOP creating new concepts**. Force the remaining candidates into Branch A using the closest existing concept from `find-similar-concept`, even at score < 0.40.
+2. Otherwise, create `wiki/concepts/{concept-slug}.md` per the CLAUDE.md template:
+   - Generate slug: `python3 tools/research_wiki.py slug "<concept-title>"`
+   - maturity: `emerging`
+   - key_papers: `[<paper-slug>]`
+   - aliases: list of all alternative names you found in the paper (be generous — this list is what future ingests will match against)
+3. Append `[[<concept-slug>]]` to the paper page's `## Related`
+4. Add graph edge (same as Branch A step 5)
+
+#### Step 5.A.4: Self-check at end of Part A — MANDATORY
+
+Log how many concepts this ingest created vs. matched vs. referenced-as-foundation:
+```bash
+python3 tools/research_wiki.py log wiki/ "ingest | concepts for <paper-slug>: N matched existing, M new, F foundation-refs"
+```
+
+**If M > the hard limit**, you violated the constraint. STOP, undo the extra new concept files, convert them to Branch A appends.
+
+#### Anti-patterns (do NOT do these)
+
+- ❌ **Skipping `find-similar-concept`** because "I already read all the concept pages at the start of /ingest" — even if you did, the test6 incident proves human-eye dedup misses paraphrases; and you also need the foundations scan
+- ❌ **Creating one new concept per technical idea in the paper** without checking if existing concepts or foundations already cover them
+- ❌ **Slug-only matching** — slugs are autogenerated from titles, the same idea phrased differently gets different slugs (test6: `llm-driven-evolutionary-operators` vs `llms-evolutionary-operators`)
+- ❌ **Treating Branch B as "default to create"** — the default is merge, not split
+- ❌ **Creating a "more general" or "more specific" version of an existing concept as a new page** — extend the existing concept with `## Variants` instead
+- ❌ **Writing back to a foundation page** — foundations are terminal; their `key_papers`-style fields do not exist, and any reverse link violates the invariant. Only paper → foundation edges in `edges.jsonl` and `[[foundation-slug]]` in the paper's `## Related` are allowed.
 
 **Part B — Topic matching:**
 
@@ -238,7 +389,9 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 - **log.md append-only**: append via `python3 tools/research_wiki.py log`
 - **Importance scoring**: 1=niche, 2=useful, 3=field-standard, 4=influential, 5=seminal
 - **Conservative claim extraction**: extract only claims the paper explicitly asserts — do not over-infer
-- **Deduplication check**: check for existing pages before creating any new page
+- **Deduplication is mandatory, not optional**: BEFORE creating any new claim or concept page, you MUST run `find-similar-claim` / `find-similar-concept` and follow Step 4 / Step 5.A's branching logic. `find-similar-concept` scans both `concepts/` and `foundations/`; a foundation match routes to Branch 0 (reference only, never create). Skipping the dedup tool is the single most common cause of wiki bloat.
+- **Hard limits per paper**: at most 1 new claim and 1 new concept (or 2 claims and 3 concepts if importance == 5). All other claims/concepts must be matched to existing entries via Branch A, or referenced from a foundation via Branch 0. When in doubt, merge.
+- **Foundations are terminal**: never write a reverse link from a paper to a foundation's frontmatter. Foundation references live only in the paper's `## Related` and in `edges.jsonl`.
 
 ## Error Handling
 
@@ -253,6 +406,8 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 
 ### Tools（via Bash）
 - `python3 tools/research_wiki.py slug "<title>"` — slug generation
+- `python3 tools/research_wiki.py find-similar-concept wiki/ "<title>" --aliases "<a,b,c>"` — **MANDATORY before creating any concept** (Step 5 Part A). Scans both `concepts/` and `foundations/`; tag-ranked foundations first.
+- `python3 tools/research_wiki.py find-similar-claim wiki/ "<title>" --tags "<a,b,c>"` — **MANDATORY before creating any claim** (Step 4). Canonicalized token Jaccard with tag-aware threshold.
 - `python3 tools/research_wiki.py add-edge wiki/ --from <id> --to <id> --type <type> --evidence "<text>"` — add graph edge
 - `python3 tools/research_wiki.py rebuild-context-brief wiki/` — rebuild compressed context
 - `python3 tools/research_wiki.py rebuild-open-questions wiki/` — rebuild knowledge gap map
