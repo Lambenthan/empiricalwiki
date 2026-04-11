@@ -341,8 +341,17 @@ class TestSubagentIngest:
 class TestConstraints:
     """Constraints match CLAUDE.md rules."""
 
-    def test_raw_readonly(self, skill_content):
-        assert "raw/ 只读" in skill_content or "raw/ is read-only" in skill_content.lower()
+    def test_raw_append_only_constraint(self, skill_content):
+        """Init is the one sanctioned place that may append to raw/papers/; everything else is read-only.
+
+        Accepts either the English or Chinese phrasing of the two-tier rule.
+        """
+        lowered = skill_content.lower()
+        en_ok = "raw/ is append-only" in lowered and "read-only" in lowered
+        zh_ok = "raw/ 对 `/init` 是追加写的" in skill_content or "追加写" in skill_content
+        assert en_ok or zh_ok, \
+            "init SKILL.md must document the two-tier raw/ rule " \
+            "(append-only for /init, read-only for everything else)"
 
     def test_graph_via_tools(self, skill_content):
         assert "graph/" in skill_content and "tools" in skill_content.lower()

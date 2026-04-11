@@ -191,7 +191,7 @@ Output summary:
 
 - **Only ingest papers with relevance >= 3**: leave the rest for user judgment, do not auto-create wiki pages
 - **At most `--max-ingest` papers per run** (default 5): prevents single-run wiki overload
-- **raw/ is read-only**: do not modify files under `raw/`
+- **raw/ is read-only for `/daily-arxiv`**: do not write, modify, or delete anything under `raw/`. (Note: only `/init` Step 2 has the sanctioned exception to append newly-discovered sources into `raw/papers/`; this skill does not.)
 - **graph/ maintained via tools only**: do not manually edit graph files
 - **Bidirectional links**: guaranteed by /ingest
 - **Deduplication must be strict**: double-check by both arxiv_url and arxiv_id

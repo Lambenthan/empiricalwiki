@@ -72,10 +72,7 @@ python3 tools/research_wiki.py init wiki/
 
 若 `wiki/CLAUDE.md` 不存在，从产品模板复制。
 
-记录日志：
-```bash
-python3 tools/research_wiki.py log wiki/ "init | initialized wiki directory structure"
-```
+`init` 命令本身已经自动向 `log.md` 追加了一条 `init | wiki initialized`——不要在此再追加一次。
 
 ### Step 2: 收集 Raw Sources + 智能扩展
 
@@ -127,21 +124,31 @@ python3 tools/fetch_deepxiv.py search "<topic>" --mode hybrid --limit 10
 
 **若 DeepXiv 不可用**：仅依赖 S2 搜索。
 
-#### Phase D — 下载已选论文
+#### Phase D — 下载已选论文（只新增，不覆盖）
 
 对 Phase B + C 选出的每篇论文：
 
-```bash
-# 优先下载 tex source（arXiv e-print）
-curl -sL -o raw/papers/<slug>.tar.gz "https://arxiv.org/e-print/<arxiv_id>"
-mkdir -p raw/papers/<slug> && tar -xzf raw/papers/<slug>.tar.gz -C raw/papers/<slug>/
-rm raw/papers/<slug>.tar.gz
+**已存在则跳过（强制规则）**——下载前先检查 `raw/papers/<slug>/` 或 `raw/papers/<slug>.pdf` 是否已经存在。任一存在，则**完全跳过**本次下载。`/init` 严禁覆盖 `raw/` 下任何已有内容（见 Constraints 段）；用户本地已有的素材是权威。
 
-# 若 e-print 失败或无 arXiv ID，回退到 PDF
-curl -sL -o raw/papers/<slug>.pdf "https://arxiv.org/pdf/<arxiv_id>"
+```bash
+if [ -d "raw/papers/<slug>" ] || [ -f "raw/papers/<slug>.pdf" ]; then
+  echo "skip: raw/papers/<slug> already exists"
+else
+  # 优先下载 tex source（arXiv e-print）
+  curl -sL -o raw/papers/<slug>.tar.gz "https://arxiv.org/e-print/<arxiv_id>"
+  if [ -s raw/papers/<slug>.tar.gz ]; then
+    mkdir -p raw/papers/<slug> && tar -xzf raw/papers/<slug>.tar.gz -C raw/papers/<slug>/
+    rm raw/papers/<slug>.tar.gz
+  else
+    rm -f raw/papers/<slug>.tar.gz
+    # 回退到 PDF
+    curl -sL -o raw/papers/<slug>.pdf "https://arxiv.org/pdf/<arxiv_id>"
+    [ -s raw/papers/<slug>.pdf ] || { rm -f raw/papers/<slug>.pdf; echo "download failed: <slug>"; }
+  fi
+fi
 ```
 
-下载后验证文件有效（非空、内容类型正确）。
+每次下载后验证文件非空（`test -s`）、类型正确；若校验失败，立即删除残留文件并记录失败——永远不要在 `raw/papers/` 里留下 0 字节的空壳。
 
 #### Phase E — 汇总最终来源列表
 
@@ -152,7 +159,7 @@ curl -sL -o raw/papers/<slug>.pdf "https://arxiv.org/pdf/<arxiv_id>"
 python3 tools/research_wiki.py log wiki/ "init | source expansion: <N> local + <M> discovered via citation chains and search"
 ```
 
-**透明度**：在最终报告（Step 8）中，明确区分"用户提供的论文"和"系统发现的论文"，方便用户核实相关性。
+**透明度**：Phase D 下载的论文会永久成为用户 `raw/papers/` 的一部分。Step 8 的最终报告**必须**把它们单独列在"我们发现并下载的论文"一节里（与"用户提供的论文"分开），方便用户检视并 `git rm` 自己不要的那几篇。
 
 ### Step 3: 领域分析
 
@@ -207,7 +214,14 @@ if [ -n "$UNRELATED" ]; then
 fi
 ```
 
-**记录 stash ref**（`git stash list | head -1`）到 `init-session` checkpoint metadata，供 Step 8 在末尾自动 pop 回来。如果无法持久化存储，至少要打印给用户并提醒他们 `/init` 结束后自己 `git stash pop`。
+**记录 stash ref** 到 `init-session` checkpoint 的 metadata，这样即使 `/init` 中途被中断、之后重启，Step 8 也能读回并 pop：
+
+```bash
+STASH_REF=$(git stash list | head -1 | cut -d: -f1)
+python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session stash_ref "$STASH_REF"
+```
+
+这会把 `{"metadata": {"stash_ref": "stash@{0}"}}` 写入 `.checkpoints/init-session.json`；Step 8 在 `checkpoint-clear` 之前通过 `checkpoint-get-meta` 读回。若 4.5.b 的 stash 没有产生任何 entry（没有无关脏文件），跳过本条命令即可——Step 8 读到空字符串时会跳过 pop。
 
 **为什么是 stash 而不是"问用户"**：上一个版本曾要求问用户，而不是自动 stash。那会把脏文件留在工作树里，Phase B 第一次 `git merge` 就会报 `your local changes ... would be overwritten by merge` — 即使那些文件跟合并毫无关系，git 的安全检查也会拒绝在 dirty 工作树上合并。stash → init → pop 才是标准工作流，用户的修改不会丢失。
 
@@ -438,15 +452,35 @@ python3 tools/research_wiki.py checkpoint-clear wiki/ "init-session"
    python3 tools/research_wiki.py log wiki/ "init | completed: N papers, M concepts, K claims, L topics"
    ```
 
-### Step 8: 报告给用户
+### Step 8: 恢复 stash、报告给用户
 
-输出摘要，包含：
+**在报告之前，先把 4.5.b 存起来的 stash 恢复到工作树**。从 checkpoint metadata 读回 stash ref 并 pop：
+
+```bash
+STASH_REF=$(python3 tools/research_wiki.py checkpoint-get-meta wiki/ init-session stash_ref)
+if [ -z "$STASH_REF" ]; then
+  # 4.5.b 没有 stash 任何东西（工作树本来就干净）——直接清理 checkpoint。
+  python3 tools/research_wiki.py checkpoint-clear wiki/ init-session
+elif git stash pop "$STASH_REF"; then
+  python3 tools/research_wiki.py checkpoint-clear wiki/ init-session
+else
+  echo "⚠ stash pop 失败 — checkpoint 已保留在 .checkpoints/init-session.json"
+  echo "  请运行 'git stash list' 查看并手工处理，然后再："
+  echo "    python3 tools/research_wiki.py checkpoint-clear wiki/ init-session"
+fi
+```
+
+`checkpoint-get-meta` 带 key 时会直接把原始值写到 stdout（不存在时写空字符串），因此 `[ -z "$STASH_REF" ]` 能干净地区分"无需 pop"、"pop 成功"、"pop 失败"三种情况。**仅在** pop 成功后才清理 checkpoint——pop 失败**必须**保留 checkpoint（含 `stash_ref` metadata），以便用户手工恢复。不要把这段压缩成 `pop || echo`：`echo` 永远返回 0，会把 pop 的非零退出码吞掉，导致 `checkpoint-clear` 无条件执行并丢失 stash ref。
+
+然后输出摘要，包含：
 - 创建的页面统计（按 8 种 entity 分类）
 - 领域概况（topics 和 Summary 摘要）
 - 提取的 claims 总览
 - graph edges 数量
 - lint 发现的问题（若有）
 - 生成的初始 ideas（若有）
+- **Step 2 Phase D 新发现并下载的论文**（单独列出，与用户自己提供的论文区分，方便用户 `git rm` 自己不要的那几篇）
+- stash 是否成功 pop（以及 pop 失败时的恢复方式）
 - 建议下一步：
   - 手动 `/ingest` 更多论文
   - 阅读 `wiki/Summary/` 查看领域全景
@@ -455,7 +489,7 @@ python3 tools/research_wiki.py checkpoint-clear wiki/ "init-session"
 
 ## Constraints
 
-- **raw/ 只读**：不得修改 `raw/` 下的文件
+- **raw/ 对 `/init` 是追加写的，其它 skill 只读**：Step 2 Phase D 是 `raw/papers/` 接收新文件的唯一合法入口（通过引用链/关键词搜索发现的论文）。只允许新增，绝不覆盖或删除 `raw/papers/*` 下已有的条目。Step 5 派生出的所有 `/ingest` subagent 都必须把 `raw/` 当成严格只读（只消费 `raw/papers/<slug>/`，绝不回写）
 - **graph/ 仅通过 tools 维护**：不得手动编辑 `graph/` 下的文件
 - **双向链接**：写正向链接时同步写反向链接（参照 CLAUDE.md Cross Reference 规则表）
 - **tex 优先**：.tex > .pdf > vision API fallback
@@ -470,7 +504,7 @@ python3 tools/research_wiki.py checkpoint-clear wiki/ "init-session"
 - **raw/ 为空**：仅通过 arXiv/S2 搜索获取论文，在报告中注明
 - **arXiv/S2/DeepXiv 搜索失败**：跳过失败的外部搜索源，使用其余可用源 + raw/ 中已有文件
 - **单篇论文 ingest 失败**：记录到 checkpoint（`--failed`），跳过该论文继续处理，在最终报告中列出失败项
-- **中途中断**：下次运行 `/init` 时自动检测 checkpoint，从断点继续（跳过已完成的论文）
+- **中途中断**：下次运行 `/init` 时自动检测 checkpoint，从断点继续（跳过已完成的论文）。4.5.b 记录的 `stash_ref` 保存在 checkpoint metadata 里、可跨重启保留，因此**续跑的那次**到 Step 8 仍然会 pop——续跑开始时**不要**先 pop，只在最后 Step 8 pop。
 - **wiki/ 已存在内容**：检测已有页面，跳过已存在的 entity，仅补充新内容（幂等性）
 - **topic 生成不确定**：优先少而准，2-3 个高质量 topic 优于 5 个模糊 topic
 - **worktree 隔离明显失效**（Phase A 后没有 worktree branch 但 `wiki/` 已被写入）：子代理 prompt 很可能含有绝对路径。停止、审计 prompt、修正主流程行为，从干净的 checkpoint 重跑。**绝不可**在缺少 Phase B 合并的情况下进入 Phase C — 这会导致 wiki 含大量重复 concept 和 claim。
@@ -488,6 +522,9 @@ python3 tools/research_wiki.py checkpoint-clear wiki/ "init-session"
 - `python3 tools/research_wiki.py rebuild-open-questions wiki/` — 重建知识缺口地图
 - `python3 tools/research_wiki.py stats wiki/` — wiki 统计
 - `python3 tools/research_wiki.py log wiki/ "<message>"` — 追加日志
+- `python3 tools/research_wiki.py checkpoint-save/load/clear wiki/ init-session ...` — Step 5 并行 ingest 的 resume 支持
+- `python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session <key> <value>` — 把跨步骤状态（例如 4.5.b 的 stash ref）持久化到 checkpoint metadata
+- `python3 tools/research_wiki.py checkpoint-get-meta wiki/ init-session [<key>]` — Step 8 读回单个 metadata 值（原始字符串）或整个 metadata dict（JSON）
 - `python3 tools/fetch_s2.py search "<topic>" 20` — Semantic Scholar 关键词搜索
 - `python3 tools/fetch_s2.py references <arxiv_id>` — 引用链扩展（参考文献）
 - `python3 tools/fetch_s2.py citations <arxiv_id>` — 引用链扩展（被引用）

@@ -191,7 +191,7 @@ argument-hint: "[--hours 24] [--max-ingest 5] [--dry-run]"
 
 - **只 ingest 相关性 >= 3 的论文**：其余留给用户判断，不自动创建 wiki 页面
 - **每次最多 ingest `--max-ingest` 篇**（默认 5）：防止 wiki 单次过载
-- **raw/ 只读**：不得修改 `raw/` 下的文件
+- **`/daily-arxiv` 对 raw/ 严格只读**：不得写入、修改或删除 `raw/` 下的任何内容。（注：`/init` Step 2 是唯一合法的例外——可以向 `raw/papers/` 追加新发现的论文；本 skill 没有这个例外。）
 - **graph/ 仅通过 tools 维护**：不得手动编辑 `graph/` 下的文件
 - **双向链接**：通过 /ingest 保证
 - **去重必须严格**：按 arxiv_url 和 arxiv_id 双重检查

@@ -72,10 +72,7 @@ This creates:
 
 If `wiki/CLAUDE.md` does not exist, copy from the product template.
 
-Append log:
-```bash
-python3 tools/research_wiki.py log wiki/ "init | initialized wiki directory structure"
-```
+The `init` command already appends `init | wiki initialized` to `log.md` automatically — do not add a second log call here.
 
 ### Step 2: Collect Raw Sources + Smart Expansion
 
@@ -127,21 +124,31 @@ From the combined results:
 
 **If DeepXiv is unavailable**: rely on S2 search only.
 
-#### Phase D — Download selected papers
+#### Phase D — Download selected papers (additions only)
 
 For each paper selected in Phase B + C:
 
-```bash
-# Prefer tex source (arXiv e-print)
-curl -sL -o raw/papers/<slug>.tar.gz "https://arxiv.org/e-print/<arxiv_id>"
-mkdir -p raw/papers/<slug> && tar -xzf raw/papers/<slug>.tar.gz -C raw/papers/<slug>/
-rm raw/papers/<slug>.tar.gz
+**Skip-if-exists guard (mandatory)** — before downloading, check that neither `raw/papers/<slug>/` nor `raw/papers/<slug>.pdf` already exists. If either is present, SKIP the download entirely. `/init` is forbidden from overwriting anything already under `raw/` (see the Constraints section); the user's existing materials are authoritative.
 
-# If e-print fails or no arXiv ID, fall back to PDF
-curl -sL -o raw/papers/<slug>.pdf "https://arxiv.org/pdf/<arxiv_id>"
+```bash
+if [ -d "raw/papers/<slug>" ] || [ -f "raw/papers/<slug>.pdf" ]; then
+  echo "skip: raw/papers/<slug> already exists"
+else
+  # Prefer tex source (arXiv e-print)
+  curl -sL -o raw/papers/<slug>.tar.gz "https://arxiv.org/e-print/<arxiv_id>"
+  if [ -s raw/papers/<slug>.tar.gz ]; then
+    mkdir -p raw/papers/<slug> && tar -xzf raw/papers/<slug>.tar.gz -C raw/papers/<slug>/
+    rm raw/papers/<slug>.tar.gz
+  else
+    rm -f raw/papers/<slug>.tar.gz
+    # Fall back to PDF
+    curl -sL -o raw/papers/<slug>.pdf "https://arxiv.org/pdf/<arxiv_id>"
+    [ -s raw/papers/<slug>.pdf ] || { rm -f raw/papers/<slug>.pdf; echo "download failed: <slug>"; }
+  fi
+fi
 ```
 
-After download, verify the file is valid (not empty, correct content type).
+After each download, verify the artifact is non-empty (`test -s`) and of the expected content type; if the check fails, delete the partial file and log the failure — never leave a zero-byte stub in `raw/papers/`.
 
 #### Phase E — Compile final source list
 
@@ -152,7 +159,7 @@ Log what was expanded:
 python3 tools/research_wiki.py log wiki/ "init | source expansion: <N> local + <M> discovered via citation chains and search"
 ```
 
-**Transparency**: when reporting to the user (Step 8), clearly separate "papers you provided" from "papers we discovered" so the user can verify relevance.
+**Transparency**: papers downloaded in Phase D become permanent additions to the user's `raw/papers/`. Step 8's report MUST list them under a separate "papers we discovered and downloaded" section (distinct from "papers you provided") so the user can review and `git rm` any they reject.
 
 ### Step 3: Domain Analysis
 
@@ -207,7 +214,14 @@ if [ -n "$UNRELATED" ]; then
 fi
 ```
 
-**Record the stash ref** (`git stash list | head -1`) into `init-session` checkpoint metadata so Step 8 can pop it back at the end. If you cannot record it durably, at minimum print it to the user and remind them to `git stash pop` themselves after `/init` completes.
+**Record the stash ref** into the `init-session` checkpoint metadata so Step 8 can pop it back at the end, even if `/init` is interrupted and resumed later:
+
+```bash
+STASH_REF=$(git stash list | head -1 | cut -d: -f1)
+python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session stash_ref "$STASH_REF"
+```
+
+This writes `{"metadata": {"stash_ref": "stash@{0}"}}` into `.checkpoints/init-session.json`; Step 8 reads it back via `checkpoint-get-meta` before clearing the checkpoint. If the stash step in 4.5.b produced no stash (nothing unrelated was dirty), skip this command — Step 8 will see an empty `stash_ref` and simply not pop.
 
 **Why stash and not "ask the user"**: a previous version of this step asked the user instead of stashing automatically. That left dirty files in the working tree, and Phase B's first `git merge` then failed with `your local changes ... would be overwritten by merge` even when those files had nothing to do with the merge — git's safety check is conservative and refuses any merge while the work tree is dirty. Stash → init → pop is the standard workflow; the user's work is never lost.
 
@@ -440,15 +454,35 @@ After all papers are ingested:
    python3 tools/research_wiki.py log wiki/ "init | completed: N papers, M concepts, K claims, L topics"
    ```
 
-### Step 8: Report to User
+### Step 8: Restore stash, Report to User
 
-Output a summary including:
+**Before reporting, restore the pre-init working tree state.** Read the stash ref recorded in 4.5.b back from checkpoint metadata and pop it:
+
+```bash
+STASH_REF=$(python3 tools/research_wiki.py checkpoint-get-meta wiki/ init-session stash_ref)
+if [ -z "$STASH_REF" ]; then
+  # Nothing was stashed in 4.5.b (working tree was clean) — just clear the checkpoint.
+  python3 tools/research_wiki.py checkpoint-clear wiki/ init-session
+elif git stash pop "$STASH_REF"; then
+  python3 tools/research_wiki.py checkpoint-clear wiki/ init-session
+else
+  echo "⚠ stash pop failed — checkpoint preserved at .checkpoints/init-session.json"
+  echo "  Run 'git stash list' and resolve manually, then:"
+  echo "    python3 tools/research_wiki.py checkpoint-clear wiki/ init-session"
+fi
+```
+
+`checkpoint-get-meta` with a key prints the raw value (empty string if absent), so `[ -z "$STASH_REF" ]` cleanly distinguishes "nothing to pop" from "pop succeeded" from "pop failed". Only clear the checkpoint after a successful pop — a failed pop MUST leave the checkpoint (and its `stash_ref` metadata) intact so the user can recover manually. Do not collapse this into `pop || echo`: `echo` always exits 0, which would swallow the pop failure and run `checkpoint-clear` unconditionally, losing the stash ref.
+
+Then output a summary including:
 - Page creation counts (broken down by all 8 entity types)
 - Domain overview (topics and Summary digest)
 - Overview of extracted claims
 - Number of graph edges
 - Issues found by lint (if any)
 - Initial ideas generated (if any)
+- **Papers we discovered and downloaded** in Step 2 Phase D (listed separately from papers the user provided, so the user can `git rm` any they reject)
+- Whether the pre-init stash was popped cleanly (and how to recover if not)
 - Suggested next steps:
   - Manually `/ingest` more papers
   - Read `wiki/Summary/` for the domain landscape
@@ -457,7 +491,7 @@ Output a summary including:
 
 ## Constraints
 
-- **raw/ is read-only**: do not modify files under `raw/`
+- **raw/ is append-only for `/init`, read-only for everything else**: Step 2 Phase D is the one sanctioned place where `raw/papers/` receives new files (discovered via citation-chain / keyword search). Only additions are allowed — never overwrite or delete an existing `raw/papers/*` entry. All `/ingest` subagents spawned in Step 5 treat `raw/` as strictly read-only (they consume `raw/papers/<slug>/` but never write back)
 - **graph/ maintained via tools only**: do not manually edit files under `graph/`; use `tools/research_wiki.py` exclusively
 - **Bidirectional links**: when writing a forward link, simultaneously write the reverse link (follow the Cross Reference rules in CLAUDE.md)
 - **tex preferred**: .tex > .pdf > vision API fallback
@@ -472,7 +506,7 @@ Output a summary including:
 - **raw/ is empty**: fetch papers via arXiv/S2 search only; note in report
 - **arXiv/S2/DeepXiv search fails**: skip the failing external source, use the remaining available sources + files already in raw/
 - **Single paper ingest fails**: record to checkpoint (`--failed`), skip that paper and continue; list failures in the final report
-- **Interrupted mid-run**: next time `/init` runs, it automatically detects the checkpoint and resumes from where it left off (skipping already-completed papers)
+- **Interrupted mid-run**: next time `/init` runs, it automatically detects the checkpoint and resumes from where it left off (skipping already-completed papers). The `stash_ref` recorded in 4.5.b persists across restarts via checkpoint metadata, so Step 8 of the resumed run will still pop it — do NOT pop the stash at the start of a resumed run, only at Step 8 as usual.
 - **wiki/ already has content**: detect existing pages, skip entities that already exist, only supplement new content (idempotent)
 - **Topic generation uncertain**: prefer fewer and more precise; 2–3 high-quality topics beats 5 vague ones
 - **Worktree isolation appears to have failed** (no worktree branches after Phase A, but `wiki/` is already populated): the subagent prompts likely contained absolute paths. Stop, audit the prompts, fix the orchestrator behavior, and re-run from a clean checkpoint. Do NOT proceed to Phase C without Phase B merge — the wiki will end up with many duplicate concepts and claims.
@@ -490,6 +524,9 @@ Output a summary including:
 - `python3 tools/research_wiki.py rebuild-open-questions wiki/` — rebuild knowledge gap map
 - `python3 tools/research_wiki.py stats wiki/` — wiki statistics
 - `python3 tools/research_wiki.py log wiki/ "<message>"` — append log
+- `python3 tools/research_wiki.py checkpoint-save/load/clear wiki/ init-session ...` — resume support for Step 5 parallel ingest
+- `python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session <key> <value>` — persist cross-step state (e.g. the Step 4.5.b stash ref) in checkpoint metadata
+- `python3 tools/research_wiki.py checkpoint-get-meta wiki/ init-session [<key>]` — read a metadata value (raw) or the whole metadata dict (JSON) in Step 8
 - `python3 tools/fetch_s2.py search "<topic>" 20` — Semantic Scholar keyword search
 - `python3 tools/fetch_s2.py references <arxiv_id>` — citation-chain expansion (references)
 - `python3 tools/fetch_s2.py citations <arxiv_id>` — citation-chain expansion (citations)
