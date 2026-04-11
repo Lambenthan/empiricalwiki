@@ -1956,16 +1956,18 @@ def _checkpoint_read(wiki_root: str, task_id: str, strict: bool = False) -> dict
     """
     cp_file = _checkpoint_path(wiki_root, task_id)
     data = {"task_id": task_id, "completed": [], "failed": [], "metadata": {}}
+    _PARSE_FAILED = object()  # sentinel: distinguishes parse-failed from parsed-to-None
     if cp_file.exists():
         try:
             loaded = json.loads(cp_file.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             if strict:
                 raise
-            loaded = None
+            loaded = _PARSE_FAILED
         if isinstance(loaded, dict):
             data.update(loaded)
-        elif loaded is not None and strict:
+        elif loaded is not _PARSE_FAILED and strict:
+            # loaded parsed successfully but is not a dict (e.g. null, [], "str", 42)
             raise ValueError("checkpoint top-level JSON is not an object")
     data.setdefault("completed", [])
     data.setdefault("failed", [])

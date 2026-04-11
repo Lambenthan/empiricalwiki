@@ -1640,15 +1640,21 @@ class TestCheckpoint:
         assert out["completed"] == []
         assert out["metadata"] == {}
 
-    def test_load_non_dict_json_reports_error(self, wiki, capsys):
-        """Top-level JSON that isn't a dict (e.g. a list) is also corruption."""
+    @pytest.mark.parametrize("payload", ["[]", "null", "\"string\"", "42"])
+    def test_load_non_dict_json_reports_error(self, wiki, capsys, payload):
+        """Any top-level JSON that isn't an object is corruption.
+
+        Must cover `null` specifically — it parses to Python None, which is
+        easy to conflate with "parse failed" via a truthy sentinel. The
+        _PARSE_FAILED sentinel in _checkpoint_read distinguishes the two.
+        """
         cp_dir = wiki / ".checkpoints"
         cp_dir.mkdir(parents=True, exist_ok=True)
-        (cp_dir / "bad-shape.json").write_text("[]")
+        (cp_dir / "bad-shape.json").write_text(payload)
 
         rw.checkpoint_load(str(wiki), "bad-shape")
         out = json.loads(capsys.readouterr().out.strip())
-        assert out["exists"] is False
+        assert out["exists"] is False, f"payload {payload!r} should be flagged corrupt"
         assert out.get("error") == "corrupt checkpoint"
 
     def test_set_meta_repairs_corrupt_file(self, wiki):
