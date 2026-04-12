@@ -65,7 +65,9 @@ npm install -g @anthropic-ai/claude-code
 claude login
 
 # 3. One-click setup
-chmod +x setup.sh && ./setup.sh
+chmod +x setup.sh && ./setup.sh        # Linux / macOS
+# Windows (PowerShell):
+#   powershell -ExecutionPolicy Bypass -File .\setup.ps1
 
 # 4. Put your papers in raw/papers/ (.tex or .pdf)
 
@@ -75,7 +77,7 @@ claude
 ```
 
 <details>
-<summary><b>Manual setup</b></summary>
+<summary><b>Manual setup (Linux / macOS)</b></summary>
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
@@ -83,6 +85,23 @@ pip install -r requirements.txt
 cp .env.example .env                 # Edit to add API keys
 cp config/settings.local.json.example .claude/settings.local.json
 ```
+
+</details>
+
+<details>
+<summary><b>Manual setup (Windows / PowerShell)</b></summary>
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env          # Edit to add API keys
+Copy-Item config\settings.local.json.example .claude\settings.local.json
+```
+
+Note: native Windows is supported for the local pipeline. Remote-GPU
+experiments via `/exp-run --env remote` rely on `ssh`/`rsync`/`screen`
+and are best run from WSL2 or Linux/macOS.
 
 </details>
 
@@ -301,13 +320,17 @@ npm install -g @anthropic-ai/claude-code
 claude login
 
 # 一键配置
-chmod +x setup.sh && ./setup.sh --lang zh
+chmod +x setup.sh && ./setup.sh --lang zh        # Linux / macOS
+# Windows (PowerShell):
+#   powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Lang zh
 
 # 把论文放入 raw/papers/（.tex 或 .pdf）
 # 启动 Claude Code
 claude
 # 输入：/init <你的研究方向>
 ```
+
+> **Windows 用户**：本地 pipeline 已原生支持。`/exp-run --env remote` 远程 GPU 实验依赖 `ssh`/`rsync`/`screen`，建议在 WSL2 或 Linux/macOS 下运行。
 
 ### API Key 说明
 

@@ -175,10 +175,23 @@ argument-hint: <experiment-slug> [--review] [--collect] [--full] [--env local|re
      --cmd "bash experiments/code/{slug}/run.sh" \
      --gpu {gpu_index}
    ```
-6. 更新 `wiki/experiments/{slug}.md`：
-   - status: `running`
-   - run_log: `logs/exp-{slug}.log`
-   - 新增 `remote:` 块到 frontmatter（server, gpu, session, started）
+6. 更新 `wiki/experiments/{slug}.md` frontmatter —— 以下字段已由 /exp-design 写入完整 CLAUDE.md 模板,都是空值:
+   ```bash
+   # 顶层 scalar 字段 —— 用 set-meta
+   python3 tools/research_wiki.py set-meta wiki/experiments/{slug}.md status running
+   python3 tools/research_wiki.py set-meta wiki/experiments/{slug}.md run_log "logs/exp-{slug}.log"
+   ```
+
+   嵌套 `remote:` 块无法通过 `set-meta` 更新（set-meta 只处理顶层 scalar 字段）。直接用 `Edit` 工具就地替换这五个空的子字段值。文件里已有的 block 形如：
+   ```yaml
+   remote:
+     server: ""
+     gpu: ""
+     session: ""
+     started: ""
+     completed: ""
+   ```
+   用 5 次 Edit 调用（每个子字段一次）设置 `server`、`gpu`、`session`、`started`。`completed: ""` 留空由 Phase 4 填写。如果发现文件里没有 `remote:` block,说明 /exp-design 没写完整的 CLAUDE.md 模板;停下来报 bug,不要在这里追加 block（追加会让字段顺序偏离 canonical 模板,破坏后续 edit 的匹配）。
 7. **估算运行时长**，写入 frontmatter（同 local 模式估算逻辑）：
    ```bash
    python3 tools/research_wiki.py set-meta \

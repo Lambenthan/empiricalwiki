@@ -224,27 +224,65 @@ argument-hint: "[research-direction-or-topic] [--max-ideas N] [--skip-validation
    # 生成 slug
    python3 tools/research_wiki.py slug "<idea-title>"
    ```
-   创建 `wiki/ideas/{slug}.md`：
+   创建 `wiki/ideas/{slug}.md`，**严格遵循 CLAUDE.md 的 ideas template**（所有字段必填；`lint.py` 强制要求 `status` 和 `priority`）：
    ```yaml
    ---
-   title: ""
-   slug: ""
+   title: "<idea 标题>"
+   slug: "<idea-slug>"
    status: proposed
-   origin: "ideate"
-   origin_gaps: []           # [[claim-slug]] or gap description
-   linked_papers: []         # [[paper-slug]]
-   linked_experiments: []
+   origin: "ideate: <驱动该 idea 的 gap / 弱 claim / 论文的简短描述>"
+   origin_gaps: []           # [[claim-slug]] 列表 — 该 idea 针对的 claim 或 topic
+   tags: []                  # 2-5 个主题标签（从目标 claim / direction 继承）
+   domain: ""                # NLP / CV / ML Systems / Robotics（从 direction 继承）
+   priority: 3               # 1-5 — 见下方 Priority 计算
+   pilot_result: ""          # 留空，由 /exp-eval 填写
+   failure_reason: ""        # proposed ideas 留空
+   linked_experiments: []    # 留空，由 /exp-design 创建 experiment 后填写
    date_proposed: YYYY-MM-DD
-   pilot_result: ""
-   failure_reason: ""
+   date_resolved: ""         # 留空，validated/failed 时填写
    ---
    ```
-   正文包含：Hypothesis、Approach sketch、Feasibility、Novelty score、Review summary、Risks
+
+   **Priority 计算**（把 Phase 4 信号映射到 1-5 分）：
+   - 若 `--skip-validation`：默认 `priority = 3`
+   - 否则从 `novelty_score`（/novelty 给出的 1-5）开始
+   - `+1` 若 `gap_alignment_bonus > 0`（直接命中 gap_map 条目）
+   - `-1` 若 `review_score <= 4`（major issues 降权）
+   - Clamp 到 `[1, 5]`
+
+   **正文结构**（必须与 CLAUDE.md 模板严格一致 — 不要改名）：
+   ```markdown
+   ## Motivation
+   哪个 gap / weakly_supported claim / 论文限制驱动了这个 idea。用 `[[slug]]` 引用 wiki 页面。
+
+   ## Hypothesis
+   1-2 句话陈述可验证的命题。
+
+   ## Approach sketch
+   3-5 句描述提出的方法。任何借用现有工作的组件用 `[[paper-slug]]` 或 `[[concept-slug]]` 标注。
+
+   ## Expected outcome
+   成功的表现（指标 / claim 状态变化），加上 Phase 4 的 novelty 与 review 总结：
+   - Novelty score: N/5 — <来自 /novelty 的一行理由>
+   - Review score: M/10 — <来自 /review 的一行总结>
+
+   ## Risks
+   可行性评级（high/medium/low）+ top 2-3 风险。包含 /review 揭示的主要弱点。
+
+   ## Pilot results
+   （留空 — 由 /exp-eval 跑完实验后填写）
+
+   ## Lessons learned
+   （留空 — 由 /exp-eval 在 idea 达到终态后填写）
+   ```
 
 2. **写入被淘汰的 ideas**（status: failed）：
-   对 Phase 3/4 中被淘汰的 ideas，也创建 `wiki/ideas/{slug}.md`：
-   - status: failed
-   - failure_reason: 具体的淘汰原因（如 "已有高度相似的发表工作: [paper-title]"、"可行性不足: GPU 需求过高"）
+   对 Phase 3/4 中被淘汰的 ideas，也用**上方同一模板**创建 `wiki/ideas/{slug}.md`，应用以下覆盖：
+   - `status: failed`
+   - `priority: 1`（被淘汰的 ideas 永远不会阻塞更高优先级的工作）
+   - `date_resolved: YYYY-MM-DD`（今天）
+   - `failure_reason: "[filter] <具体淘汰原因>"` — `[filter]` 前缀用于区分 ideate 阶段淘汰和实验后失败（/exp-eval 用不同标签）。例如：`"[filter] 已有高度相似的发表工作: <paper-title>"`、`"[filter] 可行性不足：GPU 需求过高"`
+   - `## Motivation` 和 `## Hypothesis` 仍需填写（供未来 banlist 匹配）；`## Approach sketch` 可简略；`## Expected outcome` 和 `## Risks` 可说明淘汰原因
    - 这些 failed ideas 成为未来 ideate 的 banlist
 
 3. **添加 graph edges**：

@@ -61,19 +61,11 @@ from pathlib import Path
 # Constants
 # ---------------------------------------------------------------------------
 
-ENTITY_DIRS = [
-    "papers", "concepts", "topics", "people",
-    "ideas", "experiments", "claims", "Summary",
-    "foundations",
-]
+# ENTITY_DIRS / VALID_EDGE_TYPES are re-exported from _schemas so this module
+# and lint.py share a single source of truth — see tools/_schemas.py.
+from _schemas import ENTITY_DIRS, VALID_EDGE_TYPES  # noqa: E402
 
 DERIVED_DIR = "graph"
-
-VALID_EDGE_TYPES = {
-    "extends", "contradicts", "supports", "inspired_by",
-    "tested_by", "invalidates", "supersedes", "addresses_gap",
-    "derived_from",
-}
 
 STOP_WORDS = frozenset({
     "a", "an", "the", "of", "for", "in", "on", "with", "via",
@@ -1565,6 +1557,195 @@ def rebuild_index(wiki_root: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Topic backfill (post-merge sweep for /init INIT MODE)
+# ---------------------------------------------------------------------------
+
+def topic_backfill(wiki_root: str) -> None:
+    """Append matching papers to each topic's seminal_works / SOTA tracker.
+
+    Re-implements the deterministic half of /ingest Step 5 Part B in a
+    post-merge sweep. /init's INIT MODE tells subagents to skip topic updates
+    so parallel ingest doesn't conflict on shared topic files; this command
+    is what finally repairs them after Phase B merges complete.
+
+    Matching rule (matches /ingest Part B):
+      - paper.tags ∩ topic.tags must be non-empty (or paper.domain in topic.tags)
+      - importance >= 4 → append `- [[paper-slug]]` to ## Seminal works
+      - importance < 4  → append `- [[paper-slug]]` to ## SOTA tracker
+      - existing entries are detected and skipped (idempotent)
+
+    NOT handled here (deferred to a later /ingest or /edit pass):
+      - topic.key_people backfill (requires "is the author a key figure"
+        judgment, which is fuzzy and not safe to automate)
+      - topic.tags inference (topics that have no tags get no matches)
+
+    Idempotent: re-running on a wiki that's already backfilled is a no-op.
+    """
+    root = Path(wiki_root)
+    topics_dir = root / "topics"
+    papers_dir = root / "papers"
+
+    if not topics_dir.exists() or not papers_dir.exists():
+        print(json.dumps({
+            "status": "ok",
+            "topics_scanned": 0,
+            "topics_matched": 0,
+            "lines_added": 0,
+            "lines_skipped_existing": 0,
+            "per_topic": {},
+            "note": "topics/ or papers/ missing",
+        }))
+        return
+
+    def _as_str_set(val) -> set[str]:
+        if not val:
+            return set()
+        if isinstance(val, str):
+            return {val.strip().lower()} if val.strip() else set()
+        if isinstance(val, list):
+            return {str(t).strip().lower() for t in val if str(t).strip()}
+        return set()
+
+    # Pre-load all paper frontmatter once
+    papers: list[dict] = []
+    for p in sorted(papers_dir.glob("*.md")):
+        fm = _parse_frontmatter(p)
+        slug = p.stem
+        tags = _as_str_set(fm.get("tags"))
+        domain = str(fm.get("domain", "")).strip().lower()
+        if domain:
+            tags.add(domain)
+        try:
+            importance = int(str(fm.get("importance", "3")).strip())
+        except (TypeError, ValueError):
+            importance = 3
+        papers.append({"slug": slug, "tags": tags, "importance": importance})
+
+    added = 0
+    skipped_existing = 0
+    matched_topics = 0
+    per_topic: dict[str, dict[str, int]] = {}
+
+    for tpath in sorted(topics_dir.glob("*.md")):
+        topic_slug = tpath.stem
+        tfm = _parse_frontmatter(tpath)
+        ttags = _as_str_set(tfm.get("tags"))
+        if not ttags:
+            per_topic[topic_slug] = {"added": 0, "skipped": 0,
+                                      "note": "topic has no tags"}
+            continue
+
+        seminal: list[str] = []
+        sota: list[str] = []
+        for paper in papers:
+            if not (ttags & paper["tags"]):
+                continue
+            link = f"- [[{paper['slug']}]]"
+            if paper["importance"] >= 4:
+                seminal.append(link)
+            else:
+                sota.append(link)
+
+        if not seminal and not sota:
+            per_topic[topic_slug] = {"added": 0, "skipped": 0}
+            continue
+
+        matched_topics += 1
+        t_added, t_skipped = 0, 0
+        if seminal:
+            a, s = _append_lines_to_section(tpath, "## Seminal works", seminal)
+            t_added += a
+            t_skipped += s
+        if sota:
+            a, s = _append_lines_to_section(tpath, "## SOTA tracker", sota)
+            t_added += a
+            t_skipped += s
+
+        added += t_added
+        skipped_existing += t_skipped
+        per_topic[topic_slug] = {"added": t_added, "skipped": t_skipped}
+
+    print(json.dumps({
+        "status": "ok",
+        "topics_scanned": len(per_topic),
+        "topics_matched": matched_topics,
+        "lines_added": added,
+        "lines_skipped_existing": skipped_existing,
+        "per_topic": per_topic,
+    }, ensure_ascii=False))
+
+
+def _find_section_heading(content: str, heading: str) -> int:
+    """Locate an exact markdown heading in `content`.
+
+    Returns the offset of the leading newline of the matched heading line, or
+    -1 if not found. The match must be exact: the character following
+    `heading` has to be `\\n`, `\\r`, or end-of-string. This rejects prefix
+    collisions like `## Seminal works (extended)` matching `## Seminal works`,
+    which would otherwise let the caller insert text inside another heading.
+    """
+    needle = f"\n{heading}"
+    start = 0
+    while True:
+        idx = content.find(needle, start)
+        if idx == -1:
+            return -1
+        end_of_match = idx + len(needle)
+        if end_of_match == len(content) or content[end_of_match] in "\n\r":
+            return idx
+        start = idx + 1
+
+
+def _append_lines_to_section(fpath: Path, heading: str,
+                              lines: list[str]) -> tuple[int, int]:
+    """Append lines under a markdown heading. Returns (added, skipped).
+
+    - Idempotent: re-appending an already-present line in the same section
+      returns it as `skipped`, not `added`.
+    - Dedup is **section-scoped** in both branches (existing section AND
+      newly-created section). The previous version dedup'd the
+      missing-section path against the entire file, which silently dropped
+      lines that happened to appear in unrelated prose like ## Overview.
+    - Heading match is exact (see `_find_section_heading`) to prevent
+      `## Seminal works (extended)` collisions corrupting the file.
+    - Inserts new lines immediately after the heading (and any blank lines
+      that follow it), before existing content.
+    """
+    content = fpath.read_text(encoding="utf-8")
+    section_start = _find_section_heading(content, heading)
+
+    if section_start == -1:
+        # Section missing — create it at EOF. The new section starts empty,
+        # so dedup is unnecessary; just append all requested lines.
+        body = "\n".join(lines)
+        content = content.rstrip() + f"\n\n{heading}\n\n{body}\n"
+        fpath.write_text(content, encoding="utf-8")
+        return (len(lines), 0)
+
+    # Slice that belongs to this section (up to next ## heading or EOF).
+    body_start = section_start + 1 + len(heading)
+    rest = content[body_start:]
+    next_section = re.search(r"\n## ", rest)
+    section_end = body_start + (next_section.start() if next_section else len(rest))
+    section_text = content[body_start:section_end]
+
+    new_lines = [l for l in lines if l.strip() not in section_text]
+    skipped = len(lines) - len(new_lines)
+    if not new_lines:
+        return (0, skipped)
+
+    # Insert immediately after the heading line + any blank lines following it.
+    insert_pos = body_start
+    while insert_pos < section_end and content[insert_pos] == "\n":
+        insert_pos += 1
+
+    insertion = "\n".join(new_lines) + "\n"
+    new_content = content[:insert_pos] + insertion + content[insert_pos:]
+    fpath.write_text(new_content, encoding="utf-8")
+    return (len(new_lines), skipped)
+
+
+# ---------------------------------------------------------------------------
 # Audit log
 # ---------------------------------------------------------------------------
 
@@ -2194,6 +2375,11 @@ def main():
     p = sub.add_parser("rebuild-index", help="Regenerate index.md from entity dirs")
     p.add_argument("wiki_root")
 
+    # topic-backfill
+    p = sub.add_parser("topic-backfill",
+                       help="Append matching papers to topic seminal_works / SOTA tracker (post-merge sweep for /init)")
+    p.add_argument("wiki_root")
+
     # checkpoint-save
     p = sub.add_parser("checkpoint-save", help="Save item to batch checkpoint")
     p.add_argument("wiki_root")
@@ -2301,6 +2487,8 @@ def main():
         dedup_edges(args.wiki_root)
     elif args.command == "rebuild-index":
         rebuild_index(args.wiki_root)
+    elif args.command == "topic-backfill":
+        topic_backfill(args.wiki_root)
     elif args.command == "checkpoint-save":
         checkpoint_save(args.wiki_root, args.task_id, args.item,
                         status="failed" if args.failed else "completed")

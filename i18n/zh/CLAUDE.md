@@ -350,18 +350,26 @@ claims:
 
 运行任何 Python 工具之前，必须确保使用正确的 Python 环境。按以下优先级检测并激活：
 
-1. **检查 `.venv/` 是否存在**：若存在，在 Bash 命令前加 `source .venv/bin/activate &&`
+1. **检查 `.venv/` 是否存在**：若存在，直接调用 venv 内的解释器 —— 跨平台最安全。
+   - Unix/macOS：存在 `.venv/bin/python` → 用 `.venv/bin/python tools/X.py`
+   - Windows：存在 `.venv/Scripts/python.exe` → 用 `.venv/Scripts/python.exe tools/X.py`
 2. **检查 `conda` 环境**：若当前无 venv 但有 conda，使用 `conda run -n <env>` 或确认 conda env 已激活
-3. **系统 Python**：若以上都不存在，直接使用 `python3`
+3. **系统 Python**：若以上都不存在，Unix/macOS 用 `python3`，Windows 用 `python`
 
 **示例：调用工具时**
 ```bash
-# 若 .venv/ 存在
-source .venv/bin/activate && python3 tools/fetch_arxiv.py --hours 24
+# Unix/macOS，存在 .venv/
+.venv/bin/python tools/fetch_arxiv.py --hours 24
 
-# 若无 venv，直接调用
-python3 tools/fetch_arxiv.py --hours 24
+# Windows，存在 .venv/（Git Bash 与 PowerShell 都支持正斜杠）
+.venv/Scripts/python.exe tools/fetch_arxiv.py --hours 24
+
+# 无 venv
+python3 tools/fetch_arxiv.py --hours 24      # Unix/macOS
+python tools/fetch_arxiv.py --hours 24       # Windows
 ```
+
+直接调用 venv 内的解释器，可以避免在 Unix 上 `source activate` 与 Windows 上 `Activate.ps1` 的差异，跨平台行为完全一致。
 
 **环境变量**：所有 Python 工具会自动从 `~/.env` 和项目根目录 `.env` 加载 API Key（通过 `tools/_env.py`），无需手动 export。
 

@@ -315,7 +315,7 @@ Agent({
          跳过 — fetch_s2.py references <arxiv_id>           （同上）
          跳过 — fetch_deepxiv.py head <arxiv_id>            （批量引导不需要章节结构）
          跳过 — 更新 wiki/index.md                           （主流程合并后执行 rebuild-index）
-         跳过 — 更新 wiki/topics/*.md                        （主流程在合并后执行 lint --fix 修复所有 xref）
+         跳过 — 更新 wiki/topics/*.md                        （主流程在合并后依次执行 `topic-backfill` 和 `lint --fix` 修复所有 xref）
          跳过 — research_wiki.py rebuild-context-brief       （graph/ 文件是派生的；由主流程在所有合并完成后统一重建一次。在 worktree 中并行重建必然导致 context_brief.md / open_questions.md 的合并冲突。）
          跳过 — research_wiki.py rebuild-open-questions      （同上 — 子代理绝不可写 wiki/graph/*.md）
          执行 — 完整阅读 .tex/.pdf 来源
@@ -409,7 +409,7 @@ python3 tools/research_wiki.py checkpoint-clear wiki/ "init-session"
 - **子代理必须在汇报前 commit** — 每个 agent prompt 都强制要求最后一步 `git add wiki/ && git commit`，否则 Phase B 会合入空结果。Phase B sanity check 必须验证每个 branch 都有 commit。
 - **spawn 完所有 N 个 agent 后，等待所有 N 个完成通知**，再进入 Phase B
 - **绝不绕过子代理** — 所有论文 ingest 必须通过子代理运行 /ingest 工作流
-- **强制执行 init 模式跳过项** — SKIP 列表不得移除；`lint --fix`（Step 7）负责修复所有跳过的 xref
+- **强制执行 init 模式跳过项** — SKIP 列表不得移除。Step 7 先跑 `topic-backfill`（把已合并的论文按 tag 重叠 + importance 阈值回填到 topic 的 seminal_works / SOTA tracker），再跑 `lint --fix`（修复 concept↔paper、claim↔paper、idea↔claim、experiment↔claim 的反向链接）。两者合起来覆盖子代理跳过的全部 xref。
 
 ### Step 6: 生成初始 Ideas（可选）
 
@@ -435,12 +435,19 @@ python3 tools/research_wiki.py checkpoint-clear wiki/ "init-session"
    ```bash
    # 从 entity frontmatter 重建 index.md（子代理已跳过此步骤）
    python3 tools/research_wiki.py rebuild-index wiki/
+   # 把已合并的论文按 tag 重叠 + importance 阈值回填到 topic 页面
+   #（INIT MODE 下子代理跳过了 wiki/topics/*.md 的更新）
+   python3 tools/research_wiki.py topic-backfill wiki/
    # 重建 graph 上下文与开放问题
    python3 tools/research_wiki.py rebuild-context-brief wiki/
    python3 tools/research_wiki.py rebuild-open-questions wiki/
    ```
-2. 运行 lint 检查基本健康：
+2. 自动修复子代理跳过的确定性 xref，再跑一次裸 lint 看最终健康状态：
    ```bash
+   # --fix 修复 concept↔paper、claim↔paper、idea↔claim、experiment↔claim
+   # 的反向链接（CLAUDE.md 里那张双向规则表）。topic 相关的 xref
+   # 不在此列 —— 那些由上面的 topic-backfill 处理。
+   python3 tools/lint.py --wiki-dir wiki/ --fix
    python3 tools/lint.py --wiki-dir wiki/
    ```
 3. 获取统计信息：
@@ -518,6 +525,7 @@ fi
 - `python3 tools/research_wiki.py add-edge wiki/ ...` — 添加 graph edge
 - `python3 tools/research_wiki.py dedup-edges wiki/` — 删除并行 ingest 合并后的重复 edges（Step 5，Phase C）
 - `python3 tools/research_wiki.py rebuild-index wiki/` — 从 entity frontmatter 重建 index.md（Step 7，所有子代理完成后）
+- `python3 tools/research_wiki.py topic-backfill wiki/` — 把已合并的论文按 tag 重叠 + importance 阈值回填到 topic 的 seminal_works / SOTA tracker（Step 7，修复子代理在 INIT MODE 下跳过的 wiki/topics/*.md 更新）
 - `python3 tools/research_wiki.py rebuild-context-brief wiki/` — 重建压缩上下文
 - `python3 tools/research_wiki.py rebuild-open-questions wiki/` — 重建知识缺口地图
 - `python3 tools/research_wiki.py stats wiki/` — wiki 统计
@@ -529,7 +537,7 @@ fi
 - `python3 tools/fetch_s2.py references <arxiv_id>` — 引用链扩展（参考文献）
 - `python3 tools/fetch_s2.py citations <arxiv_id>` — 引用链扩展（被引用）
 - `python3 tools/fetch_deepxiv.py search "<topic>" --mode hybrid --limit 10` — DeepXiv 语义搜索（可选）
-- `python3 tools/lint.py --wiki-dir wiki/` — 结构检查
+- `python3 tools/lint.py --wiki-dir wiki/ --fix` — 结构检查 + 自动修复（Step 7，修复子代理跳过的 concept↔paper、claim↔paper、idea↔claim、experiment↔claim 反向链接）
 - `curl` — 下载 arXiv e-print（tex）或 PDF 到 raw/papers/
 
 ### Skills（via Agent 子代理）
