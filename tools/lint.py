@@ -30,50 +30,18 @@ import re
 import sys
 from pathlib import Path
 
+# Schema constants — single source of truth shared with research_wiki.py.
+# See tools/_schemas.py for the spec; do not duplicate the definitions here.
+from _schemas import (
+    ENTITY_DIRS,
+    FIELD_DEFAULTS,
+    REQUIRED_FIELDS,
+    VALID_EDGE_TYPES,
+    VALID_VALUES,
+)
+
 WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
-
-# All 8 entity directories + Summary
-ENTITY_DIRS = ["papers", "concepts", "topics", "people", "foundations",
-               "ideas", "experiments", "claims", "Summary"]
-
-# Required fields per entity type
-REQUIRED_FIELDS = {
-    "papers": ["title", "slug", "tags", "importance"],
-    "concepts": ["title", "tags", "maturity", "key_papers"],
-    "topics": ["title", "tags"],
-    "people": ["name", "tags"],
-    "Summary": ["title", "scope", "key_topics"],
-    "ideas": ["title", "slug", "status", "origin", "tags", "priority"],
-    "experiments": ["title", "slug", "status", "target_claim", "hypothesis", "tags"],
-    "claims": ["title", "slug", "status", "confidence", "tags", "source_papers", "evidence"],
-    "foundations": ["title", "slug", "domain", "status"],
-}
-
-# Valid enum values
-VALID_VALUES = {
-    "papers.importance": {"1", "2", "3", "4", "5"},
-    "concepts.maturity": {"stable", "active", "emerging", "deprecated"},
-    "ideas.status": {"proposed", "in_progress", "tested", "validated", "failed"},
-    "ideas.priority": {"1", "2", "3", "4", "5"},
-    "experiments.status": {"planned", "running", "completed", "abandoned"},
-    "experiments.outcome": {"succeeded", "failed", "inconclusive", ""},
-    "claims.status": {"proposed", "weakly_supported", "supported", "challenged", "deprecated"},
-    "foundations.status": {"mainstream", "historical"},
-}
-
-# Safe default values for --fix mode (only fields where a neutral default is reasonable)
-FIELD_DEFAULTS = {
-    "papers": {"tags": "[]", "importance": "3"},
-    "concepts": {"tags": "[]", "maturity": "active", "key_papers": "[]"},
-    "topics": {"tags": "[]"},
-    "people": {"tags": "[]"},
-    "Summary": {"key_topics": "[]"},
-    "ideas": {"tags": "[]", "priority": "3"},
-    "experiments": {"tags": "[]"},
-    "claims": {"tags": "[]", "confidence": "0.5"},
-    "foundations": {"status": "mainstream"},
-}
 
 
 class LintIssue:
@@ -401,9 +369,7 @@ def check_graph_edges(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIssue]
     if not edges_path.exists():
         return issues
 
-    valid_types = {"extends", "contradicts", "supports", "inspired_by",
-                   "tested_by", "invalidates", "supersedes", "addresses_gap",
-                   "derived_from"}
+    valid_types = VALID_EDGE_TYPES
 
     line_num = 0
     for line in edges_path.read_text(encoding="utf-8").strip().split("\n"):

@@ -150,6 +150,21 @@ class TestAddEdge:
             rw.add_edge(str(wiki), f"a{i}", f"b{i}", t)
         assert len(rw.load_edges(str(wiki))) == len(rw.VALID_EDGE_TYPES)
 
+    def test_schema_constants_are_shared_with_lint(self):
+        """research_wiki and lint must read from the same _schemas module —
+        anything else means the enum sets can drift apart silently."""
+        import sys as _sys
+        _sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+        import _schemas
+        import lint as lint_mod
+        assert rw.VALID_EDGE_TYPES is _schemas.VALID_EDGE_TYPES
+        assert rw.ENTITY_DIRS is _schemas.ENTITY_DIRS
+        assert lint_mod.VALID_EDGE_TYPES is _schemas.VALID_EDGE_TYPES
+        assert lint_mod.VALID_VALUES is _schemas.VALID_VALUES
+        assert lint_mod.REQUIRED_FIELDS is _schemas.REQUIRED_FIELDS
+        assert lint_mod.FIELD_DEFAULTS is _schemas.FIELD_DEFAULTS
+        assert lint_mod.ENTITY_DIRS is _schemas.ENTITY_DIRS
+
     def test_entity_validation_warns(self, wiki, capsys):
         """add-edge with nonexistent entities should still succeed but warn."""
         rw.add_edge(str(wiki), "papers/nonexistent", "claims/missing", "supports")
@@ -1384,6 +1399,167 @@ class TestRebuildIndex:
         out = json.loads(capsys.readouterr().out)
         assert out["status"] == "ok"
         assert all(v == 0 for v in out["entities"].values())
+
+
+class TestTopicBackfill:
+    """Post-merge sweep that repairs the topics/*.md updates skipped by
+    /init INIT MODE subagents. See research_wiki.topic_backfill docstring."""
+
+    def _topic(self, wiki, slug, tags, sections=("## Seminal works", "## SOTA tracker")):
+        body = "## Overview\nTBD\n\n" + "\n".join(f"{s}\n" for s in sections)
+        _write_page(wiki, "topics", slug, f"title: {slug}\ntags: [{', '.join(tags)}]", body)
+
+    def _paper(self, wiki, slug, tags, importance, domain=""):
+        fm = f"title: {slug}\nslug: {slug}\ntags: [{', '.join(tags)}]\nimportance: {importance}"
+        if domain:
+            fm += f"\ndomain: {domain}"
+        _write_page(wiki, "papers", slug, fm)
+
+    def test_matches_by_tag_overlap(self, wiki, capsys):
+        self._topic(wiki, "efficient-llm", ["efficiency", "llm"])
+        self._paper(wiki, "lora", ["fine-tuning", "llm"], 5)
+        self._paper(wiki, "robotics", ["robotics"], 5)  # no overlap
+        capsys.readouterr()
+        rw.topic_backfill(str(wiki))
+        out = json.loads(capsys.readouterr().out)
+        assert out["status"] == "ok"
+        topic_md = (wiki / "topics" / "efficient-llm.md").read_text()
+        assert "[[lora]]" in topic_md
+        assert "[[robotics]]" not in topic_md
+
+    def test_seminal_vs_sota_split_by_importance(self, wiki, capsys):
+        self._topic(wiki, "t1", ["x"])
+        self._paper(wiki, "important", ["x"], 5)
+        self._paper(wiki, "alsoimportant", ["x"], 4)
+        self._paper(wiki, "minor", ["x"], 2)
+        capsys.readouterr()
+        rw.topic_backfill(str(wiki))
+        topic_md = (wiki / "topics" / "t1.md").read_text()
+        seminal = topic_md.split("## Seminal works")[1].split("## SOTA tracker")[0]
+        sota = topic_md.split("## SOTA tracker")[1]
+        assert "[[important]]" in seminal
+        assert "[[alsoimportant]]" in seminal
+        assert "[[minor]]" in sota
+        assert "[[important]]" not in sota
+        assert "[[minor]]" not in seminal
+
+    def test_idempotent(self, wiki, capsys):
+        self._topic(wiki, "t1", ["x"])
+        self._paper(wiki, "p1", ["x"], 5)
+        capsys.readouterr()
+        rw.topic_backfill(str(wiki))
+        first = (wiki / "topics" / "t1.md").read_text()
+        capsys.readouterr()
+        rw.topic_backfill(str(wiki))
+        second = (wiki / "topics" / "t1.md").read_text()
+        assert first == second
+        out = json.loads(capsys.readouterr().out)
+        assert out["lines_added"] == 0
+        assert out["lines_skipped_existing"] == 1
+
+    def test_creates_section_if_missing(self, wiki, capsys):
+        # Topic page intentionally has no Seminal works section
+        _write_page(wiki, "topics", "t1", "title: t1\ntags: [x]",
+                    body="## Overview\nfoo\n")
+        self._paper(wiki, "p1", ["x"], 5)
+        capsys.readouterr()
+        rw.topic_backfill(str(wiki))
+        topic_md = (wiki / "topics" / "t1.md").read_text()
+        assert "## Seminal works" in topic_md
+        assert "[[p1]]" in topic_md
+
+    def test_topic_with_no_tags_is_skipped(self, wiki, capsys):
+        _write_page(wiki, "topics", "untagged", "title: untagged\ntags: []",
+                    body="## Seminal works\n")
+        self._paper(wiki, "p1", ["x"], 5)
+        capsys.readouterr()
+        rw.topic_backfill(str(wiki))
+        out = json.loads(capsys.readouterr().out)
+        assert out["per_topic"]["untagged"]["note"] == "topic has no tags"
+        topic_md = (wiki / "topics" / "untagged.md").read_text()
+        assert "[[p1]]" not in topic_md
+
+    def test_domain_field_counts_as_tag(self, wiki, capsys):
+        self._topic(wiki, "nlp-topic", ["nlp"])
+        # Paper has no overlapping `tags`, only matching `domain`
+        self._paper(wiki, "p1", ["fine-tuning"], 5, domain="nlp")
+        capsys.readouterr()
+        rw.topic_backfill(str(wiki))
+        topic_md = (wiki / "topics" / "nlp-topic.md").read_text()
+        assert "[[p1]]" in topic_md
+
+    def test_heading_prefix_collision_does_not_corrupt(self, wiki, capsys):
+        """Regression: a topic page with `## Seminal works (extended)` must
+        NOT be matched as `## Seminal works`. Previously the loose fallback
+        match landed inside the heading text and corrupted the file."""
+        body = (
+            "## Overview\nOV\n\n"
+            "## Seminal works (extended)\nold-content-here\n\n"
+            "## SOTA tracker\n"
+        )
+        _write_page(wiki, "topics", "t1", "title: t1\ntags: [x]", body=body)
+        self._paper(wiki, "p1", ["x"], 5)
+        capsys.readouterr()
+        rw.topic_backfill(str(wiki))
+        topic_md = (wiki / "topics" / "t1.md").read_text()
+        # The (extended) heading and its body must be intact
+        assert "## Seminal works (extended)\nold-content-here" in topic_md
+        # A real `## Seminal works` section must have been created (at EOF)
+        assert "\n## Seminal works\n" in topic_md
+        # The new bullet must be in the new exact-match section, not jammed
+        # into the (extended) heading
+        sw_idx = topic_md.find("\n## Seminal works\n")
+        assert "[[p1]]" in topic_md[sw_idx:]
+        assert "Seminal works- [[p1]]" not in topic_md
+        assert "Seminal works(extended)" not in topic_md
+
+    def test_missing_section_dedup_is_section_scoped(self, wiki, capsys):
+        """Regression: when the seminal_works section is absent and the paper
+        slug already appears in some other section (e.g. ## Overview prose),
+        topic-backfill must STILL add it to the new seminal_works section.
+        Previously the missing-section branch dedup'd against the whole file."""
+        body = (
+            "## Overview\nWe survey methods including [[lora]] and others.\n\n"
+            "## SOTA tracker\n"
+        )
+        _write_page(wiki, "topics", "t1", "title: t1\ntags: [x]", body=body)
+        self._paper(wiki, "lora", ["x"], 5)
+        capsys.readouterr()
+        rw.topic_backfill(str(wiki))
+        topic_md = (wiki / "topics" / "t1.md").read_text()
+        assert "## Seminal works" in topic_md
+        sw_section = topic_md.split("## Seminal works")[1]
+        assert "[[lora]]" in sw_section, \
+            "missing-section dedup leaked across the file"
+
+    def test_existing_section_dedup_is_section_scoped(self, wiki, capsys):
+        """The existing-section branch already does this, but pin it down: a
+        paper mentioned in another section should NOT be skipped when added
+        to seminal_works."""
+        body = (
+            "## Overview\nMentions [[other]] in prose.\n\n"
+            "## Seminal works\n- [[other]]\n\n"
+            "## SOTA tracker\n"
+        )
+        _write_page(wiki, "topics", "t1", "title: t1\ntags: [x]", body=body)
+        self._paper(wiki, "other", ["x"], 5)  # already in seminal — skip
+        self._paper(wiki, "newone", ["x"], 5)  # not in seminal — add
+        capsys.readouterr()
+        rw.topic_backfill(str(wiki))
+        topic_md = (wiki / "topics" / "t1.md").read_text()
+        sw = topic_md.split("## Seminal works")[1].split("## SOTA")[0]
+        assert sw.count("[[other]]") == 1  # not duplicated
+        assert "[[newone]]" in sw
+
+    def test_missing_topics_dir_is_no_op(self, tmp_path, capsys):
+        # No init_wiki — neither topics/ nor papers/ exists
+        empty = tmp_path / "empty"
+        empty.mkdir()
+        capsys.readouterr()
+        rw.topic_backfill(str(empty))
+        out = json.loads(capsys.readouterr().out)
+        assert out["status"] == "ok"
+        assert out["topics_scanned"] == 0
 
 
 # ── CLI integration ───────────────────────────────────────────────────────

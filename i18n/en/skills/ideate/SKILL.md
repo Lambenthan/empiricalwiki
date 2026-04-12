@@ -224,27 +224,65 @@ Write the validated ideas to the wiki (including eliminated ideas, with their el
    # generate slug
    python3 tools/research_wiki.py slug "<idea-title>"
    ```
-   Create `wiki/ideas/{slug}.md`:
+   Create `wiki/ideas/{slug}.md` **following the CLAUDE.md ideas template exactly** (all fields required; `lint.py` enforces `status` and `priority`):
    ```yaml
    ---
-   title: ""
-   slug: ""
+   title: "<idea title>"
+   slug: "<idea-slug>"
    status: proposed
-   origin: "ideate"
-   origin_gaps: []           # [[claim-slug]] or gap description
-   linked_papers: []         # [[paper-slug]]
-   linked_experiments: []
+   origin: "ideate: <short description of the driving gap / weak claim / paper>"
+   origin_gaps: []           # [[claim-slug]] list — claims or topics this idea targets
+   tags: []                  # 2-5 topic tags (inherit from target claims / direction)
+   domain: ""                # NLP / CV / ML Systems / Robotics (inherit from direction)
+   priority: 3               # 1-5 — see Priority computation below
+   pilot_result: ""          # empty until /exp-eval fills it
+   failure_reason: ""        # empty for proposed ideas
+   linked_experiments: []    # empty until /exp-design creates experiments
    date_proposed: YYYY-MM-DD
-   pilot_result: ""
-   failure_reason: ""
+   date_resolved: ""         # empty until validated/failed
    ---
    ```
-   Body includes: Hypothesis, Approach sketch, Feasibility, Novelty score, Review summary, Risks
+
+   **Priority computation** (maps Phase 4 signals into the 1-5 scale):
+   - If `--skip-validation`: default `priority = 3`
+   - Otherwise start from `novelty_score` (1-5 from /novelty)
+   - `+1` if `gap_alignment_bonus > 0` (directly targets a gap_map entry)
+   - `-1` if `review_score <= 4` (major issues downgrade)
+   - Clamp to `[1, 5]`
+
+   **Body sections** (exactly match the CLAUDE.md template — do not rename):
+   ```markdown
+   ## Motivation
+   Which gap / weakly_supported claim / paper limitation drives this idea. Reference wiki pages via `[[slug]]`.
+
+   ## Hypothesis
+   1-2 sentences stating the testable proposition.
+
+   ## Approach sketch
+   3-5 sentences on the proposed method. Reference `[[paper-slug]]` or `[[concept-slug]]` for any component borrowed from existing work.
+
+   ## Expected outcome
+   What success looks like (metric / claim status change), plus the Phase 4 novelty & review summary:
+   - Novelty score: N/5 — <one-line reason from /novelty>
+   - Review score: M/10 — <one-line summary from /review>
+
+   ## Risks
+   Feasibility rating (high/medium/low) + top 2-3 risks. Include the main weaknesses surfaced by /review.
+
+   ## Pilot results
+   (empty — filled by /exp-eval after running the experiment)
+
+   ## Lessons learned
+   (empty — filled by /exp-eval after the idea reaches a terminal status)
+   ```
 
 2. **Write eliminated ideas** (status: failed):
-   For ideas eliminated in Phase 3/4, also create `wiki/ideas/{slug}.md`:
-   - status: failed
-   - failure_reason: specific elimination reason (e.g. "highly similar published work exists: [paper-title]", "insufficient feasibility: GPU requirements too high")
+   For ideas eliminated in Phase 3/4, also create `wiki/ideas/{slug}.md` using the **same template above**, with these overrides:
+   - `status: failed`
+   - `priority: 1` (eliminated ideas never block higher-priority work)
+   - `date_resolved: YYYY-MM-DD` (today)
+   - `failure_reason: "[filter] <specific elimination reason>"` — the `[filter]` prefix distinguishes ideate-stage eliminations from post-experiment failures (which /exp-eval tags differently). Examples: `"[filter] highly similar published work exists: <paper-title>"`, `"[filter] insufficient feasibility: GPU requirements too high"`
+   - Body `## Motivation` and `## Hypothesis` should still be filled (so future banlist matching has content); `## Approach sketch` may be brief; `## Expected outcome` and `## Risks` can note why the idea was eliminated
    - These failed ideas become the banlist for future ideate runs
 
 3. **Add graph edges**:

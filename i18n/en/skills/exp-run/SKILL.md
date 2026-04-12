@@ -175,10 +175,24 @@ argument-hint: <experiment-slug> [--review] [--collect] [--full] [--env local|re
      --cmd "bash experiments/code/{slug}/run.sh" \
      --gpu {gpu_index}
    ```
-6. Update `wiki/experiments/{slug}.md`:
-   - status: `running`
-   - run_log: `logs/exp-{slug}.log`
-   - Add `remote:` block to frontmatter (server, gpu, session, started)
+6. Update `wiki/experiments/{slug}.md` frontmatter — all of these fields already exist (empty) because `/exp-design` wrote the full CLAUDE.md template:
+   ```bash
+   # Top-level scalar fields — use set-meta
+   python3 tools/research_wiki.py set-meta wiki/experiments/{slug}.md status running
+   python3 tools/research_wiki.py set-meta wiki/experiments/{slug}.md run_log "logs/exp-{slug}.log"
+   ```
+
+   The nested `remote:` block cannot be updated via `set-meta` (it only handles top-level scalar fields). Use the `Edit` tool directly to replace the five empty sub-field values in place. The pre-existing block in the file looks like:
+   ```yaml
+   remote:
+     server: ""
+     gpu: ""
+     session: ""
+     started: ""
+     completed: ""
+   ```
+   Use five Edit calls (one per sub-field) to set `server`, `gpu`, `session`, `started`. Leave `completed: ""` — Phase 4 fills that. If you find the `remote:` block missing from the file, that means `/exp-design` did not write the full CLAUDE.md template; stop and report the bug rather than trying to append the block here (appending would drift the file away from the canonical order and break future edits).
+
 7. **Estimate runtime** and write to frontmatter (same estimation logic as local mode):
    ```bash
    python3 tools/research_wiki.py set-meta \

@@ -352,18 +352,26 @@ claims:
 
 Before running any Python tool, ensure the correct environment is active. Detection priority:
 
-1. **Check for `.venv/`**: if present, prefix Bash commands with `source .venv/bin/activate &&`
+1. **Check for `.venv/`**: if present, use the venv interpreter directly — cross-platform safe.
+   - Unix/macOS: `.venv/bin/python` exists → call `.venv/bin/python tools/X.py`
+   - Windows: `.venv/Scripts/python.exe` exists → call `.venv/Scripts/python.exe tools/X.py`
 2. **Check for conda**: if no venv but conda is active, use `conda run -n <env>` or confirm env is activated
-3. **System Python**: if neither exists, use `python3` directly
+3. **System Python**: if neither exists, use `python3` (Unix/macOS) or `python` (Windows) directly
 
 **Example — calling a tool:**
 ```bash
-# If .venv/ exists
-source .venv/bin/activate && python3 tools/fetch_arxiv.py --hours 24
+# Unix/macOS, .venv/ exists
+.venv/bin/python tools/fetch_arxiv.py --hours 24
 
-# If no venv
-python3 tools/fetch_arxiv.py --hours 24
+# Windows, .venv/ exists (Git Bash or PowerShell both accept forward slashes)
+.venv/Scripts/python.exe tools/fetch_arxiv.py --hours 24
+
+# No venv
+python3 tools/fetch_arxiv.py --hours 24      # Unix/macOS
+python tools/fetch_arxiv.py --hours 24       # Windows
 ```
+
+Calling the venv interpreter directly avoids needing to `source activate` (Unix) vs `Activate.ps1` (Windows), and works identically across platforms.
 
 **Environment variables**: all Python tools auto-load API keys from `~/.env` and the project root `.env` via `tools/_env.py` — no manual `export` needed.
 

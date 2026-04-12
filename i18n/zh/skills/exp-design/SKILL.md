@@ -58,14 +58,14 @@ argument-hint: <idea-slug-or-hypothesis> [--review] [--budget <gpu-hours>]
 ### Step 1: 加载上下文
 
 1. **解析 idea 输入**：
-   - 若为 slug：读取 `wiki/ideas/{slug}.md`，提取 hypothesis、approach sketch、risks、origin_gaps、linked_papers
+   - 若为 slug：读取 `wiki/ideas/{slug}.md`，提取 `## Motivation`、`## Hypothesis`、`## Approach sketch`、`## Risks`,以及 frontmatter 字段 `origin_gaps`、`tags`、`domain`、`priority`（遵循 CLAUDE.md 的 ideas template）
    - 若为自由文本：直接作为假设描述使用
 2. **加载相关 wiki 上下文**：
    - 读取 `wiki/graph/context_brief.md`（全局上下文）
    - 读取 `wiki/graph/open_questions.md`（知识缺口）
-   - 从 idea 的 origin_gaps 读取对应的 `wiki/claims/*.md`（目标 claims）
-   - 读取已有 `wiki/experiments/*.md`，检查是否已有类似实验
-   - 读取 `wiki/papers/*.md` 中相关论文的实验设置（作为 baseline 参考）
+   - 从 idea 的 `origin_gaps` 读取对应的 `wiki/claims/*.md`（目标 claims）
+   - 从每个目标 claim 的 `source_papers` 字段读取对应的 `wiki/papers/*.md`,获取 baseline setup 和已有实验协议 —— 这是 idea → claim → paper 的规范路径(ideas **不带** `linked_papers` 字段,改用 `origin_gaps` → `source_papers`)
+   - 读取已有 `wiki/experiments/*.md`,检查是否已有类似实验
 3. **若 idea 无 origin_gaps**：从假设描述中提取隐含的 claims，在 wiki/claims/ 中查找或标注需要新建
 
 ### Step 2: 界定 Claims（Scope Claims）
@@ -92,7 +92,7 @@ argument-hint: <idea-slug-or-hypothesis> [--review] [--budget <gpu-hours>]
 **A. Baseline 实验（基线复现）**：
 - 目的：确认问题存在、基线可复现
 - 复现最相关论文的核心实验
-- 成功标准：基线结果与论文报告的差异 < 5%
+- 成功标准：基线结果与论文报告的差异 < 5%（此阈值与下方 Stage 1 decision gate 一致 —— 不要在别处使用不同的数字）
 - 计算量：通常最小
 
 **B. Validation 实验（验证 Target claim）**：
@@ -136,7 +136,7 @@ Stage 0: Sanity check
 
 Stage 1: Baseline（基线复现）
   └── 复现基线结果
-  └── 门：若基线偏差 > 10% → 停止，检查实现
+  └── 门：若基线偏差 > 5% → 停止，检查实现（与 Step 3 成功标准同阈值）
 
 Stage 2: Validation（核心验证）
   └── 在基线之上验证核心方法
@@ -192,6 +192,8 @@ mcp__llm-review__chat:
    ```
    创建 `wiki/experiments/{slug}.md`：
    ```yaml
+   创建 `wiki/experiments/{slug}.md`，**严格遵循 CLAUDE.md experiments template** —— 下方所有字段都必须存在（即使为空），因为 `/exp-run` 稍后会用 `tools/research_wiki.py set-meta` 来更新它们，而 `set-meta` 拒绝创建 frontmatter 中不存在的字段（它只更新已存在的 key）：
+   ```yaml
    ---
    title: ""
    slug: ""
@@ -207,12 +209,20 @@ mcp__llm-review__chat:
      framework: ""
    metrics: []
    baseline: ""
-   outcome: ""
-   key_result: ""
-   linked_idea: ""           # idea slug
+   outcome: ""                # 留空，由 /exp-run Phase 4 填写 — succeeded | failed | inconclusive
+   key_result: ""             # 留空，由 /exp-run Phase 4 填写
+   linked_idea: "{idea-slug}" # 必填：源 idea slug（与 wiki/ideas/{idea-slug}.md 的 linked_experiments 互为双向链接）
    date_planned: YYYY-MM-DD
-   date_completed: ""
-   run_log: ""
+   date_completed: ""         # 留空，由 /exp-run Phase 4 填写
+   run_log: ""                # 留空，由 /exp-run Phase 2 填写
+   started: ""                # 留空，由 /exp-run Phase 2 填写（ISO 时间戳，通过 set-meta）
+   estimated_hours: 0         # 0，由 /exp-run Phase 2 更新（通过 set-meta）
+   remote:                    # 完整 block 必须存在，以便 /exp-run --env remote 通过 Edit 填充子字段
+     server: ""
+     gpu: ""
+     session: ""
+     started: ""
+     completed: ""
    ---
 
    ## Objective
