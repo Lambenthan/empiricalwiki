@@ -52,6 +52,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -287,8 +288,39 @@ def dedup_edges(wiki_root: str) -> None:
 # Query pack generation
 # ---------------------------------------------------------------------------
 
+def _is_linked_worktree() -> bool:
+    # Linked worktrees have distinct --git-dir and --git-common-dir; the primary
+    # checkout has them equal. Used to block graph rebuilds from /init subagents:
+    # their worktree rebuilds collide on merge with the orchestrator's final one.
+    try:
+        git_dir = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        common_dir = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+    return Path(git_dir).resolve() != Path(common_dir).resolve()
+
+
+def _refuse_in_linked_worktree(cmd: str) -> None:
+    if _is_linked_worktree():
+        print(
+            f"error: {cmd} is not permitted inside a linked git worktree.\n"
+            "Graph rebuilds must run from the primary checkout; the /init "
+            "orchestrator rebuilds once after all subagent merges. See "
+            "init/SKILL.md INIT MODE.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
 def rebuild_context_brief(wiki_root: str, max_chars: int = 8000) -> None:
     """Backward-compatible alias for ``compile_context --for general``."""
+    _refuse_in_linked_worktree("rebuild-context-brief")
     compile_context(wiki_root, "general", max_chars)
 
 
@@ -305,6 +337,7 @@ def rebuild_open_questions(wiki_root: str) -> None:
       - concepts/: ## Open problems section
       - claims/: status == 'proposed' or 'weakly_supported'
     """
+    _refuse_in_linked_worktree("rebuild-open-questions")
     root = Path(wiki_root)
     gaps: list[str] = []
 
