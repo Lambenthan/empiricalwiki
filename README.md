@@ -271,9 +271,57 @@ python -m pytest tests/ -v
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
+## 🎁 Angel User Program / 天使用户计划
+
+> **Limited time — free 15-day MiMo API credits for our earliest supporters.**
+> **限时活动 — 为天使用户提供 15 天免费 MiMo API 额度。**
+
+We're offering a batch of MiMo API credits to early supporters — use them with Claude Code to explore ΩmegaWiki, try out the skills, and help us iterate. ΩmegaWiki is still in its early stage and supports a wide range of feature extensions; we'd love for you to push it, explore new use cases, tell us what you'd like to see, and shape it alongside us.
+
+**Haven't used Claude Code yet?** This is also your chance to get hands-on with one of the most capable agentic systems out there. You might just fall in love with it — and figure out how to reshape your research, your workflow, and the way you build things with AI, well before the people around you catch on.
+
+我们为早期支持者提供一批 MiMo API 额度——用它在 Claude Code 里探索 ΩmegaWiki，体验各项 skill，并和我们一起打磨这个项目。ΩmegaWiki 仍处于早期阶段，同时支持非常丰富的功能拓展空间。我们希望你来用它、探索新的使用场景、告诉我们你想看到什么，和我们一起把它做得更强。
+
+**还没用过 Claude Code？** 这也是一次近距离接触前沿 Agent 的机会——Claude Code 是目前最强的智能 agent 之一。你很可能会爱上它，并比身边的人更早一步摸索出：如何用 Claude Code 重塑你的研究、工作流，以及与 AI 协作的方式。
+
+**Credits are valid through 2026-04-30. First come, first served.**
+**额度有效期至 2026-04-30，先到先得。**
+
+### How to claim / 领取方式
+
+1. ⭐ **Star this repository** on GitHub / **给本仓库点个 Star**
+2. 📣 **Share ΩmegaWiki** on any social platform (Twitter/X, 知乎, 即刻, 小红书, B站, 微博, 微信朋友圈...) with a short note on how you plan to use it / **转发 ΩmegaWiki** 到任意社交平台，附一句你的使用场景
+3. 💬 **Join our WeChat group** (QR code below) and send your share screenshot + GitHub username to the admin / **扫下方二维码进群**，把转发截图 + GitHub 用户名发给群管理员
+4. 🔑 **Add the admin on WeChat** to receive your personal MiMo API key and the 3-second Claude Code config / **添加管理员微信**，领取专属 MiMo API key 和 3 秒配置教程
+
+### Config / 配置方式
+
+Drop the following into `~/.claude/settings.json` (or your project's `.claude/settings.json`):
+
+将以下内容写入 `~/.claude/settings.json`（或项目的 `.claude/settings.json`）：
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.xiaomimimo.com/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "<your-personal-mimo-key>",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "mimo-v2-pro",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "mimo-v2-pro",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "mimo-v2-pro"
+  }
+}
+```
+
+Then run `claude` as usual. That's it — zero extra setup.
+保存后正常运行 `claude` 即可，零额外配置。
+
+> **House rules / 使用约定**: Personal use only. Please don't share your key or run automated batch scripts — if any single key shows abuse patterns, we'll revoke it to protect other users. / **请仅限个人使用**，不要分享 key 或跑批量脚本。任何 key 出现异常用量会立即被回收，以保护其他用户。
+
+---
+
 ## Community / 交流群
 
-<img src="assets/wechat-group.jpg" width="240" alt="WeChat Group QR Code">
+<img src="assets/wechat-group.png" width="240" alt="WeChat Group QR Code">
 
 Scan to join the ΩmegaWiki WeChat group / 扫码加入微信交流群
 
