@@ -284,15 +284,26 @@ We're offering a batch of MiMo API credits to early supporters — use them with
 
 **还没用过 Claude Code？** 这也是一次近距离接触前沿 Agent 的机会——Claude Code 是目前最强的智能 agent 之一。你很可能会爱上它，并比身边的人更早一步摸索出：如何用 Claude Code 重塑你的研究、工作流，以及与 AI 协作的方式。
 
-**Credits are valid through 2026-04-30. First come, first served.**
-**额度有效期至 2026-04-30，先到先得。**
+**Credits are valid through 2026-04-30. Credits are limited and the program may close once the current batch is exhausted.**
+**额度有效期至 2026-04-30。名额有限，当前批次发放完毕后本计划可能随时关闭。**
 
-### How to claim / 领取方式
+> If you find ΩmegaWiki useful, starring the repo helps others discover it — but it's not a requirement for joining this program. / 如果你觉得 ΩmegaWiki 对你有帮助，欢迎 Star 本仓库帮助更多人发现它——但这并非参与本计划的条件。
 
-1. ⭐ **Star this repository** on GitHub / **给本仓库点个 Star**
-2. 📣 **Share ΩmegaWiki** on any social platform (Twitter/X, 知乎, 即刻, 小红书, B站, 微博, 微信朋友圈...) with a short note on how you plan to use it / **转发 ΩmegaWiki** 到任意社交平台，附一句你的使用场景
-3. 💬 **Join our WeChat group** (QR code below) and send your share screenshot + GitHub username to the admin / **扫下方二维码进群**，把转发截图 + GitHub 用户名发给群管理员
-4. 🔑 **Add the admin on WeChat** to receive your personal MiMo API key and the 3-second Claude Code config / **添加管理员微信**，领取专属 MiMo API key 和 3 秒配置教程
+### How to apply / 申请方式
+
+Applications are currently handled manually via the community WeChat group due to limited quota. To apply, please join the WeChat group (QR code below) and contact the admin with:
+
+- Your GitHub username
+- A short description of your intended workflow / how you plan to use ΩmegaWiki
+- (Optional) Any feedback or feature ideas you'd like to share
+
+由于名额有限，本计划目前通过社群微信群人工受理申请。请扫描下方二维码加入微信群，并向管理员提供以下信息：
+
+- 你的 GitHub 用户名
+- 简要说明你计划如何使用 ΩmegaWiki（预期的工作流/使用场景）
+- （可选）你希望分享的反馈或功能建议
+
+We review applications based on fit with the project's current stage and the kind of feedback we're looking for — not on a first-come-first-served basis alone. / 我们会根据申请信息与项目当前阶段的契合度来审核，而非单纯按先后顺序。
 
 ### Config / 配置方式
 
