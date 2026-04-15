@@ -25,7 +25,7 @@
 
 ## What is ΩmegaWiki?
 
-Andrej Karpathy proposed [LLM-Wiki](https://x.com/karpathy/status/1909372692069236775): an LLM that **builds and maintains a persistent, structured wiki** from your sources — not a throwaway RAG answer, but compounding knowledge that grows smarter with every paper you feed it.
+Andrej Karpathy proposed LLM-Wiki: an LLM that **builds and maintains a persistent, structured wiki** from your sources — not a throwaway RAG answer, but compounding knowledge that grows smarter with every paper you feed it.
 
 **ΩmegaWiki takes that idea and runs the full distance.** It's not just a wiki builder — it's a complete research lifecycle platform: from paper ingestion → knowledge graph → gap detection → idea generation → experiment design → paper writing → peer review response. All driven by 23 Claude Code skills, all centered on one wiki as the single source of truth.
 
@@ -355,7 +355,7 @@ Scan to join the ΩmegaWiki WeChat group / 扫码加入微信交流群
 
 ## Acknowledgments
 
-- **[Andrej Karpathy](https://x.com/karpathy/status/1909372692069236775)** — for the LLM-Wiki concept that inspired this project
+- **Andrej Karpathy** — for the LLM-Wiki concept that inspired this project
 - **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** — the AI agent runtime that powers ΩmegaWiki
 
 ## Star History
@@ -372,7 +372,7 @@ Scan to join the ΩmegaWiki WeChat group / 扫码加入微信交流群
 
 ### ΩmegaWiki 是什么？
 
-Andrej Karpathy 提出了 [LLM-Wiki](https://x.com/karpathy/status/1909372692069236775) 概念：让 LLM **构建并维护一个持久的、结构化的 wiki**，而不是一次性的 RAG 回答。知识持续积累，每一篇新论文都让整个知识图谱更强。
+Andrej Karpathy 提出了 LLM-Wiki 概念：让 LLM **构建并维护一个持久的、结构化的 wiki**，而不是一次性的 RAG 回答。知识持续积累，每一篇新论文都让整个知识图谱更强。
 
 **ΩmegaWiki 将这个理念完整实现。** 它不仅是 wiki 构建器，更是完整的研究全流程平台：从论文摄入 → 知识图谱 → 缺口检测 → 想法生成 → 实验设计 → 论文写作 → 同行评审回复。23 个 Claude Code Skills 驱动，一个 wiki 作为唯一的知识中枢。
 

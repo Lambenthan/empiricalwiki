@@ -91,6 +91,19 @@ This step scans what the user provided, then **selectively expands** via citatio
 
 #### Phase B — Citation-chain expansion (primary discovery method)
 
+**Before calling S2**, check whether the API key is set:
+
+```bash
+python3 -c "
+import sys, os; sys.path.insert(0, 'tools')
+try: import _env
+except Exception: pass
+print('SET' if os.environ.get('SEMANTIC_SCHOLAR_API_KEY', '').strip() else 'UNSET')
+"
+```
+
+If `UNSET`, print a warning: "No Semantic Scholar API key found — citation-chain expansion will work but run 3x slower (3s/request). Run `/setup` to add a key for faster init." Then proceed — fetch_s2.py works unauthenticated.
+
 For each paper in `local_papers` that has an arXiv ID (pick the 3–5 highest-importance ones):
 
 ```bash

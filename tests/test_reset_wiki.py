@@ -49,31 +49,34 @@ def test_plan_wiki_lists_all_md(project):
     assert "wiki/concepts/c1.md" in deletes
     assert "wiki/foundations/gradient-descent.md" in deletes
     assert "wiki/outputs/report.md" in deletes
-    # CLAUDE.md and log.md must NOT appear
+    # CLAUDE.md must NOT appear
     assert not any("CLAUDE.md" in f for f in deletes)
-    assert not any("log.md" in f for f in deletes)
+    # Scaffold files (index.md, log.md, graph/) are now deleted, not reset
+    assert "wiki/index.md" in deletes
+    assert "wiki/log.md" in deletes
+    assert "wiki/graph/edges.jsonl" in deletes
 
 
 def test_execute_wiki_deletes_md_keeps_protected_files(project):
     rw.execute(project, ["wiki"])
     assert not (project / "wiki" / "papers" / "p1.md").exists()
     assert not (project / "wiki" / "foundations" / "gradient-descent.md").exists()
+    # Scaffold files deleted (not reset)
+    assert not (project / "wiki" / "index.md").exists()
+    assert not (project / "wiki" / "log.md").exists()
+    assert not (project / "wiki" / "graph" / "edges.jsonl").exists()
     # Protected
     assert (project / "wiki" / "CLAUDE.md").exists()
-    assert (project / "wiki" / "log.md").exists()
     # .gitkeep preserved or recreated
     assert (project / "wiki" / "papers" / ".gitkeep").exists()
     assert (project / "wiki" / "foundations" / ".gitkeep").exists()
-    # index.md regenerated with all 9 entities
-    idx = (project / "wiki" / "index.md").read_text()
-    for entity in rw.ENTITY_DIRS:
-        assert f"{entity}:" in idx
 
 
-def test_execute_wiki_resets_graph(project):
+def test_execute_wiki_deletes_graph(project):
     rw.execute(project, ["wiki"])
-    edges = (project / "wiki" / "graph" / "edges.jsonl").read_text()
-    assert edges == ""
+    assert not (project / "wiki" / "graph" / "edges.jsonl").exists()
+    assert not (project / "wiki" / "graph" / "context_brief.md").exists()
+    assert not (project / "wiki" / "graph" / "open_questions.md").exists()
 
 
 def test_execute_raw_deletes_files_keeps_gitkeep(project):
@@ -94,7 +97,8 @@ def test_execute_all_combines_scopes(project):
     rw.execute(project, ["wiki", "raw", "log"])
     assert not (project / "wiki" / "papers" / "p1.md").exists()
     assert not (project / "raw" / "papers" / "x.pdf").exists()
-    assert (project / "wiki" / "log.md").read_text() == "# OmegaWiki Log\n\n"
+    # log.md deleted by wiki scope, not recreated by log scope
+    assert not (project / "wiki" / "log.md").exists()
     assert (project / "wiki" / "CLAUDE.md").exists()
 
 
