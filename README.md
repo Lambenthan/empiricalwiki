@@ -358,6 +358,10 @@ Scan to join the ΩmegaWiki WeChat group / 扫码加入微信交流群
 - **[Andrej Karpathy](https://x.com/karpathy/status/1909372692069236775)** — for the LLM-Wiki concept that inspired this project
 - **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** — the AI agent runtime that powers ΩmegaWiki
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=skyllwt/OmegaWiki&type=Date)](https://star-history.com/#skyllwt/OmegaWiki&Date)
+
 ## License
 
 [MIT](LICENSE) — use it, fork it, build on it.
