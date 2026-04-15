@@ -1,6 +1,7 @@
 """Tests for tools/research_wiki.py — Wiki Knowledge Engine."""
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -1676,6 +1677,68 @@ class TestCLI:
             capture_output=True, text=True)
         assert result.returncode == 0
         assert "LoRA" in (wiki / "index.md").read_text()
+
+
+# ── Worktree guard on graph rebuilds (issue #12) ────────────────────────────
+
+class TestRebuildWorktreeGuard:
+    """`rebuild-context-brief` and `rebuild-open-questions` must refuse to run
+    from a linked git worktree — otherwise parallel /init subagents produce
+    add/add merge conflicts on wiki/graph/*.md on Phase B fan-in."""
+
+    TOOL = str(Path(__file__).parent.parent / "tools" / "research_wiki.py")
+
+    def _make_repo_with_worktree(self, tmp_path):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        env = {
+            "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+            "PATH": os.environ.get("PATH", ""),
+        }
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True, env=env)
+        (repo / "seed").write_text("x")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True, env=env)
+        subprocess.run(["git", "commit", "-q", "-m", "seed", "--no-gpg-sign"],
+                       cwd=repo, check=True, env=env)
+        wt = tmp_path / "wt"
+        subprocess.run(
+            ["git", "worktree", "add", "-q", str(wt), "-b", "feat", "main"],
+            cwd=repo, check=True, env=env)
+        return repo, wt, env
+
+    def test_rebuild_context_brief_refuses_in_linked_worktree(self, tmp_path):
+        repo, wt, env = self._make_repo_with_worktree(tmp_path)
+        wiki = wt / "wiki"
+        subprocess.run([sys.executable, self.TOOL, "init", str(wiki)],
+                       cwd=wt, check=True, capture_output=True, env={**os.environ, **env})
+        result = subprocess.run(
+            [sys.executable, self.TOOL, "rebuild-context-brief", str(wiki)],
+            cwd=wt, capture_output=True, text=True, env={**os.environ, **env})
+        assert result.returncode == 2
+        assert "linked git worktree" in result.stderr
+
+    def test_rebuild_open_questions_refuses_in_linked_worktree(self, tmp_path):
+        repo, wt, env = self._make_repo_with_worktree(tmp_path)
+        wiki = wt / "wiki"
+        subprocess.run([sys.executable, self.TOOL, "init", str(wiki)],
+                       cwd=wt, check=True, capture_output=True, env={**os.environ, **env})
+        result = subprocess.run(
+            [sys.executable, self.TOOL, "rebuild-open-questions", str(wiki)],
+            cwd=wt, capture_output=True, text=True, env={**os.environ, **env})
+        assert result.returncode == 2
+        assert "linked git worktree" in result.stderr
+
+    def test_rebuild_context_brief_works_in_primary_worktree(self, tmp_path):
+        repo, wt, env = self._make_repo_with_worktree(tmp_path)
+        wiki = repo / "wiki"
+        subprocess.run([sys.executable, self.TOOL, "init", str(wiki)],
+                       cwd=repo, check=True, capture_output=True, env={**os.environ, **env})
+        result = subprocess.run(
+            [sys.executable, self.TOOL, "rebuild-context-brief", str(wiki)],
+            cwd=repo, capture_output=True, text=True, env={**os.environ, **env})
+        assert result.returncode == 0
+        assert (wiki / "graph" / "context_brief.md").exists()
 
 
 # ── Checkpoint ───────────────────────────────────────────────────────────────
