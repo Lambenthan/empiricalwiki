@@ -5,55 +5,42 @@
 
 ---
 
-## 目录结构
+## 仓库布局
 
-```
-wiki/
-├── CLAUDE.md          ← 本文件
-├── index.md           ← 内容目录（YAML）
-├── log.md             ← 时序日志（append-only）
-├── papers/            ← 论文结构化摘要
-├── concepts/          ← 技术概念综述
-├── topics/            ← 研究方向地图
-├── people/            ← 研究者追踪
-├── ideas/             ← 研究想法（带生命周期状态）
-├── experiments/       ← 实验记录（wiki 页面）
-├── claims/            ← 可验证的研究断言
-├── Summary/           ← 领域全景综述
-├── foundations/       ← 领域基础知识（终端：只接受入链，不写出链）
-├── outputs/           ← 生成物（Related Work, 论文草稿）
-└── graph/             ← 自动生成（勿手动编辑）
-    ├── edges.jsonl    ← 类型化关系图谱
-    ├── context_brief.md  ← 压缩上下文（≤8000字符）
-    └── open_questions.md     ← 开放问题与知识缺口
+需要完整仓库树时，再打开 `docs/runtime-directory-structure.zh.md`。
 
-raw/
-├── papers/            ← .tex / .pdf（只读）
-├── notes/             ← .md 笔记（只读）
-└── web/               ← HTML / Markdown（只读）
+平时请优先记住这个心智地图：
 
-config/
-├── server.yaml        ← 远程 GPU 服务器配置（可选，/exp-run --env remote 时需要）
-├── server.yaml.example
-├── .env.example
-└── settings.local.json.example
-```
+### `wiki/` 是主要工作面
+
+- `wiki/index.md` 是所有 wiki 页面的目录
+- `wiki/log.md` 是 append-only 活动日志
+- `wiki/papers/` 存放论文总结
+- `wiki/concepts/`、`wiki/topics/`、`wiki/foundations/` 存放可复用知识结构
+- `wiki/people/`、`wiki/ideas/`、`wiki/experiments/`、`wiki/claims/` 存放研究者、假设、实验和断言
+- `wiki/Summary/` 存放领域级综述
+- `wiki/outputs/` 存放生成产物
+- `wiki/graph/` 是派生状态，禁止手动编辑
+
+### 格式护栏
+
+- 在新建或修复 wiki 页面结构、YAML、正文章节前，先打开 `docs/runtime-page-templates.zh.md`
+- 需要 graph 派生文件细节或 `index.md` / `log.md` 格式时，打开 `docs/runtime-support-files.zh.md`
+
+### `raw/` 与 `config/`
+
+- `raw/papers/`、`raw/notes/`、`raw/web/` 是用户自有输入
+- `raw/discovered/` 存放 `/init` 与 `/daily-arxiv` 抓取的外部论文
+- `raw/tmp/` 存放 `/init` 生成的本地 prepared sidecar
+- `config/` 存放环境与远程服务器模板
 
 ---
 
 ## 9 类页面
 
-| 目录 | 文件名 | 职责 |
-|------|--------|------|
-| `papers/` | `{slug}.md` | 论文结构化摘要 |
-| `concepts/` | `{concept-name}.md` | 跨论文技术概念综述 |
-| `topics/` | `{topic-name}.md` | 研究方向地图 |
-| `people/` | `{firstname-lastname}.md` | 研究者追踪 |
-| `ideas/` | `{idea-slug}.md` | 研究想法（proposed → tested → validated/failed） |
-| `experiments/` | `{experiment-slug}.md` | 实验记录（hypothesis → setup → results → claim updates） |
-| `claims/` | `{claim-slug}.md` | 可验证的研究断言，连接论文、实验与综述 |
-| `Summary/` | `{area-name}.md` | 领域全景综述 |
-| `foundations/` | `{slug}.md` | 领域基础知识（其他页面链入；foundations 不写反向链接） |
+`papers`、`concepts`、`topics`、`people`、`ideas`、`experiments`、`claims`、`Summary`、`foundations`。
+
+页面模板看 `docs/runtime-page-templates.zh.md`；graph/index/log 参考看 `docs/runtime-support-files.zh.md`。
 
 ---
 
@@ -90,294 +77,34 @@ config/
 
 ---
 
-## 页面模板
+## Graph 规则
 
-### papers/{slug}.md
+- `graph/` 是自动生成目录，不要手动编辑
+- 核心派生文件是 `edges.jsonl`、`context_brief.md`、`open_questions.md`
+- 合法 edge type：`extends`、`contradicts`、`supports`、`inspired_by`、`tested_by`、`invalidates`、`supersedes`、`addresses_gap`、`derived_from`
+- 用 `tools/research_wiki.py add-edge`、`rebuild-context-brief`、`rebuild-open-questions` 维护
 
-```yaml
----
-title: ""
-slug: ""
-arxiv: ""
-venue: ""
-year:
-tags: []
-importance: 3           # 1-5
-date_added: YYYY-MM-DD
-source_type: tex         # tex | pdf
-s2_id: ""
-keywords: []
-domain: ""               # NLP / CV / ML Systems / Robotics
-code_url: ""
-cited_by: []
----
-```
+## log.md 格式
 
-正文：`## Problem` / `## Key idea` / `## Method` / `## Results` / `## Limitations` / `## Open questions` / `## My take` / `## Related`
-
-### concepts/{concept-name}.md
-
-```yaml
----
-title: ""
-aliases: []              # 别名列表（用于去重匹配，如 ["scaled dot-product attention", "SDPA"]）
-tags: []
-maturity: active         # stable | active | emerging | deprecated
-key_papers: []
-first_introduced: ""
-date_updated: YYYY-MM-DD
-related_concepts: []
----
-```
-
-正文：`## Definition` / `## Intuition` / `## Formal notation` / `## Variants` / `## Comparison` / `## When to use` / `## Known limitations` / `## Open problems` / `## Key papers` / `## My understanding`
-
-### topics/{topic-name}.md
-
-```yaml
----
-title: ""
-tags: []
-my_involvement: none     # none | reading | side-project | main-focus
-sota_updated: YYYY-MM-DD
-key_venues: []
-related_topics: []
-key_people: []
----
-```
-
-正文：`## Overview` / `## Timeline` / `## Seminal works` / `## SOTA tracker` / `## Open problems` / `## My position` / `## Research gaps` / `## Key people`
-
-### people/{firstname-lastname}.md
-
-```yaml
----
-name: ""
-affiliation: ""
-tags: []
-homepage: ""
-scholar: ""
-date_updated: YYYY-MM-DD
----
-```
-
-正文：`## Research areas` / `## Key papers` / `## Recent work` / `## Collaborators` / `## My notes`
-
-### Summary/{area-name}.md
-
-```yaml
----
-title: ""
-scope: ""
-key_topics: []
-paper_count:
-date_updated: YYYY-MM-DD
----
-```
-
-正文：`## Overview` / `## Core areas` / `## Evolution` / `## Current frontiers` / `## Key references` / `## Related`
-
-### foundations/{slug}.md
-
-```yaml
----
-title: ""
-slug: ""
-domain: ""               # general / NLP / CV / ML Systems / Robotics
-status: mainstream       # mainstream | historical
-aliases: []              # 别名列表（用于 /ingest 去重匹配）
-first_introduced: ""
-date_updated: YYYY-MM-DD
-source_url: ""           # Wikipedia URL 或留空
----
-```
-
-正文：`## Definition` / `## Intuition` / `## Formal notation` / `## Key variants` / `## Known limitations` / `## Open problems` / `## Relevance to active research`
-
-Foundations **没有外向链接字段**（无 `key_papers`、无 `related_concepts`）。其他页面可链接到 foundation；foundation 不写反向链接。
-
-### ideas/{idea-slug}.md
-
-```yaml
----
-title: ""
-slug: ""
-status: proposed          # proposed | in_progress | tested | validated | failed
-origin: ""                # 来源描述：哪篇论文的 gap、哪个 claim 的弱证据等
-origin_gaps: []           # 关联的 claim/topic slugs（知识缺口来源）
-tags: []
-domain: ""                # NLP / CV / ML Systems / Robotics
-priority: 3               # 1-5（1=low, 5=critical）
-pilot_result: ""          # 初步实验结果摘要（tested 后填写）
-failure_reason: ""        # 失败原因（failed 后填写，anti-repetition memory）
-linked_experiments: []    # 关联的 experiment slugs
-date_proposed: YYYY-MM-DD
-date_resolved: ""         # validated/failed 日期
----
-```
-
-正文：`## Motivation` / `## Hypothesis` / `## Approach sketch` / `## Expected outcome` / `## Risks` / `## Pilot results` / `## Lessons learned`
-
-### experiments/{experiment-slug}.md
-
-```yaml
----
-title: ""
-slug: ""
-status: planned           # planned | running | completed | abandoned
-target_claim: ""          # 目标 claim slug
-hypothesis: ""            # 实验验证的假设
-tags: []
-domain: ""                # NLP / CV / ML Systems / Robotics
-setup:
-  model: ""
-  dataset: ""
-  hardware: ""
-  framework: ""
-metrics: []               # 评估指标列表，如 [accuracy, F1, latency]
-baseline: ""              # 对比基线描述
-outcome: ""               # succeeded | failed | inconclusive
-key_result: ""            # 核心结论一句话
-linked_idea: ""           # 来源 idea slug
-date_planned: YYYY-MM-DD
-date_completed: ""
-run_log: ""               # 运行日志路径（可选）
-started: ""              # 开始运行时间（ISO 格式，由 /exp-run 自动填写）
-estimated_hours: 0        # 预计运行时长（小时，由 /exp-run 根据 setup 自动估算）
-remote:                   # 远程部署信息（仅 --env remote 时由 /exp-run 自动填写）
-  server: ""              # 服务器 host
-  gpu: ""                 # GPU index
-  session: ""             # screen session 名
-  started: ""             # 部署时间（ISO 格式）
-  completed: ""           # 完成时间
----
-```
-
-正文：`## Objective` / `## Setup` / `## Procedure` / `## Results` / `## Analysis` / `## Claim updates` / `## Follow-up`
-
-### claims/{claim-slug}.md
-
-```yaml
----
-title: ""
-slug: ""
-status: proposed          # proposed | weakly_supported | supported | challenged | deprecated
-confidence: 0.5           # 0.0-1.0
-tags: []
-domain: ""                # NLP / CV / ML Systems / Robotics
-source_papers: []         # 提出该 claim 的论文 slugs
-evidence:                 # 证据列表
-  - source: ""            # paper/experiment slug
-    type: supports        # supports | contradicts | tested_by | invalidates
-    strength: moderate    # weak | moderate | strong
-    detail: ""
-conditions: ""            # claim 成立的前提条件/适用范围
-date_proposed: YYYY-MM-DD
-date_updated: YYYY-MM-DD
----
-```
-
-正文：`## Statement` / `## Evidence summary` / `## Conditions and scope` / `## Counter-evidence` / `## Linked ideas` / `## Open questions`
-
-### graph/（自动生成 — 勿手动编辑）
-
-`graph/` 目录由 `tools/research_wiki.py` 自动维护，从 wiki 页面内容派生。
-
-| 文件 | 内容 | 生成命令 |
-|------|------|----------|
-| `edges.jsonl` | 类型化关系（extends, contradicts, supports, inspired_by, tested_by, invalidates, supersedes, addresses_gap, derived_from） | `python3 tools/research_wiki.py add-edge` |
-| `context_brief.md` | 压缩上下文：claims + gaps + failed ideas + papers + edges（≤8000字符） | `python3 tools/research_wiki.py rebuild-context-brief` |
-| `open_questions.md` | 开放问题：under-supported claims + open questions from papers/topics | `python3 tools/research_wiki.py rebuild-open-questions` |
-
-每条 edge 格式：`{"from": "node_id", "to": "node_id", "type": "edge_type", "evidence": "...", "date": "..."}`
-
----
-
-## index.md 格式
-
-```yaml
-papers:
-  - slug: lora-low-rank-adaptation
-    title: "LoRA: Low-Rank Adaptation of Large Language Models"
-    tags: [fine-tuning, efficiency]
-    importance: 5
-
-concepts:
-  - slug: parameter-efficient-fine-tuning
-    tags: [fine-tuning, efficiency]
-    maturity: stable
-
-topics:
-  - slug: efficient-llm-adaptation
-    tags: [fine-tuning, efficiency, llm]
-
-people:
-  - slug: tri-dao
-    affiliation: "Princeton / Together AI"
-
-ideas:
-  - slug: sparse-lora-for-edge-devices
-    status: proposed
-    domain: ML Systems
-    priority: 4
-
-experiments:
-  - slug: sparse-lora-latency-benchmark
-    status: planned
-    target_claim: lora-preserves-quality-at-low-rank
-    domain: ML Systems
-
-claims:
-  - slug: lora-preserves-quality-at-low-rank
-    status: weakly_supported
-    confidence: 0.6
-    domain: NLP
-```
-
----
-
-## log.md 格式（append-only）
+标准日志行：
 
 ```markdown
-## [2026-04-07] ingest | added papers/lora-low-rank-adaptation | updated: concepts/parameter-efficient-fine-tuning
-## [2026-04-07] lint | report: 0 🔴, 2 🟡, 1 🔵
-## [2026-04-08] daily-arxiv | 3 papers ingested from RSS
+## [YYYY-MM-DD] skill | details
 ```
-
----
 
 ## Python 环境
 
-运行任何 Python 工具之前，必须确保使用正确的 Python 环境。按以下优先级检测并激活：
-
-1. **检查 `.venv/` 是否存在**：若存在，直接调用 venv 内的解释器 —— 跨平台最安全。
-   - Unix/macOS：存在 `.venv/bin/python` → 用 `.venv/bin/python tools/X.py`
-   - Windows：存在 `.venv/Scripts/python.exe` → 用 `.venv/Scripts/python.exe tools/X.py`
-2. **检查 `conda` 环境**：若当前无 venv 但有 conda，使用 `conda run -n <env>` 或确认 conda env 已激活
-3. **系统 Python**：若以上都不存在，Unix/macOS 用 `python3`，Windows 用 `python`
-
-**示例：调用工具时**
-```bash
-# Unix/macOS，存在 .venv/
-.venv/bin/python tools/fetch_arxiv.py --hours 24
-
-# Windows，存在 .venv/（Git Bash 与 PowerShell 都支持正斜杠）
-.venv/Scripts/python.exe tools/fetch_arxiv.py --hours 24
-
-# 无 venv
-python3 tools/fetch_arxiv.py --hours 24      # Unix/macOS
-python tools/fetch_arxiv.py --hours 24       # Windows
-```
-
-直接调用 venv 内的解释器，可以避免在 Unix 上 `source activate` 与 Windows 上 `Activate.ps1` 的差异，跨平台行为完全一致。
-
-**环境变量**：所有 Python 工具会自动从 `~/.env` 和项目根目录 `.env` 加载 API Key（通过 `tools/_env.py`），无需手动 export。
+- 有 `.venv/` 时优先用 `.venv/bin/python`（Unix/macOS）或 `.venv/Scripts/python.exe`（Windows）
+- 否则使用当前激活的 conda 环境
+- 再否则回退到 `python3`（Unix/macOS）或 `python`（Windows）
+- Python 工具会通过 `tools/_env.py` 自动加载 `~/.env` 与项目根目录 `.env`
 
 ---
 
 ## 约束
 
-- **raw/ 仅 `/init` 可追加写，其它一律只读**：`/init` Step 2 可以把新发现的源文件下载到 `raw/papers/`（只允许新增，绝不覆盖已有文件）。其它所有 skill、tool、subagent（包括 `/ingest`、`/daily-arxiv`、以及 `/init` 在 INIT MODE 下 fan-out 的 `/ingest` subagents）都必须把 `raw/` 视为严格只读：不得修改、覆盖或删除 `raw/` 下的任何内容。
+- **`raw/papers/`、`raw/notes/`、`raw/web/` 归用户所有**：把它们当作权威输入。`/init` 与 `/daily-arxiv` 只能把外部抓取论文追加到 `raw/discovered/`，并且只有 `/init` 能把本地来源的预处理 sidecar 写到 `raw/tmp/`（只增不改，绝不覆盖用户自有文件）。`/edit` 仅在用户明确要求时才允许新增 raw 来源。除此之外，所有 skill、tool，以及 `/init` 在 INIT MODE 下 fan-out 的 `/ingest` 子代理都必须把 `raw/` 视为严格只读。
+- **INIT MODE 交接由 manifest 驱动**：当 `/init` 写出 `.checkpoints/init-sources.json` 后，该 manifest 就是 ingest 顺序与规范来源路径的唯一真相来源。预处理后的本地输入应指向 `raw/tmp/`；外部引入论文应指向 `raw/discovered/`。
 - **graph/ 自动生成**：不得手动编辑 `graph/` 下的文件，仅通过 `tools/research_wiki.py` 维护。
 - **双向链接**：写正向链接时同步写反向链接。
 - **tex 优先**：.tex > .pdf，fallback 链：tex 失败 → PDF 解析，PDF 失败 → vision API。

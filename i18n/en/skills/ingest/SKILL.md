@@ -11,7 +11,7 @@ argument-hint: <local-path-or-arXiv-URL>
 
 ## Inputs
 
-- `source`: local .tex / .pdf path, or arXiv URL (e.g. `https://arxiv.org/abs/2106.09685`)
+- `source`: local `.tex` / `.pdf` path, a canonical path handed off by `/init` (for example `raw/tmp/...` synthetic or translated `.tex`, or `raw/discovered/...` fetched source dirs / PDFs), or an arXiv URL (e.g. `https://arxiv.org/abs/2106.09685`)
 
 ## Outputs
 
@@ -64,9 +64,12 @@ Set `WIKI_ROOT=wiki/`.
    - **arXiv URL**: fetch tex source (ar5iv HTML or direct .tex download); fall back to PDF if unavailable
    - **local .tex**: read directly
    - **local .pdf**: extract text (PyMuPDF or vision API fallback)
+   - **INIT MODE canonical handoff path**: if `/init` passes a path from `.checkpoints/init-sources.json`, ingest that exact `canonical_ingest_path` rather than rescanning sibling raw folders
 2. Extract metadata: title, abstract, author list (with affiliations), publication date, venue
 3. Extract reference list (BibTeX entries or reference section)
-4. If arXiv ID is present, save source file to `raw/papers/`
+4. Raw-source persistence rule:
+   - if the handed-off source already lives under `raw/discovered/` or `raw/tmp/`, treat that path as canonical and do not duplicate it into `raw/papers/`
+   - if the source is a direct arXiv URL, save the fetched source artifact under `raw/discovered/` and ingest from there; do not write fetched sources into `raw/papers/`
 
 ### Step 2: Preprocessing and Annotation
 
@@ -381,6 +384,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 ## Constraints
 
 - **raw/ is read-only**: do not modify files under `raw/`
+- **INIT MODE source handoff is authoritative**: when `/init` passes a `canonical_ingest_path` from `.checkpoints/init-sources.json`, ingest that exact path rather than rescanning `raw/papers/`, `raw/tmp/`, or `raw/discovered/`
 - **graph/ via tools only**: do not manually edit files in `graph/` — use `python3 tools/research_wiki.py` only
 - **Bidirectional links**: always write the reverse link when writing a forward link (see CLAUDE.md Cross-Reference Rules table)
 - **tex priority**: .tex > .pdf > vision API fallback
@@ -395,7 +399,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 
 ## Error Handling
 
-- **Source parse failure**: tex fails → PDF parse → vision API → report to user for manual handling
+- **Source parse failure**: tex fails → PDF parse → vision API → report to user for manual handling. In INIT MODE, synthetic / translated `.tex` under `raw/tmp/` and fetched source dirs / PDFs under `raw/discovered/` are valid inputs and should be consumed as handed off.
 - **S2 API unavailable**: skip S2 steps (citations backfill, default importance to 3); note in report
 - **DeepXiv API unavailable**: skip DeepXiv enrichment (TLDR, structure verification, social metrics); fall back to S2 + source file parsing
 - **Slug conflict**: if generated slug already exists but content differs, append numeric suffix (e.g. `attention-mechanism-2`)

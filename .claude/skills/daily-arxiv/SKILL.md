@@ -18,6 +18,7 @@ argument-hint: "[--hours 24] [--max-ingest 5] [--dry-run]"
 
 ## Outputs
 
+- `raw/discovered/{slug}/` or `raw/discovered/{slug}.pdf` — fetched source artifact for each auto-ingested paper
 - `wiki/papers/{slug}.md` — highly relevant paper pages (created via /ingest)
 - Corresponding `concepts/`, `people/`, `claims/` pages (created via /ingest)
 - Updated `wiki/topics/*.md` — SOTA tracker annotations (if SOTA update detected)
@@ -113,8 +114,12 @@ For each new paper, LLM assesses relevance based on title and abstract vs. the r
    ```bash
    python3 tools/research_wiki.py checkpoint-load wiki/ "daily-arxiv-{date}"
    ```
-3. Take the first `--max-ingest` papers (default 5) and call `/ingest` one at a time:
-   - Pass the arXiv URL as the source
+3. Take the first `--max-ingest` papers (default 5). For each selected paper:
+   - Download the source artifact into `raw/discovered/` first:
+     ```bash
+     python3 tools/init_discovery.py download --raw-root raw --arxiv-id <arxiv_id> --title "<title>"
+     ```
+   - Pass the returned `canonical_ingest_path` from `raw/discovered/` into `/ingest`, not the bare arXiv URL
    - /ingest completes the full wiki incorporation flow (paper + concepts + people + claims + cross-refs + graph)
    - After each success, record checkpoint:
      ```bash
@@ -124,7 +129,7 @@ For each new paper, LLM assesses relevance based on title and abstract vs. the r
      ```bash
      python3 tools/research_wiki.py checkpoint-save wiki/ "daily-arxiv-{date}" "{arxiv_id}" --failed
      ```
-4. If `--dry-run`, skip actual ingest; mark "would ingest" in the digest
+4. If `--dry-run`, skip both the `raw/discovered/` download and the actual ingest; mark "would ingest" in the digest
 5. After all done, clear checkpoint:
    ```bash
    python3 tools/research_wiki.py checkpoint-clear wiki/ "daily-arxiv-{date}"
@@ -191,7 +196,7 @@ Output summary:
 
 - **Only ingest papers with relevance >= 3**: leave the rest for user judgment, do not auto-create wiki pages
 - **At most `--max-ingest` papers per run** (default 5): prevents single-run wiki overload
-- **raw/ is read-only for `/daily-arxiv`**: do not write, modify, or delete anything under `raw/`. (Note: only `/init` Step 2 has the sanctioned exception to append newly-discovered sources into `raw/papers/`; this skill does not.)
+- **`/daily-arxiv` is raw-read-only except `raw/discovered/` for auto-ingested papers**: never write to `raw/papers/`, `raw/tmp/`, `raw/notes/`, or `raw/web/`
 - **graph/ maintained via tools only**: do not manually edit graph files
 - **Bidirectional links**: guaranteed by /ingest
 - **Deduplication must be strict**: double-check by both arxiv_url and arxiv_id
@@ -217,6 +222,7 @@ Output summary:
 - `python3 tools/fetch_arxiv.py --hours <N> -o <path>` — pull arXiv RSS
 - `python3 tools/fetch_deepxiv.py trending --days 7 --limit 20` — fetch trending papers
 - `python3 tools/fetch_deepxiv.py brief <arxiv_id>` — fetch paper TLDR and keywords
+- `python3 tools/init_discovery.py download --raw-root raw --arxiv-id <id> --title "<title>"` — download selected papers into `raw/discovered/`
 - `python3 tools/research_wiki.py rebuild-context-brief wiki/` — rebuild compressed context
 - `python3 tools/research_wiki.py rebuild-open-questions wiki/` — rebuild knowledge gap map
 - `python3 tools/research_wiki.py log wiki/ "<message>"` — append log

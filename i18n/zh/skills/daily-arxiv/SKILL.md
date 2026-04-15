@@ -18,6 +18,7 @@ argument-hint: "[--hours 24] [--max-ingest 5] [--dry-run]"
 
 ## Outputs
 
+- `raw/discovered/{slug}/` 或 `raw/discovered/{slug}.pdf` — 每篇 auto-ingest 论文对应的抓取原始来源
 - `wiki/papers/{slug}.md` — 高相关论文页面（通过 /ingest 创建）
 - 相应的 concepts/、people/、claims/ 页面（通过 /ingest 创建）
 - 更新的 `wiki/topics/*.md` — SOTA tracker 标注（若检测到 SOTA 更新）
@@ -113,8 +114,12 @@ argument-hint: "[--hours 24] [--max-ingest 5] [--dry-run]"
    ```bash
    python3 tools/research_wiki.py checkpoint-load wiki/ "daily-arxiv-{date}"
    ```
-3. 取前 `--max-ingest` 篇（默认 5），逐篇调用 `/ingest`：
-   - 传入 arXiv URL 作为 source
+3. 取前 `--max-ingest` 篇（默认 5）。对每篇选中的论文：
+   - 先把原始来源下载到 `raw/discovered/`：
+     ```bash
+     python3 tools/init_discovery.py download --raw-root raw --arxiv-id <arxiv_id> --title "<title>"
+     ```
+   - 把返回的 `canonical_ingest_path`（位于 `raw/discovered/`）传给 `/ingest`，不要直接传裸 arXiv URL
    - /ingest 会完成完整的 wiki 纳入流程（paper + concepts + people + claims + cross-refs + graph）
    - 每篇成功后记录 checkpoint：
      ```bash
@@ -124,7 +129,7 @@ argument-hint: "[--hours 24] [--max-ingest 5] [--dry-run]"
      ```bash
      python3 tools/research_wiki.py checkpoint-save wiki/ "daily-arxiv-{date}" "{arxiv_id}" --failed
      ```
-4. 若 `--dry-run`，跳过实际 ingest，仅在 digest 中标记「would ingest」
+4. 若 `--dry-run`，同时跳过 `raw/discovered/` 下载与实际 ingest，仅在 digest 中标记「would ingest」
 5. 全部完成后清理 checkpoint：
    ```bash
    python3 tools/research_wiki.py checkpoint-clear wiki/ "daily-arxiv-{date}"
@@ -191,7 +196,7 @@ argument-hint: "[--hours 24] [--max-ingest 5] [--dry-run]"
 
 - **只 ingest 相关性 >= 3 的论文**：其余留给用户判断，不自动创建 wiki 页面
 - **每次最多 ingest `--max-ingest` 篇**（默认 5）：防止 wiki 单次过载
-- **`/daily-arxiv` 对 raw/ 严格只读**：不得写入、修改或删除 `raw/` 下的任何内容。（注：`/init` Step 2 是唯一合法的例外——可以向 `raw/papers/` 追加新发现的论文；本 skill 没有这个例外。）
+- **`/daily-arxiv` 对 raw/ 严格只读，只有 auto-ingest 论文可写入 `raw/discovered/`**：不得写入 `raw/papers/`、`raw/tmp/`、`raw/notes/` 或 `raw/web/`
 - **graph/ 仅通过 tools 维护**：不得手动编辑 `graph/` 下的文件
 - **双向链接**：通过 /ingest 保证
 - **去重必须严格**：按 arxiv_url 和 arxiv_id 双重检查
@@ -217,6 +222,7 @@ argument-hint: "[--hours 24] [--max-ingest 5] [--dry-run]"
 - `python3 tools/fetch_arxiv.py --hours <N> -o <path>` — 拉取 arXiv RSS
 - `python3 tools/fetch_deepxiv.py trending --days 7 --limit 20` — 获取热门论文
 - `python3 tools/fetch_deepxiv.py brief <arxiv_id>` — 获取论文 TLDR 和关键词
+- `python3 tools/init_discovery.py download --raw-root raw --arxiv-id <id> --title "<title>"` — 将选中的论文下载到 `raw/discovered/`
 - `python3 tools/research_wiki.py rebuild-context-brief wiki/` — 重建压缩上下文
 - `python3 tools/research_wiki.py rebuild-open-questions wiki/` — 重建知识缺口地图
 - `python3 tools/research_wiki.py log wiki/ "<message>"` — 追加日志

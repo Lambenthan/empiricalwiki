@@ -11,7 +11,7 @@ argument-hint: <local-path-or-arXiv-URL>
 
 ## Inputs
 
-- `source`：本地 .tex / .pdf 路径，或 arXiv URL（如 `https://arxiv.org/abs/2106.09685`）
+- `source`：本地 `.tex` / `.pdf` 路径、`/init` 交接的规范来源路径（例如 `raw/tmp/...` 下的合成/翻译 `.tex`，或 `raw/discovered/...` 下抓取到的源码目录 / PDF），或 arXiv URL（如 `https://arxiv.org/abs/2106.09685`）
 
 ## Outputs
 
@@ -64,9 +64,12 @@ argument-hint: <local-path-or-arXiv-URL>
    - **arXiv URL**：尝试获取 tex source（ar5iv HTML 或直接下载 .tex）；若失败则下载 PDF
    - **本地 .tex**：直接读取
    - **本地 .pdf**：提取文本（PyMuPDF 或 vision API fallback）
+   - **INIT MODE 规范交接路径**：若 `/init` 传入来自 `.checkpoints/init-sources.json` 的路径，则直接 ingest 该 `canonical_ingest_path`，不要重新扫描相邻 raw 目录
 2. 提取元数据：标题、摘要、作者列表（含机构）、发表日期、venue
 3. 提取参考文献列表（BibTeX entries 或 reference section）
-4. 如有 arXiv ID，保存原始文件到 `raw/papers/`
+4. raw 来源持久化规则：
+   - 若交接的 source 已位于 `raw/discovered/` 或 `raw/tmp/`，则直接把该路径视为 canonical source，不要再复制到 `raw/papers/`
+   - 若 source 是直接给定的 arXiv URL，则把抓取到的原始来源保存到 `raw/discovered/` 并从那里 ingest；不要把抓取来源写入 `raw/papers/`
 
 ### Step 2: 预处理与标注
 
@@ -381,6 +384,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 ## Constraints
 
 - **raw/ 只读**：不得修改 `raw/` 下的文件
+- **INIT MODE 的来源交接具有最高优先级**：当 `/init` 从 `.checkpoints/init-sources.json` 传入 `canonical_ingest_path` 时，直接 ingest 该路径，不要重新扫描 `raw/papers/`、`raw/tmp/` 或 `raw/discovered/`
 - **graph/ 仅通过 tools 维护**：不得手动编辑 `graph/` 下的文件，仅通过 `python3 tools/research_wiki.py` 操作
 - **双向链接**：写正向链接时同步写反向链接（参照 CLAUDE.md Cross Reference 规则表）
 - **tex 优先**：.tex > .pdf > vision API fallback
@@ -395,7 +399,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 
 ## Error Handling
 
-- **来源解析失败**：tex 失败 → PDF 解析 → vision API → 报告用户手动处理
+- **来源解析失败**：tex 失败 → PDF 解析 → vision API → 报告用户手动处理。INIT MODE 下，`raw/tmp/` 中的合成 / 翻译 `.tex` 与 `raw/discovered/` 中的抓取源码目录 / PDF 都是合法输入，应按交接路径直接消费。
 - **S2 API 不可用**：跳过 S2 相关步骤（citations 回填、importance 使用默认值 3），在报告中注明
 - **DeepXiv API 不可用**：跳过 DeepXiv 增强步骤（TLDR、结构验证、社交指标），仅依赖 S2 + 源文件解析
 - **slug 冲突**：若生成的 slug 已存在但内容不同，追加数字后缀（如 `attention-mechanism-2`）

@@ -37,6 +37,9 @@ def project(tmp_path):
         (raw / sub).mkdir(parents=True)
         (raw / sub / ".gitkeep").touch()
     (raw / "papers" / "x.pdf").write_bytes(b"PDF")
+    (raw / "discovered" / "external-paper").mkdir()
+    (raw / "discovered" / "external-paper" / "main.tex").write_text("\\title{External}")
+    (raw / "tmp" / "prepared.tex").write_text("\\title{Prepared}")
     (raw / "notes" / "n.md").write_text("notes")
 
     return tmp_path
@@ -82,8 +85,12 @@ def test_execute_wiki_deletes_graph(project):
 def test_execute_raw_deletes_files_keeps_gitkeep(project):
     rw.execute(project, ["raw"])
     assert not (project / "raw" / "papers" / "x.pdf").exists()
+    assert not (project / "raw" / "discovered" / "external-paper").exists()
+    assert not (project / "raw" / "tmp" / "prepared.tex").exists()
     assert not (project / "raw" / "notes" / "n.md").exists()
     assert (project / "raw" / "papers" / ".gitkeep").exists()
+    assert (project / "raw" / "discovered" / ".gitkeep").exists()
+    assert (project / "raw" / "tmp" / ".gitkeep").exists()
     assert (project / "raw" / "notes" / ".gitkeep").exists()
 
 

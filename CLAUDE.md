@@ -7,55 +7,42 @@
 
 ---
 
-## Directory Structure
+## Repository Layout
 
-```
-wiki/
-├── CLAUDE.md          ← this file
-├── index.md           ← content catalog (YAML)
-├── log.md             ← chronological log (append-only)
-├── papers/            ← structured paper summaries
-├── concepts/          ← cross-paper technical concepts
-├── topics/            ← research direction maps
-├── people/            ← researcher profiles
-├── ideas/             ← research ideas (with lifecycle status)
-├── experiments/       ← experiment records (wiki pages)
-├── claims/            ← testable research claims
-├── Summary/           ← domain-wide surveys
-├── foundations/       ← background knowledge (terminal: receives inward links, writes none)
-├── outputs/           ← generated artifacts (Related Work, paper drafts)
-└── graph/             ← auto-generated (do not edit)
-    ├── edges.jsonl    ← typed relationship graph
-    ├── context_brief.md  ← compressed context (≤8000 chars)
-    └── open_questions.md     ← open questions and knowledge gaps
+Open `docs/runtime-directory-structure.en.md` only when you need the full repo tree.
 
-raw/
-├── papers/            ← .tex / .pdf (read-only)
-├── notes/             ← .md notes (read-only)
-└── web/               ← HTML / Markdown (read-only)
+Keep this mental map in immediate context:
 
-config/
-├── server.yaml        ← remote GPU server config (optional, needed for /exp-run --env remote)
-├── server.yaml.example
-├── .env.example
-└── settings.local.json.example
-```
+### `wiki/` is the main product surface
+
+- `wiki/index.md` is the catalog of all wiki pages
+- `wiki/log.md` is the append-only activity log
+- `wiki/papers/` holds paper summaries
+- `wiki/concepts/`, `wiki/topics/`, and `wiki/foundations/` hold reusable knowledge structure
+- `wiki/people/`, `wiki/ideas/`, `wiki/experiments/`, and `wiki/claims/` hold research actors, hypotheses, tests, and assertions
+- `wiki/Summary/` holds area-level syntheses
+- `wiki/outputs/` holds generated artifacts
+- `wiki/graph/` is derived state; do not edit it manually
+
+### Formatting guardrail
+
+- Open `docs/runtime-page-templates.en.md` before drafting or repairing wiki page structure, YAML, or body sections
+- Open `docs/runtime-support-files.en.md` when you need graph-derived file details or `index.md` / `log.md` format
+
+### `raw/` and `config/`
+
+- `raw/papers/`, `raw/notes/`, and `raw/web/` are user-owned inputs
+- `raw/discovered/` stores externally fetched papers from `/init` and `/daily-arxiv`
+- `raw/tmp/` stores `/init`-generated prepared local sidecars
+- `config/` holds environment and remote-server templates
 
 ---
 
 ## 9 Page Types
 
-| Directory | Filename | Purpose |
-|-----------|----------|---------|
-| `papers/` | `{slug}.md` | structured paper summary |
-| `concepts/` | `{concept-name}.md` | cross-paper technical concept |
-| `topics/` | `{topic-name}.md` | research direction map |
-| `people/` | `{firstname-lastname}.md` | researcher profile |
-| `ideas/` | `{idea-slug}.md` | research idea (proposed → tested → validated/failed) |
-| `experiments/` | `{experiment-slug}.md` | experiment record (hypothesis → setup → results → claim updates) |
-| `claims/` | `{claim-slug}.md` | testable research claim linking papers, experiments, and reviews |
-| `Summary/` | `{area-name}.md` | domain-wide survey |
-| `foundations/` | `{slug}.md` | foundational background concept (other pages link in; foundations write no reverse link) |
+`papers`, `concepts`, `topics`, `people`, `ideas`, `experiments`, `claims`, `Summary`, `foundations`.
+
+Open `docs/runtime-page-templates.en.md` for page templates and `docs/runtime-support-files.en.md` for graph/index/log references.
 
 ---
 
@@ -92,294 +79,36 @@ When writing a forward link, **always write the reverse link simultaneously**:
 
 ---
 
-## Page Templates
+## Graph Rules
 
-### papers/{slug}.md
+- `graph/` is auto-generated; do not edit it manually
+- core derived files are `edges.jsonl`, `context_brief.md`, and `open_questions.md`
+- valid edge types are `extends`, `contradicts`, `supports`, `inspired_by`, `tested_by`, `invalidates`, `supersedes`, `addresses_gap`, and `derived_from`
+- use `tools/research_wiki.py add-edge`, `rebuild-context-brief`, and `rebuild-open-questions`
 
-```yaml
----
-title: ""
-slug: ""
-arxiv: ""
-venue: ""
-year:
-tags: []
-importance: 3           # 1-5
-date_added: YYYY-MM-DD
-source_type: tex         # tex | pdf
-s2_id: ""
-keywords: []
-domain: ""               # NLP / CV / ML Systems / Robotics
-code_url: ""
-cited_by: []
----
-```
+## log.md Format
 
-Body sections: `## Problem` / `## Key idea` / `## Method` / `## Results` / `## Limitations` / `## Open questions` / `## My take` / `## Related`
-
-### concepts/{concept-name}.md
-
-```yaml
----
-title: ""
-aliases: []              # alias list (for dedup matching, e.g. ["scaled dot-product attention", "SDPA"])
-tags: []
-maturity: active         # stable | active | emerging | deprecated
-key_papers: []
-first_introduced: ""
-date_updated: YYYY-MM-DD
-related_concepts: []
----
-```
-
-Body sections: `## Definition` / `## Intuition` / `## Formal notation` / `## Variants` / `## Comparison` / `## When to use` / `## Known limitations` / `## Open problems` / `## Key papers` / `## My understanding`
-
-### topics/{topic-name}.md
-
-```yaml
----
-title: ""
-tags: []
-my_involvement: none     # none | reading | side-project | main-focus
-sota_updated: YYYY-MM-DD
-key_venues: []
-related_topics: []
-key_people: []
----
-```
-
-Body sections: `## Overview` / `## Timeline` / `## Seminal works` / `## SOTA tracker` / `## Open problems` / `## My position` / `## Research gaps` / `## Key people`
-
-### people/{firstname-lastname}.md
-
-```yaml
----
-name: ""
-affiliation: ""
-tags: []
-homepage: ""
-scholar: ""
-date_updated: YYYY-MM-DD
----
-```
-
-Body sections: `## Research areas` / `## Key papers` / `## Recent work` / `## Collaborators` / `## My notes`
-
-### Summary/{area-name}.md
-
-```yaml
----
-title: ""
-scope: ""
-key_topics: []
-paper_count:
-date_updated: YYYY-MM-DD
----
-```
-
-Body sections: `## Overview` / `## Core areas` / `## Evolution` / `## Current frontiers` / `## Key references` / `## Related`
-
-### foundations/{slug}.md
-
-```yaml
----
-title: ""
-slug: ""
-domain: ""               # general / NLP / CV / ML Systems / Robotics
-status: mainstream       # mainstream | historical
-aliases: []              # alias list (for /ingest dedup matching)
-first_introduced: ""
-date_updated: YYYY-MM-DD
-source_url: ""           # Wikipedia URL or empty
----
-```
-
-Body sections: `## Definition` / `## Intuition` / `## Formal notation` / `## Key variants` / `## Known limitations` / `## Open problems` / `## Relevance to active research`
-
-Foundations have **no outward link fields** (no `key_papers`, no `related_concepts`). Other pages may link to a foundation; foundations write no reverse link.
-
-### ideas/{idea-slug}.md
-
-```yaml
----
-title: ""
-slug: ""
-status: proposed          # proposed | in_progress | tested | validated | failed
-origin: ""                # source description: which paper's gap, which claim's weak evidence, etc.
-origin_gaps: []           # related claim/topic slugs (knowledge gap sources)
-tags: []
-domain: ""                # NLP / CV / ML Systems / Robotics
-priority: 3               # 1-5 (1=low, 5=critical)
-pilot_result: ""          # brief pilot experiment summary (fill after tested)
-failure_reason: ""        # failure reason (fill after failed — anti-repetition memory)
-linked_experiments: []    # linked experiment slugs
-date_proposed: YYYY-MM-DD
-date_resolved: ""         # validated/failed date
----
-```
-
-Body sections: `## Motivation` / `## Hypothesis` / `## Approach sketch` / `## Expected outcome` / `## Risks` / `## Pilot results` / `## Lessons learned`
-
-### experiments/{experiment-slug}.md
-
-```yaml
----
-title: ""
-slug: ""
-status: planned           # planned | running | completed | abandoned
-target_claim: ""          # target claim slug
-hypothesis: ""            # hypothesis being tested
-tags: []
-domain: ""                # NLP / CV / ML Systems / Robotics
-setup:
-  model: ""
-  dataset: ""
-  hardware: ""
-  framework: ""
-metrics: []               # evaluation metrics, e.g. [accuracy, F1, latency]
-baseline: ""              # comparison baseline description
-outcome: ""               # succeeded | failed | inconclusive
-key_result: ""            # one-sentence core finding
-linked_idea: ""           # source idea slug
-date_planned: YYYY-MM-DD
-date_completed: ""
-run_log: ""               # run log path (optional)
-started: ""              # start time (ISO format, written by /exp-run)
-estimated_hours: 0        # estimated runtime in hours (auto-estimated by /exp-run)
-remote:                   # remote deployment info (written by /exp-run --env remote)
-  server: ""              # server host
-  gpu: ""                 # GPU index
-  session: ""             # screen session name
-  started: ""             # deployment time (ISO format)
-  completed: ""           # completion time
----
-```
-
-Body sections: `## Objective` / `## Setup` / `## Procedure` / `## Results` / `## Analysis` / `## Claim updates` / `## Follow-up`
-
-### claims/{claim-slug}.md
-
-```yaml
----
-title: ""
-slug: ""
-status: proposed          # proposed | weakly_supported | supported | challenged | deprecated
-confidence: 0.5           # 0.0-1.0
-tags: []
-domain: ""                # NLP / CV / ML Systems / Robotics
-source_papers: []         # slugs of papers that proposed this claim
-evidence:                 # evidence list
-  - source: ""            # paper/experiment slug
-    type: supports        # supports | contradicts | tested_by | invalidates
-    strength: moderate    # weak | moderate | strong
-    detail: ""
-conditions: ""            # preconditions and scope under which the claim holds
-date_proposed: YYYY-MM-DD
-date_updated: YYYY-MM-DD
----
-```
-
-Body sections: `## Statement` / `## Evidence summary` / `## Conditions and scope` / `## Counter-evidence` / `## Linked ideas` / `## Open questions`
-
-### graph/ (auto-generated — do not edit)
-
-The `graph/` directory is maintained automatically by `tools/research_wiki.py`, derived from wiki page content.
-
-| File | Content | Generated by |
-|------|---------|-------------|
-| `edges.jsonl` | typed relationships (extends, contradicts, supports, inspired_by, tested_by, invalidates, supersedes, addresses_gap, derived_from) | `python3 tools/research_wiki.py add-edge` |
-| `context_brief.md` | compressed context: claims + gaps + failed ideas + papers + edges (≤8000 chars) | `python3 tools/research_wiki.py rebuild-context-brief` |
-| `open_questions.md` | open questions: under-supported claims + open questions from papers/topics | `python3 tools/research_wiki.py rebuild-open-questions` |
-
-Each edge format: `{"from": "node_id", "to": "node_id", "type": "edge_type", "evidence": "...", "date": "..."}`
-
----
-
-## index.md format
-
-```yaml
-papers:
-  - slug: lora-low-rank-adaptation
-    title: "LoRA: Low-Rank Adaptation of Large Language Models"
-    tags: [fine-tuning, efficiency]
-    importance: 5
-
-concepts:
-  - slug: parameter-efficient-fine-tuning
-    tags: [fine-tuning, efficiency]
-    maturity: stable
-
-topics:
-  - slug: efficient-llm-adaptation
-    tags: [fine-tuning, efficiency, llm]
-
-people:
-  - slug: tri-dao
-    affiliation: "Princeton / Together AI"
-
-ideas:
-  - slug: sparse-lora-for-edge-devices
-    status: proposed
-    domain: ML Systems
-    priority: 4
-
-experiments:
-  - slug: sparse-lora-latency-benchmark
-    status: planned
-    target_claim: lora-preserves-quality-at-low-rank
-    domain: ML Systems
-
-claims:
-  - slug: lora-preserves-quality-at-low-rank
-    status: weakly_supported
-    confidence: 0.6
-    domain: NLP
-```
-
----
-
-## log.md format (append-only)
+Standard log line:
 
 ```markdown
-## [2026-04-07] ingest | added papers/lora-low-rank-adaptation | updated: concepts/parameter-efficient-fine-tuning
-## [2026-04-07] lint | report: 0 🔴, 2 🟡, 1 🔵
-## [2026-04-08] daily-arxiv | 3 papers ingested from RSS
+## [YYYY-MM-DD] skill | details
 ```
 
 ---
 
 ## Python Environment
 
-Before running any Python tool, ensure the correct environment is active. Detection priority:
-
-1. **Check for `.venv/`**: if present, use the venv interpreter directly — cross-platform safe.
-   - Unix/macOS: `.venv/bin/python` exists → call `.venv/bin/python tools/X.py`
-   - Windows: `.venv/Scripts/python.exe` exists → call `.venv/Scripts/python.exe tools/X.py`
-2. **Check for conda**: if no venv but conda is active, use `conda run -n <env>` or confirm env is activated
-3. **System Python**: if neither exists, use `python3` (Unix/macOS) or `python` (Windows) directly
-
-**Example — calling a tool:**
-```bash
-# Unix/macOS, .venv/ exists
-.venv/bin/python tools/fetch_arxiv.py --hours 24
-
-# Windows, .venv/ exists (Git Bash or PowerShell both accept forward slashes)
-.venv/Scripts/python.exe tools/fetch_arxiv.py --hours 24
-
-# No venv
-python3 tools/fetch_arxiv.py --hours 24      # Unix/macOS
-python tools/fetch_arxiv.py --hours 24       # Windows
-```
-
-Calling the venv interpreter directly avoids needing to `source activate` (Unix) vs `Activate.ps1` (Windows), and works identically across platforms.
-
-**Environment variables**: all Python tools auto-load API keys from `~/.env` and the project root `.env` via `tools/_env.py` — no manual `export` needed.
+- prefer `.venv/bin/python` (Unix/macOS) or `.venv/Scripts/python.exe` (Windows) when `.venv/` exists
+- otherwise use the active conda env if present
+- otherwise fall back to `python3` (Unix/macOS) or `python` (Windows)
+- Python tools auto-load API keys from `~/.env` and project-root `.env` via `tools/_env.py`
 
 ---
 
 ## Constraints
 
-- **raw/ is append-only, and only for `/init`**: `/init` Step 2 may download newly-discovered sources into `raw/papers/` (additions only — never overwrite an existing file). Every other skill, tool, and subagent (including `/ingest`, `/daily-arxiv`, and all `/init` subagents running `/ingest` in INIT MODE) treats `raw/` as strictly read-only: never modify, overwrite, or delete anything under `raw/`.
+- **`raw/papers/`, `raw/notes/`, `raw/web/` are user-owned**: treat them as authoritative inputs. `/init` and `/daily-arxiv` may add externally fetched papers only under `raw/discovered/`, and only `/init` may add generated prepared local sidecars under `raw/tmp/` (additions only — never overwrite an existing user-owned file). `/edit` may add raw sources only when the user explicitly asked for it. All other skills, tools, and `/init` subagents running `/ingest` in INIT MODE treat `raw/` as strictly read-only.
+- **INIT MODE handoff is manifest-driven**: when `/init` writes `.checkpoints/init-sources.json`, that manifest becomes the single source of truth for ingest order and canonical source paths. Prepared local inputs should point to `raw/tmp/`; introduced external papers should point to `raw/discovered/`.
 - **graph/ is auto-generated**: never manually edit files in `graph/` — only via `tools/research_wiki.py`.
 - **Bidirectional links**: always write the reverse link when writing a forward link.
 - **tex priority**: .tex > .pdf; fallback chain: tex fails → PDF parse, PDF fails → vision API.

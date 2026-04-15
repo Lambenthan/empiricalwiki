@@ -230,7 +230,9 @@ and that the user can run `/setup` again anytime to add them.
 If this is a fresh install (no `wiki/` directory):
 ```
 Configuration done. Next:
-  • Put papers in raw/papers/ (.tex or .pdf)
+  • Put your own papers in raw/papers/ (.tex or .pdf)
+  • Optional: add intent notes to raw/notes/ and saved pages to raw/web/
+  • /init will manage generated inputs under raw/discovered/ and raw/tmp/
   • Run: /init <your-research-topic>
 ```
 

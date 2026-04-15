@@ -228,7 +228,9 @@ for k in keys:
 如果是全新安装（`wiki/` 目录不存在）：
 ```
 配置完成。接下来：
-  • 将论文放入 raw/papers/（.tex 或 .pdf）
+  • 将你自己的论文放入 raw/papers/（.tex 或 .pdf）
+  • 可选：把意图笔记放入 raw/notes/，网页存档放入 raw/web/
+  • /init 会自动管理 raw/discovered/ 与 raw/tmp/ 下的生成内容
   • 运行：/init <你的研究主题>
 ```
 

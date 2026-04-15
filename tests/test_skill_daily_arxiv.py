@@ -175,6 +175,7 @@ REQUIRED_TOOL_REFS = [
     ("fetch_arxiv.py", "Must reference fetch_arxiv.py for RSS fetching"),
     ("fetch_deepxiv.py trending", "Must reference fetch_deepxiv.py trending for hot papers"),
     ("fetch_deepxiv.py brief", "Must reference fetch_deepxiv.py brief for TLDR enrichment"),
+    ("init_discovery.py download", "Must reference init_discovery.py download for raw/discovered/ handoff"),
     ("research_wiki.py rebuild-context-brief", "Must reference rebuild-context-brief"),
     ("research_wiki.py rebuild-open-questions", "Must reference rebuild-open-questions"),
     ("research_wiki.py log", "Must reference log for audit trail"),
@@ -217,6 +218,17 @@ class TestIngestDelegation:
     def test_dry_run_option(self, skill_text):
         assert "dry-run" in skill_text or "dry_run" in skill_text, \
             "Must support --dry-run option"
+
+    def test_raw_is_read_only_with_init_generated_dir_note(self, skill_text):
+        assert "raw/discovered/" in skill_text, \
+            "/daily-arxiv should acknowledge init-managed introduced papers under raw/discovered/"
+        assert "raw/tmp/" in skill_text, \
+            "/daily-arxiv should acknowledge init-managed prepared local inputs under raw/tmp/"
+
+    def test_ingests_from_discovered_path_not_bare_url(self, skill_text):
+        workflow = _extract_section(skill_text, "Workflow", level=2)
+        assert "canonical_ingest_path" in workflow, \
+            "/daily-arxiv should hand off a canonical raw/discovered/ path to /ingest"
 
 
 # ── 6. SOTA Detection ─────────────────────────────────────────────────

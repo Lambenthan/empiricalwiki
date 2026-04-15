@@ -218,3 +218,15 @@ def test_zh_claude_md_lists_setup_skill():
     assert claude_md.exists(), "i18n/zh/CLAUDE.md not found"
     content = claude_md.read_text(encoding="utf-8")
     assert "`/setup`" in content, "i18n/zh/CLAUDE.md skills table should list /setup"
+
+
+def test_en_setup_mentions_init_managed_raw_dirs():
+    content = EN_SKILL.read_text(encoding="utf-8")
+    assert "raw/discovered/" in content, "EN /setup should mention init-managed raw/discovered/"
+    assert "raw/tmp/" in content, "EN /setup should mention init-managed raw/tmp/"
+
+
+def test_zh_setup_mentions_init_managed_raw_dirs():
+    content = ZH_SKILL.read_text(encoding="utf-8")
+    assert "raw/discovered/" in content, "ZH /setup should mention init-managed raw/discovered/"
+    assert "raw/tmp/" in content, "ZH /setup should mention init-managed raw/tmp/"

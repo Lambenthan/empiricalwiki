@@ -15,7 +15,15 @@ import re
 import sys
 from datetime import datetime, timedelta, timezone
 
-import feedparser
+try:
+    import feedparser
+except ImportError:
+    class _FeedParserStub:
+        @staticmethod
+        def parse(*args, **kwargs):
+            raise ImportError("feedparser not installed")
+
+    feedparser = _FeedParserStub()
 
 DEFAULT_CATEGORIES = ["cs.LG", "cs.CV", "cs.CL", "cs.AI", "stat.ML"]
 

@@ -241,6 +241,29 @@ class TestConstraints:
         assert "只读" in constraints or "read-only" in constraints.lower(), \
             "Must explicitly state raw/ is read-only"
 
+    def test_init_mode_source_handoff(self, skill_text):
+        lowered = skill_text.lower()
+        assert "init-sources.json" in skill_text, \
+            "INIT MODE must document manifest-driven source handoff"
+        assert "raw/tmp/" in skill_text, \
+            "INIT MODE must accept prepared local sources from raw/tmp/"
+        assert "raw/discovered/" in skill_text, \
+            "INIT MODE must accept introduced sources from raw/discovered/"
+        assert "canonical_ingest_path" in lowered, \
+            "INIT MODE must respect the handed-off canonical ingest path"
+
+    def test_discovered_and_tmp_sources_are_not_duplicated_into_raw_papers(self, skill_text):
+        assert (
+            "do not duplicate it into `raw/papers/`" in skill_text
+            or "不要再复制到 `raw/papers/`" in skill_text
+        ), "Ingest should treat raw/discovered/ and raw/tmp/ as canonical instead of copying them into raw/papers/"
+
+    def test_direct_arxiv_fetches_go_to_raw_discovered(self, skill_text):
+        assert (
+            "save the fetched source artifact under `raw/discovered/`" in skill_text
+            or "保存到 `raw/discovered/` 并从那里 ingest" in skill_text
+        ), "Direct arXiv ingests should store fetched sources under raw/discovered/"
+
 
 # ── 7. Error handling ──────────────────────────────────────────────────
 
