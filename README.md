@@ -296,6 +296,8 @@ We're offering a batch of MiMo API credits to early supporters — use them with
 
 ### Config / 配置方式
 
+**Step 1 — Point Claude Code at MiMo** / **第 1 步：把 Claude Code 指向 MiMo**
+
 Drop the following into `~/.claude/settings.json` (or your project's `.claude/settings.json`):
 
 将以下内容写入 `~/.claude/settings.json`（或项目的 `.claude/settings.json`）：
@@ -309,6 +311,21 @@ Drop the following into `~/.claude/settings.json` (or your project's `.claude/se
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "mimo-v2-pro",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "mimo-v2-pro"
   }
+}
+```
+
+**Step 2 — Skip the Claude Code onboarding** / **第 2 步：跳过 Claude Code 初始引导**
+
+Because you're using a third-party key (MiMo) instead of signing in via `claude login`, Claude Code's first-run onboarding flow won't complete automatically. Create or edit `.claude.json` to mark onboarding as done:
+
+因为你用的是第三方 key（MiMo），不会走 `claude login` 的登录流程，Claude Code 首次启动的引导步骤不会自动完成。创建或编辑 `.claude.json`，手动标记引导已完成：
+
+- macOS / Linux: `~/.claude.json`
+- Windows: `<用户目录>\.claude.json`
+
+```json
+{
+  "hasCompletedOnboarding": true
 }
 ```
 
