@@ -91,6 +91,19 @@ python3 tools/research_wiki.py init wiki/
 
 #### Phase B — 引用链扩展（主要发现方式）
 
+**调用 S2 前**先检查 API key 是否已配置：
+
+```bash
+python3 -c "
+import sys, os; sys.path.insert(0, 'tools')
+try: import _env
+except Exception: pass
+print('SET' if os.environ.get('SEMANTIC_SCHOLAR_API_KEY', '').strip() else 'UNSET')
+"
+```
+
+如果返回 `UNSET`，提示用户："未检测到 Semantic Scholar API key — 引用链扩展仍可运行，但速度慢 3 倍（3 秒/请求）。建议先运行 `/setup` 配置 key 以加速 init。"然后继续执行 — fetch_s2.py 无 key 也可用。
+
 对 `local_papers` 中有 arXiv ID 的论文（选 importance 最高的 3–5 篇）：
 
 ```bash

@@ -75,8 +75,10 @@ python3 --version
 ================================
 ✓  ANTHROPIC_API_KEY      — 由 Claude Code 管理（claude login）
 
-可选 key：
-✗  Semantic Scholar        — 未配置（skill 可运行，但较慢）
+推荐配置：
+✗  Semantic Scholar        — 未配置（引用链扩展速度慢 3 倍，建议配置免费 key）
+
+可选：
 ✗  DeepXiv                 — 未配置（语义搜索不可用）
 ✗  Review LLM              — 未配置（跨模型 review 不可用）
 ```
@@ -93,11 +95,11 @@ python3 --version
 #### 4a：Semantic Scholar API Key
 
 **解释**："Semantic Scholar 提供论文引用数据和检索功能。
-被 /ingest、/init、/novelty、/ideate 使用。免费，秒批。
-不配置的话，这些 skill 仍可运行，但速度较慢（1请求/3秒，有 key 则 1请求/秒）。"
+被 /ingest、/init、/novelty、/ideate 使用。免费获取。
+**推荐配置** — 不配置的话，/init 速度慢 3 倍，引用链扩展效率大幅下降。"
 
 **引导获取**："访问 https://www.semanticscholar.org/product/api，
-点击 'Get API Key'，免费秒批，无需信用卡。"
+点击 'Get API Key'，免费申请。"
 
 **询问**："您是否有 Semantic Scholar API key？（粘贴，或输入 'skip' 跳过）"
 
