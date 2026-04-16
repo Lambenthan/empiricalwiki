@@ -29,6 +29,11 @@ MAX_RETRIES = 3
 _HEADERS = {"x-api-key": S2_API_KEY} if S2_API_KEY else {}
 
 
+def _bare_arxiv_id(arxiv_id: str) -> str:
+    """Strip optional ARXIV:/arxiv: prefix so callers can pass either form."""
+    return arxiv_id.removeprefix("ARXIV:").removeprefix("arxiv:")
+
+
 def _get(endpoint: str, params: dict | None = None) -> dict | list:
     """Make a GET request to S2 API with basic rate limiting."""
     time.sleep(RATE_LIMIT_DELAY)
@@ -57,12 +62,12 @@ def search(query: str, limit: int = 10) -> list[dict]:
 
 def paper(arxiv_id: str) -> dict:
     """Get paper details by arXiv ID."""
-    return _get(f"/paper/ARXIV:{arxiv_id}", {"fields": FIELDS})
+    return _get(f"/paper/ARXIV:{_bare_arxiv_id(arxiv_id)}", {"fields": FIELDS})
 
 
 def citations(arxiv_id: str, limit: int = 100) -> list[dict]:
     """Get papers that cite the given paper."""
-    data = _get(f"/paper/ARXIV:{arxiv_id}/citations", {
+    data = _get(f"/paper/ARXIV:{_bare_arxiv_id(arxiv_id)}/citations", {
         "limit": limit,
         "fields": FIELDS,
     })
@@ -71,7 +76,7 @@ def citations(arxiv_id: str, limit: int = 100) -> list[dict]:
 
 def references(arxiv_id: str, limit: int = 100) -> list[dict]:
     """Get papers referenced by the given paper."""
-    data = _get(f"/paper/ARXIV:{arxiv_id}/references", {
+    data = _get(f"/paper/ARXIV:{_bare_arxiv_id(arxiv_id)}/references", {
         "limit": limit,
         "fields": FIELDS,
     })
