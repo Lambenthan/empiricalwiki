@@ -58,14 +58,14 @@ argument-hint: <idea-slug-or-hypothesis> [--review] [--budget <gpu-hours>]
 ### Step 1: Load Context
 
 1. **Parse idea input**:
-   - If slug: read `wiki/ideas/{slug}.md`, extract hypothesis, approach sketch, risks, origin_gaps, linked_papers
+   - If slug: read `wiki/ideas/{slug}.md`, extract `## Motivation`, `## Hypothesis`, `## Approach sketch`, `## Risks`, and the frontmatter fields `origin_gaps`, `tags`, `domain`, `priority` (per CLAUDE.md ideas template)
    - If free text: use directly as the hypothesis description
 2. **Load relevant wiki context**:
    - Read `wiki/graph/context_brief.md` (global context)
    - Read `wiki/graph/open_questions.md` (knowledge gaps)
-   - From idea's origin_gaps, read the corresponding `wiki/claims/*.md` (target claims)
+   - From the idea's `origin_gaps`, read the corresponding `wiki/claims/*.md` (target claims)
+   - From each target claim's `source_papers` field, read the corresponding `wiki/papers/*.md` for baseline setups and prior experiment protocols — this is the canonical path from idea → claim → paper (ideas do **not** carry a `linked_papers` field; use `origin_gaps` → `source_papers` instead)
    - Read existing `wiki/experiments/*.md` to check for similar experiments
-   - Read `wiki/papers/*.md` for related papers' experiment setups (as baseline reference)
 3. **If idea has no origin_gaps**: extract implied claims from the hypothesis description; search wiki/claims/ or flag as needing new claim creation
 
 ### Step 2: Scope Claims
@@ -92,7 +92,7 @@ Design experiment blocks for each scoped claim. Four types:
 **A. Baseline experiments (reproduce baseline)**:
 - Purpose: confirm the problem exists and the baseline is reproducible
 - Reproduce the core experiment from the most relevant paper
-- Success criterion: baseline results deviate < 5% from reported paper values
+- Success criterion: baseline results deviate < 5% from reported paper values (this threshold is the same one used by the Stage 1 decision gate below — do not introduce a different number elsewhere)
 - Compute: typically minimal
 
 **B. Validation experiments (validate Target claim)**:
@@ -136,7 +136,7 @@ Stage 0: Sanity check
 
 Stage 1: Baseline (reproduce baseline)
   └── Reproduce baseline results
-  └── Gate: baseline deviation > 10% → stop, check implementation
+  └── Gate: baseline deviation > 5% → stop, check implementation (same threshold as Step 3 success criterion)
 
 Stage 2: Validation (core verification)
   └── Validate core method on top of baseline
@@ -191,6 +191,7 @@ Revise the experiment plan based on Review LLM feedback (add missing experiments
    python3 tools/research_wiki.py slug "<experiment-title>"
    ```
    Create `wiki/experiments/{slug}.md`:
+   Create `wiki/experiments/{slug}.md` following the **CLAUDE.md experiments template exactly** — every field below must be present even if empty, because `/exp-run` later uses `tools/research_wiki.py set-meta` to update them, and `set-meta` refuses to create fields that don't already exist in the frontmatter (it only updates existing keys):
    ```yaml
    ---
    title: ""
@@ -207,12 +208,20 @@ Revise the experiment plan based on Review LLM feedback (add missing experiments
      framework: ""
    metrics: []
    baseline: ""
-   outcome: ""
-   key_result: ""
-   linked_idea: ""           # idea slug
+   outcome: ""                # empty until /exp-run Phase 4 — succeeded | failed | inconclusive
+   key_result: ""             # empty until /exp-run Phase 4
+   linked_idea: "{idea-slug}" # MANDATORY: the source idea slug (reverse link to wiki/ideas/{idea-slug}.md linked_experiments)
    date_planned: YYYY-MM-DD
-   date_completed: ""
-   run_log: ""
+   date_completed: ""         # empty until /exp-run Phase 4
+   run_log: ""                # empty until /exp-run Phase 2
+   started: ""                # empty until /exp-run Phase 2 (ISO timestamp, set via set-meta)
+   estimated_hours: 0         # 0 until /exp-run Phase 2 (set via set-meta)
+   remote:                    # full block must exist so /exp-run --env remote can populate sub-fields via Edit
+     server: ""
+     gpu: ""
+     session: ""
+     started: ""
+     completed: ""
    ---
 
    ## Objective
