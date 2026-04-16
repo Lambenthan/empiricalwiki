@@ -3,7 +3,7 @@
 
 Usage:
     python3 tools/init_discovery.py prepare --raw-root raw --output-manifest .checkpoints/init-prepare.json
-    python3 tools/init_discovery.py plan --topic "efficient llm finetuning" --prepared-manifest .checkpoints/init-prepare.json --output-plan .checkpoints/init-plan.json
+    python3 tools/init_discovery.py plan [--topic "efficient llm finetuning"] --prepared-manifest .checkpoints/init-prepare.json --output-plan .checkpoints/init-plan.json
     python3 tools/init_discovery.py fetch --raw-root raw --plan-json .checkpoints/init-plan.json --prepared-manifest .checkpoints/init-prepare.json --output-sources .checkpoints/init-sources.json --id arxiv:2106.09685
     python3 tools/init_discovery.py download --raw-root raw --arxiv-id 2106.09685 --title "Example Paper"
 """
@@ -1139,6 +1139,16 @@ def _notes_priority_query(topic: str, notes_web: dict[str, Any], local_papers: l
     }
 
 
+def _build_discovery_query(topic: str, term_pack: dict[str, Any]) -> str:
+    normalized_topic = " ".join(str(topic or "").split())
+    extra_terms = list(term_pack.get("note_terms", [])[:4])
+    if not normalized_topic:
+        extra_terms = list(dict.fromkeys(extra_terms + list(term_pack.get("local_terms", [])[:4])))[:8]
+    parts = [normalized_topic] if normalized_topic else []
+    parts.extend(extra_terms)
+    return " ".join(part for part in parts if part).strip()
+
+
 def _select_seed_anchors(
     local_papers: list[dict[str, Any]],
     topic_terms: list[str],
@@ -1146,6 +1156,8 @@ def _select_seed_anchors(
     limit: int = 3,
 ) -> list[dict[str, Any]]:
     priority_terms = list(dict.fromkeys(topic_terms + note_terms))
+    if not priority_terms:
+        return [paper for paper in local_papers if paper.get("arxiv_id")][:limit]
     ranked: list[tuple[float, int, str, dict[str, Any]]] = []
     for paper in local_papers:
         if not paper.get("arxiv_id"):
@@ -1166,12 +1178,19 @@ def _gather_external_candidates(
     if not allow_introduction:
         return [], [], []
 
-    query = " ".join([topic] + term_pack["note_terms"][:4]).strip()
+    query = _build_discovery_query(topic, term_pack)
     candidates: list[dict[str, Any]] = []
     warnings: list[dict[str, str]] = []
     errors: list[dict[str, str]] = []
 
     if mode == "bootstrap":
+        if not query:
+            _record_issue(
+                errors,
+                "planner",
+                "topic is required for bootstrap discovery unless notes/web or local inputs provide fallback keywords",
+            )
+            return [], warnings, errors
         try:
             candidates.extend(_normalise_s2_result(r, "search_s2") for r in s2_search(query, 20))
         except Exception as exc:
@@ -1202,7 +1221,13 @@ def _gather_external_candidates(
             _record_issue(errors, "planner", "no external candidates found during bootstrap discovery")
         return [c for c in candidates if c], warnings, errors
 
-    anchors = _select_seed_anchors(local_papers, term_pack["topic_terms"], term_pack["note_terms"], limit=3)
+    anchor_limit = 3 if (term_pack["topic_terms"] or term_pack["note_terms"]) else min(5, len(local_papers))
+    anchors = _select_seed_anchors(
+        local_papers,
+        term_pack["topic_terms"],
+        term_pack["note_terms"],
+        limit=max(anchor_limit, 1),
+    )
     if not anchors and local_papers:
         _record_issue(
             warnings,
@@ -1226,16 +1251,30 @@ def _gather_external_candidates(
             _record_issue(warnings, f"reference:{anchor['arxiv_id']}", str(exc))
 
     if len(candidates) < 12:
-        try:
-            candidates.extend(_normalise_s2_result(r, "search_s2") for r in s2_search(query, 20))
-        except Exception as exc:
-            _record_issue(warnings, "search_s2", str(exc))
-        try:
-            candidates.extend(_normalise_deepxiv_result(r, "search_deepxiv") for r in deepxiv_search(query, limit=12))
-        except Exception as exc:
-            _record_issue(warnings, "search_deepxiv", str(exc))
+        if query:
+            try:
+                candidates.extend(_normalise_s2_result(r, "search_s2") for r in s2_search(query, 20))
+            except Exception as exc:
+                _record_issue(warnings, "search_s2", str(exc))
+            try:
+                candidates.extend(_normalise_deepxiv_result(r, "search_deepxiv") for r in deepxiv_search(query, limit=12))
+            except Exception as exc:
+                _record_issue(warnings, "search_deepxiv", str(exc))
+        elif local_papers:
+            _record_issue(
+                warnings,
+                "planner_query",
+                "topic omitted and no fallback keywords were available for search; seeded discovery will rely on local-paper citation/reference expansion only",
+            )
     if not candidates:
-        _record_issue(errors, "planner", "no external candidates found during seeded discovery")
+        if local_papers:
+            _record_issue(
+                warnings,
+                "seeded_mode",
+                "seeded discovery found no external candidates; proceeding with user-owned papers only",
+            )
+        else:
+            _record_issue(errors, "planner", "no external candidates found during seeded discovery")
     return [c for c in candidates if c], warnings, errors
 
 
@@ -1247,6 +1286,7 @@ def build_plan(
     allow_introduction: bool = True,
     prepared_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    topic = " ".join(str(topic or "").split())
     local_papers = scan_local_papers(raw_root, prepared_manifest=prepared_manifest)
     notes_web = scan_notes_web(raw_root, prepared_manifest=prepared_manifest)
     warnings: list[dict[str, str]] = []
@@ -1519,7 +1559,7 @@ def main() -> None:
     p_prepare.add_argument("--output-manifest", required=True)
 
     p_plan = sub.add_parser("plan", help="Build a deterministic discovery plan for /init")
-    p_plan.add_argument("--topic", required=True)
+    p_plan.add_argument("--topic", default="")
     p_plan.add_argument("--mode", default="auto", choices=["auto", "seeded", "bootstrap"])
     p_plan.add_argument("--raw-root", default="raw")
     p_plan.add_argument("--wiki-root", default="wiki")

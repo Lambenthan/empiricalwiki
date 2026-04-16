@@ -9,7 +9,7 @@ argument-hint: "[topic] [--no-introduction]"
 
 ## Inputs
 
-- `topic`: research direction keywords
+- `topic` (optional): research direction keywords; omit it when `raw/papers/` already defines the seed set or when notes/web already capture the intent
 - `--no-introduction` (optional): disable external paper discovery; use only user-owned `raw/papers/`, `raw/notes/`, and `raw/web/`
 - `raw/papers/`: user-owned paper sources (`.tex`, `.pdf`, archives)
 - `raw/notes/`: user-owned notes that express goals, hypotheses, exclusions, and preferred sub-directions
@@ -72,7 +72,7 @@ python3 tools/init_discovery.py prepare --raw-root raw --output-manifest .checkp
 ### Step 3: Build the discovery plan, trim it, and write the final source manifest
 
 ```bash
-python3 tools/init_discovery.py plan --topic "<topic>" --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json
+python3 tools/init_discovery.py plan [--topic "<topic>"] --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json
 ```
 
 - `mode=seeded` when the prepare manifest contains at least one parseable local paper; otherwise `mode=bootstrap`
@@ -80,6 +80,9 @@ python3 tools/init_discovery.py plan --topic "<topic>" --mode auto --raw-root ra
 - `raw/notes/` and `raw/web/` signals are read from translated `raw/tmp/` sidecars when present
 - if multiple local copies of the same paper exist, prefer better local sources in this order: translated/prepared `.tex` > original local `.tex` > archive-extracted source `.tex` > PDF-derived synthetic `.tex` > raw `.pdf`
 - if Chinese note content is detected, preserve a planner warning that curated Chinese support is planned for later and current note/web extraction may perform worse
+- when `topic` is omitted in seeded mode, derive discovery and ranking cues from local paper titles/abstracts plus notes/web signals instead of refusing to plan
+- if seeded discovery adds no external papers, proceed with the user-owned paper set instead of treating that as a fatal planner error
+- when both `topic` and notes/web keywords are absent, bootstrap discovery has no query to search with, so it must surface that as a planner error instead of issuing an empty search
 - over-pick a shortlist of **10-12** candidates
 - use S2 citations/references/search plus optional DeepXiv search
 - when DeepXiv search is available, explicitly use returned `relevance_score` inside tool scoring rather than merely noting it in prose
@@ -174,6 +177,17 @@ STASH_REF=$(git stash list | head -1 | cut -d: -f1)
 python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session stash_ref "$STASH_REF"
 ```
 
+- capture the current branch before worktree fan-out; `/init` worktree mode must run from a named branch, not detached HEAD:
+
+```bash
+BASE_BRANCH=$(git branch --show-current)
+if [ -z "$BASE_BRANCH" ]; then
+  echo "/init worktree mode requires a named branch; switch to or create one before continuing." >&2
+  exit 1
+fi
+python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session base_branch "$BASE_BRANCH"
+```
+
 - save selected paper IDs and planner mode into checkpoint metadata
 - verify `.gitattributes` contains `merge=union` for `wiki/log.md`, `wiki/graph/edges.jsonl`, and `wiki/index.md`
 - commit the scaffold:
@@ -181,6 +195,8 @@ python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session stash_ref 
 ```bash
 git add wiki/ raw/papers/ raw/tmp/ raw/discovered/ .checkpoints/init-prepare.json .checkpoints/init-plan.json .checkpoints/init-sources.json
 git commit -m "init: scaffold before parallel ingest" --no-gpg-sign
+BASE_COMMIT=$(git rev-parse HEAD)
+python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session base_commit "$BASE_COMMIT"
 ```
 
 ### Step 5: Parallel paper ingest with worktree isolation
@@ -196,8 +212,19 @@ Spawn one Agent subagent per paper with:
 
 - `run_in_background: true`
 - worktree isolation
+- a fresh temp branch created from `BASE_COMMIT`, never the already-checked-out `BASE_BRANCH`
 - a prompt that uses **relative paths only**
 - explicit INIT MODE skips
+
+For each paper, create the worktree from the scaffold commit on the current branch:
+
+```bash
+WT_BRANCH="init-${BASE_BRANCH//\//-}-<rank>-<paper-slug>"
+WT_PATH="../.worktrees/$WT_BRANCH"
+git worktree add -b "$WT_BRANCH" "$WT_PATH" "$BASE_COMMIT"
+```
+
+Do not run `git worktree add` against the current branch name itself; Git will refuse because that branch is already checked out in the main workspace.
 
 Subagent prompt requirements:
 
@@ -215,11 +242,15 @@ Subagent prompt requirements:
 
 After all agents complete:
 
-1. merge worktree branches sequentially in planner order
+1. switch the main workspace back to `BASE_BRANCH` if needed, then merge worktree branches sequentially there in planner order
 2. resolve true concept/claim conflicts conservatively — merge, do not multiply near-duplicates
 3. run:
 
 ```bash
+git switch "$BASE_BRANCH"
+git merge --no-ff "$WT_BRANCH" --no-edit
+git worktree remove "$WT_PATH"
+git branch -d "$WT_BRANCH"
 python3 tools/research_wiki.py dedup-edges wiki/
 python3 tools/research_wiki.py rebuild-index wiki/
 python3 tools/research_wiki.py rebuild-context-brief wiki/
@@ -271,6 +302,7 @@ Also note explicitly:
 - **S2 or DeepXiv unavailable**: planner falls back to the remaining sources; preserve the warning in the checkpointed plan and note degraded discovery in the report
 - **External fetch fails for one paper**: keep the remaining final set and report the failed download
 - **Single paper ingest fails**: record it via checkpoint, skip it, continue the rest, and list it in the report
+- **Current checkout is detached HEAD**: stop before worktree fan-out and ask the user to switch to or create a named branch first
 - **Worktree branch has no commit**: stop and recover that worktree before merge
 - **stash pop fails**: keep checkpoint metadata and report the manual recovery step
 
@@ -287,7 +319,7 @@ Also note explicitly:
 - `python3 tools/research_wiki.py rebuild-open-questions wiki/`
 - `python3 tools/research_wiki.py log wiki/ "<message>"`
 - `python3 tools/init_discovery.py prepare --raw-root raw --output-manifest .checkpoints/init-prepare.json`
-- `python3 tools/init_discovery.py plan --topic "<topic>" --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json`
+- `python3 tools/init_discovery.py plan [--topic "<topic>"] --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json`
 - `python3 tools/init_discovery.py fetch --raw-root raw --plan-json .checkpoints/init-plan.json --prepared-manifest .checkpoints/init-prepare.json --output-sources .checkpoints/init-sources.json --id <candidate-id>`
 - `python3 tools/lint.py wiki/ --fix`
 

@@ -233,7 +233,7 @@ Configuration done. Next:
   • Put your own papers in raw/papers/ (.tex or .pdf)
   • Optional: add intent notes to raw/notes/ and saved pages to raw/web/
   • /init will manage generated inputs under raw/discovered/ and raw/tmp/
-  • Run: /init <your-research-topic>
+  • Run: /init [your-research-topic]
 ```
 
 If `wiki/` already exists:

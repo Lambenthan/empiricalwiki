@@ -138,6 +138,67 @@ def test_auto_detects_seeded_mode(raw_root, monkeypatch):
     assert plan["shortlist"][0]["user_owned"] is True
 
 
+def test_seeded_mode_accepts_missing_topic(raw_root, monkeypatch):
+    (raw_root / "papers" / "seed.tex").write_text(
+        "\\title{Adapter Tuning for LLMs}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(disc, "s2_citations", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(disc, "s2_references", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(disc, "s2_search", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(disc, "deepxiv_search", lambda *_args, **_kwargs: [])
+
+    plan = disc.build_plan("", raw_root, raw_root.parent / "wiki")
+
+    assert plan["topic"] == ""
+    assert plan["mode"] == "seeded"
+    assert plan["shortlist"][0]["user_owned"] is True
+    assert not plan["errors"]
+
+
+def test_seeded_mode_without_external_hits_proceeds_with_local_papers(raw_root, monkeypatch):
+    (raw_root / "papers" / "seed.tex").write_text(
+        "\\title{Completely Local Paper Without Arxiv}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(disc, "s2_citations", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(disc, "s2_references", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(disc, "s2_search", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(disc, "deepxiv_search", lambda *_args, **_kwargs: [])
+
+    plan = disc.build_plan("", raw_root, raw_root.parent / "wiki")
+
+    assert [item["title"] for item in plan["shortlist"]] == ["Completely Local Paper Without Arxiv"]
+    assert not plan["errors"]
+    assert any(
+        warning["source"] == "seeded_mode"
+        and "proceeding with user-owned papers only" in warning["message"]
+        for warning in plan["warnings"]
+    )
+
+
+def test_seeded_mode_without_topic_uses_local_terms_for_search_query(raw_root, monkeypatch):
+    (raw_root / "papers" / "seed.tex").write_text(
+        "\\title{Adapter Tuning for LLMs}\n",
+        encoding="utf-8",
+    )
+    queries: list[str] = []
+
+    def _search(query, *_args, **_kwargs):
+        queries.append(query)
+        return []
+
+    monkeypatch.setattr(disc, "s2_citations", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(disc, "s2_references", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(disc, "s2_search", _search)
+    monkeypatch.setattr(disc, "deepxiv_search", lambda *_args, **_kwargs: [])
+
+    disc.build_plan("", raw_root, raw_root.parent / "wiki")
+
+    assert queries
+    assert "adapter" in queries[0].lower()
+
+
 def test_plan_uses_prepared_manifest_canonical_paths(raw_root, monkeypatch):
     (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
     monkeypatch.setattr(
@@ -188,6 +249,38 @@ def test_plan_cli_writes_output_plan_file(raw_root, monkeypatch, tmp_path, capsy
     assert plan_json.exists()
     assert json.loads(plan_json.read_text(encoding="utf-8"))["topic"] == "adapter tuning"
     assert json.loads(captured.out)["topic"] == "adapter tuning"
+
+
+def test_plan_cli_allows_missing_topic(raw_root, monkeypatch, tmp_path, capsys):
+    (raw_root / "papers" / "seed.tex").write_text("\\title{Adapter Tuning for LLMs}\n", encoding="utf-8")
+    monkeypatch.setattr(disc, "s2_citations", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(disc, "s2_references", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(disc, "s2_search", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(disc, "deepxiv_search", lambda *_args, **_kwargs: [])
+
+    prepare_manifest = tmp_path / "init-prepare.json"
+    plan_json = tmp_path / "init-plan.json"
+    prepare_manifest.write_text(json.dumps(disc.prepare_inputs(raw_root)), encoding="utf-8")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "init_discovery.py",
+            "plan",
+            "--raw-root", str(raw_root),
+            "--wiki-root", str(raw_root.parent / "wiki"),
+            "--prepared-manifest", str(prepare_manifest),
+            "--output-plan", str(plan_json),
+        ],
+    )
+
+    disc.main()
+    captured = capsys.readouterr()
+
+    assert plan_json.exists()
+    assert json.loads(plan_json.read_text(encoding="utf-8"))["topic"] == ""
+    assert json.loads(captured.out)["topic"] == ""
 
 
 def test_auto_detects_bootstrap_mode(raw_root, monkeypatch):

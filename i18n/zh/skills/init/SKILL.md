@@ -9,7 +9,7 @@ argument-hint: "[topic] [--no-introduction]"
 
 ## Inputs
 
-- `topic`：研究方向关键词
+- `topic`（可选）：研究方向关键词；如果 `raw/papers/` 已经给出了 seed set，或 notes/web 已经表达了意图，就可以省略
 - `--no-introduction`（可选）：禁用外部找论文；只使用用户自有的 `raw/papers/`、`raw/notes/`、`raw/web/`
 - `raw/papers/`：用户自有论文来源（`.tex`、`.pdf`、压缩包）
 - `raw/notes/`：用户笔记
@@ -72,7 +72,7 @@ python3 tools/init_discovery.py prepare --raw-root raw --output-manifest .checkp
 ### Step 3: 基于 prepared 输入生成 plan、裁剪 shortlist，并写出最终 source manifest
 
 ```bash
-python3 tools/init_discovery.py plan --topic "<topic>" --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json
+python3 tools/init_discovery.py plan [--topic "<topic>"] --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json
 ```
 
 - `mode=seeded` 取决于 `.checkpoints/init-prepare.json` 中是否存在可解析本地论文；否则为 `bootstrap`
@@ -80,6 +80,9 @@ python3 tools/init_discovery.py plan --topic "<topic>" --mode auto --raw-root ra
 - notes/web 的用户信号若存在英文 sidecar，应优先读取 `raw/tmp/`
 - 如果同一篇本地论文出现多个副本，优先级必须明确：翻译/预处理后的 `.tex` > 原始本地 `.tex` > archive 解出的源码 `.tex` > 由 PDF 生成的 synthetic `.tex` > 原始 `.pdf`
 - 若检测到中文 notes 内容，要保留 planner warning：中文精细支持会在后续版本补上；当前 note/web 提取效果可能会降级
+- seeded 模式下如果省略 `topic`，要从本地论文标题/摘要以及 notes/web 信号里提取 discovery 与 ranking 线索，而不是直接拒绝初始化
+- 如果 seeded discovery 最终没有新增任何外部论文，也要继续用用户自带论文集往下走，而不是把它当成 fatal planner error
+- 如果 `topic` 与 notes/web 关键词都缺失，bootstrap discovery 就没有可搜索的 query；此时应把它记为 planner error，而不是发起空搜索
 - tool 先 over-pick 一个 **10-12** 篇的 shortlist
 - tool 使用 S2 的 citations / references / search，以及可选 DeepXiv search
 - 若 DeepXiv 可用，要在 tool 打分里显式使用返回的 `relevance_score`，而不是只在文字说明里提一句
@@ -174,6 +177,17 @@ STASH_REF=$(git stash list | head -1 | cut -d: -f1)
 python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session stash_ref "$STASH_REF"
 ```
 
+- 在 worktree fan-out 前先记录当前 branch；`/init` 的 worktree 模式必须运行在一个有名字的 branch 上，不能处于 detached HEAD：
+
+```bash
+BASE_BRANCH=$(git branch --show-current)
+if [ -z "$BASE_BRANCH" ]; then
+  echo "/init 的 worktree 模式要求当前位于一个命名分支；请先切换到或创建分支。" >&2
+  exit 1
+fi
+python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session base_branch "$BASE_BRANCH"
+```
+
 - 同时把 selected paper IDs 与 planner mode 写入 checkpoint metadata
 - 验证 `.gitattributes` 对 `wiki/log.md`、`wiki/graph/edges.jsonl`、`wiki/index.md` 使用了 `merge=union`
 - commit scaffold：
@@ -181,6 +195,8 @@ python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session stash_ref 
 ```bash
 git add wiki/ raw/papers/ raw/tmp/ raw/discovered/ .checkpoints/init-prepare.json .checkpoints/init-plan.json .checkpoints/init-sources.json
 git commit -m "init: scaffold before parallel ingest" --no-gpg-sign
+BASE_COMMIT=$(git rev-parse HEAD)
+python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session base_commit "$BASE_COMMIT"
 ```
 
 ### Step 5: 通过 worktree 隔离并行 ingest 论文
@@ -196,8 +212,19 @@ git commit -m "init: scaffold before parallel ingest" --no-gpg-sign
 
 - `run_in_background: true`
 - 使用 worktree isolation
+- 从 `BASE_COMMIT` 新建临时 branch，绝不要直接复用已经签出的 `BASE_BRANCH`
 - prompt 只使用**相对路径**
 - 明确给出 INIT MODE skip 列表
+
+每篇论文的 worktree 都应从当前 branch 上的 scaffold commit 拉出：
+
+```bash
+WT_BRANCH="init-${BASE_BRANCH//\//-}-<rank>-<paper-slug>"
+WT_PATH="../.worktrees/$WT_BRANCH"
+git worktree add -b "$WT_BRANCH" "$WT_PATH" "$BASE_COMMIT"
+```
+
+不要对当前 branch 名直接执行 `git worktree add`；Git 会因为该 branch 已经在主工作区签出而拒绝。
 
 子代理 prompt 必须要求：
 
@@ -215,11 +242,15 @@ git commit -m "init: scaffold before parallel ingest" --no-gpg-sign
 
 全部子代理完成后：
 
-1. 按 planner 顺序逐个 merge worktree branch
+1. 如有需要先切回 `BASE_BRANCH`，再按 planner 顺序在该 branch 上逐个 merge worktree branch
 2. concept / claim 冲突默认保守合并，不要扩散近重复页面
 3. 运行：
 
 ```bash
+git switch "$BASE_BRANCH"
+git merge --no-ff "$WT_BRANCH" --no-edit
+git worktree remove "$WT_PATH"
+git branch -d "$WT_BRANCH"
 python3 tools/research_wiki.py dedup-edges wiki/
 python3 tools/research_wiki.py rebuild-index wiki/
 python3 tools/research_wiki.py rebuild-context-brief wiki/
@@ -271,6 +302,7 @@ python3 tools/lint.py wiki/ --fix
 - **S2 或 DeepXiv 不可用**：planner 使用剩余来源并继续执行；把 warning 保留在 checkpoint plan 中，并在最终报告里注明 discovery 降级
 - **某篇外部论文下载失败**：保留其余最终论文集，报告失败项
 - **单篇 ingest 失败**：写 checkpoint，跳过该篇，继续其他论文，并在最终报告中列出
+- **当前 checkout 处于 detached HEAD**：在 worktree fan-out 前停止，并要求用户先切换到或创建一个命名分支
 - **worktree branch 没有 commit**：停止并先修复该 worktree，再进入 merge
 - **stash pop 失败**：保留 checkpoint metadata，并给出手动恢复提示
 
@@ -287,7 +319,7 @@ python3 tools/lint.py wiki/ --fix
 - `python3 tools/research_wiki.py rebuild-open-questions wiki/`
 - `python3 tools/research_wiki.py log wiki/ "<message>"`
 - `python3 tools/init_discovery.py prepare --raw-root raw --output-manifest .checkpoints/init-prepare.json`
-- `python3 tools/init_discovery.py plan --topic "<topic>" --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json`
+- `python3 tools/init_discovery.py plan [--topic "<topic>"] --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json`
 - `python3 tools/init_discovery.py fetch --raw-root raw --plan-json .checkpoints/init-plan.json --prepared-manifest .checkpoints/init-prepare.json --output-sources .checkpoints/init-sources.json --id <candidate-id>`
 - `python3 tools/lint.py wiki/ --fix`
 

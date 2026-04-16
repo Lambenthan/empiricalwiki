@@ -112,6 +112,12 @@ class TestWorkflow:
         assert "raw/discovered/" in skill_content
         assert 'commit -m "init: scaffold before parallel ingest"' in skill_content
 
+    def test_step4_5_records_base_branch_and_commit(self, skill_content):
+        assert "git branch --show-current" in skill_content
+        assert "base_branch" in skill_content
+        assert "git rev-parse HEAD" in skill_content
+        assert "base_commit" in skill_content
+
     def test_step5_parallel_ingest(self, skill_content):
         assert "### Step 5" in skill_content
         assert "/ingest" in skill_content
@@ -145,6 +151,11 @@ class TestParallelGuardrails:
     def test_relative_paths_only(self, skill_content):
         assert "relative paths only" in skill_content.lower() or "相对路径" in skill_content
 
+    def test_worktrees_branch_from_scaffold_commit(self, skill_content):
+        assert "git worktree add -b" in skill_content
+        assert "BASE_COMMIT" in skill_content
+        assert "BASE_BRANCH" in skill_content
+
     def test_init_mode_skips(self, skill_content):
         lowered = skill_content.lower()
         assert "skip `fetch_s2.py citations`" in lowered
@@ -156,6 +167,13 @@ class TestParallelGuardrails:
     def test_dedup_tools_still_required(self, skill_content):
         assert "find-similar-claim" in skill_content
         assert "find-similar-concept" in skill_content
+
+
+class TestErrorHandling:
+    def test_detached_head_is_called_out(self, skill_content):
+        lowered = skill_content.lower()
+        assert "detached head" in lowered
+        assert "named branch" in lowered or "命名分支" in skill_content
 
 
 class TestDependencies:

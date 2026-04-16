@@ -75,7 +75,7 @@ chmod +x setup.sh && ./setup.sh        # Linux / macOS
 
 # 5. Build your wiki
 claude
-# Then type: /init <your-research-topic>
+# Then type: /init [your-research-topic]
 ```
 
 <details>
@@ -134,7 +134,7 @@ and are best run from WSL2 or Linux/macOS.
 | Command | What it does |
 |---------|-------------|
 | `/prefill <domain>` | Optionally seed `foundations/` with background knowledge |
-| `/init <topic>` | Bootstrap a full wiki from user raw sources plus optional discovery |
+| `/init [topic]` | Bootstrap a full wiki from user raw sources plus optional discovery |
 | `/ingest <source>` | Parse a paper → wiki pages + cross-references |
 | `/edit <request>` | Add/remove sources or update wiki content |
 | `/ask <question>` | Query the wiki, crystallize answers back |
@@ -414,7 +414,7 @@ chmod +x setup.sh && ./setup.sh --lang zh        # Linux / macOS
 # /init 会自动管理 raw/discovered/ 与 raw/tmp/ 下的生成内容
 # 启动 Claude Code
 claude
-# 输入：/init <你的研究方向>
+# 输入：/init [你的研究方向]
 ```
 
 > **Windows 用户**：本地 pipeline 已原生支持。`/exp-run --env remote` 远程 GPU 实验依赖 `ssh`/`rsync`/`screen`，建议在 WSL2 或 Linux/macOS 下运行。
