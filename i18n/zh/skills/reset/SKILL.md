@@ -15,7 +15,7 @@ argument-hint: "--scope wiki|raw|log|checkpoints|all"
 
 - `--scope`（必填）：取值
   - `wiki` — 删除 `wiki/<entity>/` 与 `wiki/outputs/` 下所有 `*.md`，同时删除 `wiki/index.md`、`wiki/log.md` 和 `wiki/graph/` 下的文件。保留 `.gitkeep` 和 `wiki/CLAUDE.md`。
-  - `raw` — 删除 `raw/papers/`、`raw/notes/`、`raw/web/` 下所有文件（保留 `.gitkeep`）。
+  - `raw` — 删除 `raw/papers/`、`raw/discovered/`、`raw/tmp/`、`raw/notes/`、`raw/web/` 下所有条目（保留 `.gitkeep`）。
   - `log` — 重置 `wiki/log.md` 为空模板。
   - `checkpoints` — 通过 `research_wiki.py checkpoint-clear` 清除批处理状态。
   - `all` — 以上全部。

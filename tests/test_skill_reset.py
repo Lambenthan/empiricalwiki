@@ -67,9 +67,29 @@ def test_en_calls_reset_wiki_tool():
     assert "reset_wiki.py" in txt
 
 
+def test_en_mentions_raw_discovered():
+    txt = EN_SKILL.read_text(encoding="utf-8")
+    assert "raw/discovered/" in txt
+
+
+def test_en_mentions_raw_tmp():
+    txt = EN_SKILL.read_text(encoding="utf-8")
+    assert "raw/tmp/" in txt
+
+
 def test_zh_calls_reset_wiki_tool():
     txt = ZH_SKILL.read_text(encoding="utf-8")
     assert "reset_wiki.py" in txt
+
+
+def test_zh_mentions_raw_discovered():
+    txt = ZH_SKILL.read_text(encoding="utf-8")
+    assert "raw/discovered/" in txt
+
+
+def test_zh_mentions_raw_tmp():
+    txt = ZH_SKILL.read_text(encoding="utf-8")
+    assert "raw/tmp/" in txt
 
 
 def test_en_protects_claude_md_and_skills():

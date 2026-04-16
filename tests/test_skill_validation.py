@@ -14,12 +14,32 @@ import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CLAUDE_MD = PROJECT_ROOT / "CLAUDE.md"
+DIR_CHART_EN = PROJECT_ROOT / "docs" / "runtime-directory-structure.en.md"
+DIR_CHART_ZH = PROJECT_ROOT / "docs" / "runtime-directory-structure.zh.md"
+TEMPLATES_EN = PROJECT_ROOT / "docs" / "runtime-page-templates.en.md"
+TEMPLATES_ZH = PROJECT_ROOT / "docs" / "runtime-page-templates.zh.md"
+SUPPORT_EN = PROJECT_ROOT / "docs" / "runtime-support-files.en.md"
+SUPPORT_ZH = PROJECT_ROOT / "docs" / "runtime-support-files.zh.md"
 
 
 @pytest.fixture(scope="module")
 def claude_md_text():
     assert CLAUDE_MD.exists(), f"Product CLAUDE.md not found at {CLAUDE_MD}"
     return CLAUDE_MD.read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def template_text(current_lang):
+    path = TEMPLATES_ZH if current_lang == "zh" else TEMPLATES_EN
+    assert path.exists(), f"Template reference not found at {path}"
+    return path.read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def support_text(current_lang):
+    path = SUPPORT_ZH if current_lang == "zh" else SUPPORT_EN
+    assert path.exists(), f"Support reference not found at {path}"
+    return path.read_text(encoding="utf-8")
 
 
 # ── Schema definitions ───────────────────────────────────────────────────
@@ -191,23 +211,41 @@ class TestClaudeMdStructure:
     def test_claude_md_exists(self):
         assert CLAUDE_MD.exists()
 
+    def test_directory_reference_docs_exist(self):
+        assert DIR_CHART_EN.exists(), f"Missing English directory chart at {DIR_CHART_EN}"
+        assert DIR_CHART_ZH.exists(), f"Missing Chinese directory chart at {DIR_CHART_ZH}"
+        assert TEMPLATES_EN.exists(), f"Missing English template reference at {TEMPLATES_EN}"
+        assert TEMPLATES_ZH.exists(), f"Missing Chinese template reference at {TEMPLATES_ZH}"
+        assert SUPPORT_EN.exists(), f"Missing English support-file reference at {SUPPORT_EN}"
+        assert SUPPORT_ZH.exists(), f"Missing Chinese support-file reference at {SUPPORT_ZH}"
+
+    def test_claude_md_points_to_directory_reference(self, claude_md_text):
+        assert "runtime-directory-structure.en.md" in claude_md_text
+        assert "runtime-page-templates.en.md" in claude_md_text or "runtime-page-templates.zh.md" in claude_md_text
+        assert "runtime-support-files.en.md" in claude_md_text or "runtime-support-files.zh.md" in claude_md_text
+
+    def test_claude_md_frontloads_wiki_structure(self, claude_md_text):
+        assert "wiki/papers/" in claude_md_text
+        assert "wiki/concepts/" in claude_md_text
+        assert "wiki/topics/" in claude_md_text
+        assert "wiki/graph/" in claude_md_text
+
+    def test_claude_md_has_formatting_guardrail(self, claude_md_text):
+        assert "runtime-page-templates.en.md" in claude_md_text or "runtime-page-templates.zh.md" in claude_md_text
+        assert "runtime-support-files.en.md" in claude_md_text or "runtime-support-files.zh.md" in claude_md_text
+        assert "drafting or repairing wiki page structure" in claude_md_text or "新建或修复 wiki 页面结构" in claude_md_text
+
     def test_has_entity_table(self, claude_md_text, claude_md_markers):
         assert claude_md_markers["entity_section"] in claude_md_text
 
-    def test_has_all_entity_headings(self, claude_md_text):
+    def test_template_reference_has_all_entity_headings(self, template_text):
         for entity, schema in ENTITY_SCHEMAS.items():
-            assert re.search(schema["heading"], claude_md_text), (
+            assert re.search(schema["heading"], template_text), (
                 f"Missing template heading for entity: {entity}"
             )
 
     def test_has_cross_reference_rules(self, claude_md_text):
         assert "Cross Reference" in claude_md_text or "Cross-Reference" in claude_md_text
-
-    def test_has_graph_section(self, claude_md_text, claude_md_markers):
-        assert claude_md_markers["graph_section"] in claude_md_text
-
-    def test_has_index_format(self, claude_md_text, claude_md_markers):
-        assert claude_md_markers["index_format_assert"] in claude_md_text
 
     def test_has_constraints(self, claude_md_text, claude_md_markers):
         assert claude_md_markers["constraints"] in claude_md_text
@@ -220,10 +258,10 @@ class TestFrontmatterFields:
     """Validate that each entity template has all required YAML frontmatter fields."""
 
     @pytest.fixture(scope="class")
-    def template_blocks(self, claude_md_text):
+    def template_blocks(self, template_text):
         blocks = {}
         for entity, schema in ENTITY_SCHEMAS.items():
-            block = _extract_template_block(claude_md_text, schema["heading"])
+            block = _extract_template_block(template_text, schema["heading"])
             assert block is not None, f"Could not extract template block for {entity}"
             blocks[entity] = block
         return blocks
@@ -267,10 +305,10 @@ class TestBodySections:
     """Validate that each entity template specifies all required body sections."""
 
     @pytest.fixture(scope="class")
-    def template_blocks(self, claude_md_text):
+    def template_blocks(self, template_text):
         blocks = {}
         for entity, schema in ENTITY_SCHEMAS.items():
-            block = _extract_template_block(claude_md_text, schema["heading"])
+            block = _extract_template_block(template_text, schema["heading"])
             assert block is not None, f"Could not extract template block for {entity}"
             blocks[entity] = block
         return blocks
@@ -300,56 +338,56 @@ class TestBodySections:
 class TestFieldConstraints:
     """Validate enum/range constraints documented in templates."""
 
-    def test_paper_importance_range(self, claude_md_text):
-        block = _extract_template_block(claude_md_text, ENTITY_SCHEMAS["papers"]["heading"])
+    def test_paper_importance_range(self, template_text):
+        block = _extract_template_block(template_text, ENTITY_SCHEMAS["papers"]["heading"])
         assert block and "# 1-5" in block
 
-    def test_concept_maturity_values(self, claude_md_text):
-        block = _extract_template_block(claude_md_text, ENTITY_SCHEMAS["concepts"]["heading"])
+    def test_concept_maturity_values(self, template_text):
+        block = _extract_template_block(template_text, ENTITY_SCHEMAS["concepts"]["heading"])
         assert block and "stable" in block and "active" in block and "emerging" in block and "deprecated" in block
 
-    def test_idea_status_values(self, claude_md_text):
-        block = _extract_template_block(claude_md_text, ENTITY_SCHEMAS["ideas"]["heading"])
+    def test_idea_status_values(self, template_text):
+        block = _extract_template_block(template_text, ENTITY_SCHEMAS["ideas"]["heading"])
         assert block
         for status in ["proposed", "in_progress", "tested", "validated", "failed"]:
             assert status in block, f"ideas template missing status value: {status}"
 
-    def test_experiment_status_values(self, claude_md_text):
-        block = _extract_template_block(claude_md_text, ENTITY_SCHEMAS["experiments"]["heading"])
+    def test_experiment_status_values(self, template_text):
+        block = _extract_template_block(template_text, ENTITY_SCHEMAS["experiments"]["heading"])
         assert block
         for status in ["planned", "running", "completed", "abandoned"]:
             assert status in block, f"experiments template missing status value: {status}"
 
-    def test_experiment_outcome_values(self, claude_md_text):
-        block = _extract_template_block(claude_md_text, ENTITY_SCHEMAS["experiments"]["heading"])
+    def test_experiment_outcome_values(self, template_text):
+        block = _extract_template_block(template_text, ENTITY_SCHEMAS["experiments"]["heading"])
         assert block
         for outcome in ["succeeded", "failed", "inconclusive"]:
             assert outcome in block, f"experiments template missing outcome value: {outcome}"
 
-    def test_claim_status_values(self, claude_md_text):
-        block = _extract_template_block(claude_md_text, ENTITY_SCHEMAS["claims"]["heading"])
+    def test_claim_status_values(self, template_text):
+        block = _extract_template_block(template_text, ENTITY_SCHEMAS["claims"]["heading"])
         assert block
         for status in ["proposed", "weakly_supported", "supported", "challenged", "deprecated"]:
             assert status in block, f"claims template missing status value: {status}"
 
-    def test_claim_confidence_range(self, claude_md_text):
-        block = _extract_template_block(claude_md_text, ENTITY_SCHEMAS["claims"]["heading"])
+    def test_claim_confidence_range(self, template_text):
+        block = _extract_template_block(template_text, ENTITY_SCHEMAS["claims"]["heading"])
         assert block and "0.0-1.0" in block
 
-    def test_claim_evidence_types(self, claude_md_text):
-        block = _extract_template_block(claude_md_text, ENTITY_SCHEMAS["claims"]["heading"])
+    def test_claim_evidence_types(self, template_text):
+        block = _extract_template_block(template_text, ENTITY_SCHEMAS["claims"]["heading"])
         assert block
         for etype in ["supports", "contradicts", "tested_by", "invalidates"]:
             assert etype in block, f"claims template missing evidence type: {etype}"
 
-    def test_claim_evidence_strength(self, claude_md_text):
-        block = _extract_template_block(claude_md_text, ENTITY_SCHEMAS["claims"]["heading"])
+    def test_claim_evidence_strength(self, template_text):
+        block = _extract_template_block(template_text, ENTITY_SCHEMAS["claims"]["heading"])
         assert block
         for strength in ["weak", "moderate", "strong"]:
             assert strength in block, f"claims template missing evidence strength: {strength}"
 
-    def test_idea_priority_range(self, claude_md_text):
-        block = _extract_template_block(claude_md_text, ENTITY_SCHEMAS["ideas"]["heading"])
+    def test_idea_priority_range(self, template_text):
+        block = _extract_template_block(template_text, ENTITY_SCHEMAS["ideas"]["heading"])
         assert block and "# 1-5" in block
 
 
@@ -375,17 +413,10 @@ class TestCrossReferenceRules:
 class TestIndexFormat:
     """Validate that index.md format covers all 8 entity types."""
 
-    @pytest.mark.parametrize("category", [
-        "papers", "concepts", "topics", "people",
-        "ideas", "experiments", "claims",
-    ])
-    def test_index_has_category(self, claude_md_text, category, claude_md_markers):
-        split_key = claude_md_markers["index_format_split"]
-        assert split_key in claude_md_text, f"index.md format section not found (expected '{split_key}')"
-        idx_section = claude_md_text.split(split_key)[1].split("\n---")[0]
-        assert f"{category}:" in idx_section, (
-            f"index.md format missing category: {category}"
-        )
+    def test_index_has_category(self, support_text):
+        idx_section = re.split(r"##\s+index\.md\s+(?:Format|格式)", support_text, maxsplit=1)[1]
+        for category in ["papers", "concepts", "topics", "people", "ideas", "experiments", "claims"]:
+            assert f"{category}:" in idx_section, f"index.md format missing category: {category}"
 
 
 # ── Tests: graph section ─────────────────────────────────────────────────

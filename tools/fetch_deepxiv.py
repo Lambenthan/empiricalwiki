@@ -36,6 +36,10 @@ try:
 except ImportError:
     HAS_DEEPXIV = False
 
+    class Reader:  # pragma: no cover - only used when SDK is absent
+        def __init__(self, *args, **kwargs):
+            raise ImportError("deepxiv-sdk not installed")
+
     # Dummy exception classes so except clauses don't raise NameError
     class APIError(Exception): pass            # noqa: E303,E701
     class AuthenticationError(Exception): pass  # noqa: E701
@@ -244,11 +248,6 @@ def social(arxiv_id: str) -> dict:
 
 
 def main() -> None:
-    if not HAS_DEEPXIV:
-        _error_exit(
-            "deepxiv-sdk not installed. Run: pip install deepxiv-sdk"
-        )
-
     parser = argparse.ArgumentParser(
         description="DeepXiv API: semantic search + progressive reading"
     )
@@ -310,6 +309,11 @@ def main() -> None:
     p_social.add_argument("arxiv_id", help="arXiv ID")
 
     args = parser.parse_args()
+
+    if not HAS_DEEPXIV:
+        _error_exit(
+            "deepxiv-sdk not installed. Run: pip install deepxiv-sdk"
+        )
 
     try:
         if args.command == "search":

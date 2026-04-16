@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -29,7 +30,7 @@ ENTITY_DIRS = [
     "ideas", "experiments", "claims", "Summary",
     "foundations",
 ]
-RAW_SUBDIRS = ["papers", "notes", "web"]
+RAW_SUBDIRS = ["papers", "discovered", "tmp", "notes", "web"]
 ALL_SCOPES = ["wiki", "raw", "log", "checkpoints"]
 
 INDEX_TEMPLATE = "# Wiki Index\n\n" + "\n".join(f"{e}:" for e in ENTITY_DIRS) + "\n"
@@ -46,7 +47,7 @@ def _list_md(directory: Path) -> list[Path]:
 def _list_raw(directory: Path) -> list[Path]:
     if not directory.exists():
         return []
-    return [p for p in directory.iterdir() if p.is_file() and p.name != ".gitkeep"]
+    return [p for p in directory.iterdir() if p.name != ".gitkeep"]
 
 
 def plan(project_root: Path, scopes: list[str]) -> dict:
@@ -118,7 +119,10 @@ def execute(project_root: Path, scopes: list[str]) -> dict:
     if "raw" in scopes:
         for sub in RAW_SUBDIRS:
             for f in _list_raw(project_root / "raw" / sub):
-                f.unlink()
+                if f.is_dir():
+                    shutil.rmtree(f)
+                else:
+                    f.unlink()
                 deleted += 1
             keep = project_root / "raw" / sub / ".gitkeep"
             if not keep.parent.exists():

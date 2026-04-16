@@ -15,7 +15,7 @@ Manual: `/reset --scope wiki` / `--scope raw` / `--scope log` / `--scope checkpo
 
 - `--scope` *(required)*: one of
   - `wiki` — delete every `*.md` under `wiki/<entity>/` and `wiki/outputs/`, plus `wiki/index.md`, `wiki/log.md`, and `wiki/graph/` files. Preserves `.gitkeep` and `wiki/CLAUDE.md`.
-  - `raw` — delete every file under `raw/papers/`, `raw/notes/`, `raw/web/` (except `.gitkeep`).
+  - `raw` — delete every entry under `raw/papers/`, `raw/discovered/`, `raw/tmp/`, `raw/notes/`, `raw/web/` (except `.gitkeep`).
   - `log` — reset `wiki/log.md` to the empty header.
   - `checkpoints` — clear batch state via `research_wiki.py checkpoint-clear`.
   - `all` — every scope above.
