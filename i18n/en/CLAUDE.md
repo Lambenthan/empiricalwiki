@@ -108,6 +108,7 @@ Standard log line:
 ## Constraints
 
 - **`raw/papers/`, `raw/notes/`, `raw/web/` are user-owned**: treat them as authoritative inputs. `/init` and `/daily-arxiv` may add externally fetched papers only under `raw/discovered/`, and only `/init` may add generated prepared local sidecars under `raw/tmp/` (additions only — never overwrite an existing user-owned file). `/edit` may add raw sources only when the user explicitly asked for it. All other skills, tools, and `/init` subagents running `/ingest` in INIT MODE treat `raw/` as strictly read-only.
+- **User-facing skill parameters are user-owned**: flags and values shown in a skill's `argument-hint` belong to the user's command, not to agent strategy. Do not invent, flip, or drop those parameters from repository state alone. If the user omitted a parameter, only use a default or derived value when that skill explicitly documents omission behavior; otherwise leave it unset or ask the user. Internal derived settings that are not user-facing parameters may still be inferred by the skill.
 - **INIT MODE handoff is manifest-driven**: when `/init` writes `.checkpoints/init-sources.json`, that manifest becomes the single source of truth for ingest order and canonical source paths. Prepared local inputs should point to `raw/tmp/`; introduced external papers should point to `raw/discovered/`.
 - **graph/ is auto-generated**: never manually edit files in `graph/` — only via `tools/research_wiki.py`.
 - **Bidirectional links**: always write the reverse link when writing a forward link.

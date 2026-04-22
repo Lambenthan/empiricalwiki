@@ -68,6 +68,8 @@ claude login
 chmod +x setup.sh && ./setup.sh        # Linux / macOS
 # Windows (PowerShell):
 #   powershell -ExecutionPolicy Bypass -File .\setup.ps1
+# setup creates .venv for OmegaWiki
+# the script does not keep your shell activated, but /init will use .venv automatically
 
 # 4. Put your own papers in raw/papers/ (.tex or .pdf)
 #    Optional: add intent notes to raw/notes/ and saved pages to raw/web/
@@ -408,6 +410,8 @@ claude login
 chmod +x setup.sh && ./setup.sh --lang zh        # Linux / macOS
 # Windows (PowerShell):
 #   powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Lang zh
+# setup 会为 OmegaWiki 创建 .venv
+# 脚本不会把你当前 shell 永久激活，但 /init 会自动使用 .venv
 
 # 把你自己的论文放入 raw/papers/（.tex 或 .pdf）
 # 可选：把意图笔记放入 raw/notes/，网页存档放入 raw/web/

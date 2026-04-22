@@ -11,7 +11,7 @@ argument-hint: <local-path-or-arXiv-URL>
 
 ## Inputs
 
-- `source`: local `.tex` / `.pdf` path, a canonical path handed off by `/init` (for example `raw/tmp/...` synthetic or translated `.tex`, or `raw/discovered/...` fetched source dirs / PDFs), or an arXiv URL (e.g. `https://arxiv.org/abs/2106.09685`)
+- `source`: local `.tex` / `.pdf` path, a canonical path handed off by `/init` (for example `raw/tmp/...` synthetic `.tex`, or `raw/discovered/...` fetched source dirs / PDFs), or an arXiv URL (e.g. `https://arxiv.org/abs/2106.09685`)
 
 ## Outputs
 
@@ -399,7 +399,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 
 ## Error Handling
 
-- **Source parse failure**: tex fails → PDF parse → vision API → report to user for manual handling. In INIT MODE, synthetic / translated `.tex` under `raw/tmp/` and fetched source dirs / PDFs under `raw/discovered/` are valid inputs and should be consumed as handed off.
+- **Source parse failure**: tex fails → PDF parse → vision API → report to user for manual handling. In INIT MODE, synthetic `.tex` under `raw/tmp/` and fetched source dirs / PDFs under `raw/discovered/` are valid inputs and should be consumed as handed off.
 - **S2 API unavailable**: skip S2 steps (citations backfill, default importance to 3); note in report
 - **DeepXiv API unavailable**: skip DeepXiv enrichment (TLDR, structure verification, social metrics); fall back to S2 + source file parsing
 - **Slug conflict**: if generated slug already exists but content differs, append numeric suffix (e.g. `attention-mechanism-2`)

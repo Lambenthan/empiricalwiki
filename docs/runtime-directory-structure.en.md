@@ -25,7 +25,7 @@ wiki/
 raw/
 ├── papers/            ← user-owned .tex / .pdf sources
 ├── discovered/        ← externally fetched papers from /init and /daily-arxiv
-├── tmp/               ← /init-generated prepared local sources (synthetic / translated sidecars)
+├── tmp/               ← /init-generated prepared local sources (synthetic tex, fetched source dirs)
 ├── notes/             ← user-owned .md notes
 └── web/               ← user-owned HTML / Markdown
 

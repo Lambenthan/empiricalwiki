@@ -7,6 +7,8 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SKILL_PATH = PROJECT_ROOT / ".claude" / "skills" / "init" / "SKILL.md"
 CLAUDE_MD = PROJECT_ROOT / "CLAUDE.md"
+I18N_EN_CLAUDE_MD = PROJECT_ROOT / "i18n" / "en" / "CLAUDE.md"
+I18N_ZH_CLAUDE_MD = PROJECT_ROOT / "i18n" / "zh" / "CLAUDE.md"
 
 
 @pytest.fixture(scope="module")
@@ -17,6 +19,16 @@ def skill_content():
 @pytest.fixture(scope="module")
 def claude_content():
     return CLAUDE_MD.read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def i18n_en_claude_content():
+    return I18N_EN_CLAUDE_MD.read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def i18n_zh_claude_content():
+    return I18N_ZH_CLAUDE_MD.read_text(encoding="utf-8")
 
 
 class TestSkillStructure:
@@ -44,6 +56,11 @@ class TestSkillStructure:
 class TestPublicContract:
     def test_supports_no_introduction(self, skill_content):
         assert "--no-introduction" in skill_content
+
+    def test_no_introduction_is_user_controlled(self, skill_content):
+        lowered = skill_content.lower()
+        assert "do not infer `--no-introduction` from repository state alone" in lowered
+        assert "user explicitly asked to disable external discovery" in lowered
 
     def test_mentions_raw_discovered(self, skill_content):
         assert "raw/discovered/" in skill_content
@@ -75,19 +92,26 @@ class TestPublicContract:
 
     def test_mentions_degraded_chinese_notes_warning(self, skill_content):
         lowered = skill_content.lower()
-        assert "curated chinese support is planned" in lowered or "中文精细支持会在后续版本补上" in skill_content
+        assert "lower-confidence" in lowered or "较低置信度" in skill_content
         assert "raw/notes/" in skill_content
 
 
 class TestWorkflow:
+    def test_prefers_repo_python_bin(self, skill_content):
+        assert "PYTHON_BIN" in skill_content
+        assert ".venv/bin/python" in skill_content
+        assert ".venv/Scripts/python.exe" in skill_content
+
     def test_step1_init(self, skill_content):
         assert "### Step 1" in skill_content
         assert "research_wiki.py init" in skill_content
+        assert '"$PYTHON_BIN" tools/research_wiki.py init wiki/' in skill_content
 
     def test_step2_prepare(self, skill_content):
         assert "### Step 2" in skill_content
         assert "init_discovery.py prepare" in skill_content
         assert ".checkpoints/init-prepare.json" in skill_content
+        assert '"$PYTHON_BIN" tools/init_discovery.py prepare' in skill_content
 
     def test_step3_discovery_plan_and_fetch(self, skill_content):
         assert "### Step 3" in skill_content
@@ -96,6 +120,25 @@ class TestWorkflow:
         assert "init_discovery.py fetch" in skill_content
         assert ".checkpoints/init-sources.json" in skill_content
         assert "8-10" in skill_content
+        assert '"$PYTHON_BIN" tools/init_discovery.py plan' in skill_content
+        assert '"$PYTHON_BIN" tools/init_discovery.py fetch' in skill_content
+
+    def test_step3_requires_explicit_final_selection_before_fetch(self, skill_content):
+        assert "read `.checkpoints/init-plan.json`" in skill_content
+        assert "before `fetch`" in skill_content
+        assert "final selection artifact" in skill_content
+        assert "`candidate_id`" in skill_content
+
+    def test_step3_requires_revise_before_fetch_when_count_is_wrong(self, skill_content):
+        lowered = skill_content.lower()
+        assert "stop and revise the final selection before `fetch`" in lowered
+        assert "`--no-introduction`" in skill_content
+        assert "more than 10 parseable papers" in skill_content
+
+    def test_step3_distinguishes_shortlist_from_final_set(self, skill_content):
+        assert "over-picked `shortlist`" in skill_content
+        assert "final **8-10** papers total" in skill_content
+        assert "never forward the whole shortlist implicitly" in skill_content
 
     def test_step4_scaffold_pages(self, skill_content):
         assert "### Step 4" in skill_content
@@ -117,6 +160,10 @@ class TestWorkflow:
         assert "base_branch" in skill_content
         assert "git rev-parse HEAD" in skill_content
         assert "base_commit" in skill_content
+
+    def test_step4_5_checkpoint_ids_are_post_trim(self, skill_content):
+        assert "post-trim" in skill_content
+        assert "not the over-picked shortlist" in skill_content
 
     def test_step5_parallel_ingest(self, skill_content):
         assert "### Step 5" in skill_content
@@ -198,3 +245,17 @@ class TestClaudemdConsistency:
 
     def test_claude_mentions_raw_tmp(self, claude_content):
         assert "raw/tmp/" in claude_content
+
+    def test_claude_declares_user_owned_skill_parameters(self, claude_content):
+        lowered = claude_content.lower()
+        assert "user-facing skill parameters are user-owned" in lowered
+        assert "argument-hint" in claude_content
+
+    def test_i18n_en_claude_declares_user_owned_skill_parameters(self, i18n_en_claude_content):
+        lowered = i18n_en_claude_content.lower()
+        assert "user-facing skill parameters are user-owned" in lowered
+        assert "argument-hint" in i18n_en_claude_content
+
+    def test_i18n_zh_claude_declares_user_owned_skill_parameters(self, i18n_zh_claude_content):
+        assert "用户可见参数归用户所有" in i18n_zh_claude_content
+        assert "argument-hint" in i18n_zh_claude_content

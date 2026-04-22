@@ -11,7 +11,7 @@ argument-hint: <local-path-or-arXiv-URL>
 
 ## Inputs
 
-- `source`：本地 `.tex` / `.pdf` 路径、`/init` 交接的规范来源路径（例如 `raw/tmp/...` 下的合成/翻译 `.tex`，或 `raw/discovered/...` 下抓取到的源码目录 / PDF），或 arXiv URL（如 `https://arxiv.org/abs/2106.09685`）
+- `source`：本地 `.tex` / `.pdf` 路径、`/init` 交接的规范来源路径（例如 `raw/tmp/...` 下的合成 `.tex`，或 `raw/discovered/...` 下抓取到的源码目录 / PDF），或 arXiv URL（如 `https://arxiv.org/abs/2106.09685`）
 
 ## Outputs
 
@@ -399,7 +399,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 
 ## Error Handling
 
-- **来源解析失败**：tex 失败 → PDF 解析 → vision API → 报告用户手动处理。INIT MODE 下，`raw/tmp/` 中的合成 / 翻译 `.tex` 与 `raw/discovered/` 中的抓取源码目录 / PDF 都是合法输入，应按交接路径直接消费。
+- **来源解析失败**：tex 失败 → PDF 解析 → vision API → 报告用户手动处理。INIT MODE 下，`raw/tmp/` 中的合成 `.tex` 与 `raw/discovered/` 中的抓取源码目录 / PDF 都是合法输入，应按交接路径直接消费。
 - **S2 API 不可用**：跳过 S2 相关步骤（citations 回填、importance 使用默认值 3），在报告中注明
 - **DeepXiv API 不可用**：跳过 DeepXiv 增强步骤（TLDR、结构验证、社交指标），仅依赖 S2 + 源文件解析
 - **slug 冲突**：若生成的 slug 已存在但内容不同，追加数字后缀（如 `attention-mechanism-2`）
