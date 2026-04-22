@@ -97,39 +97,29 @@ Write-Info "Setting up Python environment..."
 
 Push-Location $ProjectRoot
 try {
-    $UsingExisting = $false
-    if ($env:VIRTUAL_ENV) {
-        Write-Ok "Using active venv: $env:VIRTUAL_ENV"
-        $UsingExisting = $true
-    } elseif ($env:CONDA_DEFAULT_ENV -and $env:CONDA_DEFAULT_ENV -ne "base") {
-        Write-Ok "Using active conda env: $env:CONDA_DEFAULT_ENV"
-        $UsingExisting = $true
-    } else {
-        if (Test-Path ".venv") {
-            Write-Warn2 ".venv already exists, using it"
-        } else {
-            & $PythonCmd -m venv .venv
-            if ($LASTEXITCODE -ne 0) { throw "venv creation failed" }
-            Write-Ok "Created .venv"
-        }
+    if ($env:VIRTUAL_ENV -or ($env:CONDA_DEFAULT_ENV -and $env:CONDA_DEFAULT_ENV -ne "base")) {
+        Write-Warn2 "Active environment detected; setup always installs OmegaWiki into .venv"
     }
 
-    # Resolve the python interpreter to use for installs + verification
-    if ($UsingExisting) {
-        $VenvPython = $PythonCmd
+    if (Test-Path ".venv") {
+        Write-Warn2 ".venv already exists, using it"
     } else {
-        $VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
-        if (-not (Test-Path $VenvPython)) {
-            Write-Fail "Expected $VenvPython but it does not exist"
-            exit 1
-        }
-        Write-Ok "Using .venv\Scripts\python.exe"
+        & $PythonCmd -m venv .venv
+        if ($LASTEXITCODE -ne 0) { throw "venv creation failed" }
+        Write-Ok "Created .venv"
     }
 
-    Write-Info "Installing dependencies..."
+    $VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
+    if (-not (Test-Path $VenvPython)) {
+        Write-Fail "Expected $VenvPython but it does not exist"
+        exit 1
+    }
+    Write-Ok "Using .venv\Scripts\python.exe"
+
+    Write-Info "Installing dependencies into .venv..."
     & $VenvPython -m pip install -r requirements.txt -q
     if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
-    Write-Ok "Dependencies installed"
+    Write-Ok "Dependencies installed into .venv"
 
     # -- Step 3: Configuration files ---------------------------------------
     Write-Host ""
@@ -177,27 +167,61 @@ try {
     Write-Host ""
     Write-Info "Verifying installation..."
 
-    $errors = 0
-    $checks = @(
-        @{ name = "fetch_arxiv";    import = "from fetch_arxiv import fetch_recent" },
-        @{ name = "fetch_s2";       import = "from fetch_s2 import search" },
-        @{ name = "fetch_deepxiv";  import = "from fetch_deepxiv import search" },
-        @{ name = "research_wiki";  import = "from research_wiki import slugify" },
-        @{ name = "lint";           import = "from lint import check_missing_fields" }
-    )
-    Push-Location "tools"
-    try {
-        foreach ($c in $checks) {
-            & $VenvPython -c $c.import 2>$null
+    $script:VerificationErrors = 0
+    $script:VerificationWarnings = 0
+
+    function Invoke-PythonCheck {
+        param(
+            [string]$Label,
+            [string]$Code,
+            [string]$WorkingDirectory = $ProjectRoot,
+            [switch]$WarningOnly
+        )
+
+        Push-Location $WorkingDirectory
+        try {
+            & $VenvPython -c $Code 2>$null | Out-Null
             if ($LASTEXITCODE -eq 0) {
-                Write-Ok ("tools/{0}.py" -f $c.name)
+                Write-Ok $Label
+            } elseif ($WarningOnly) {
+                Write-Warn2 $Label
+                $script:VerificationWarnings++
             } else {
-                Write-Fail ("tools/{0}.py import error" -f $c.name)
-                $errors++
+                Write-Fail $Label
+                $script:VerificationErrors++
             }
+        } finally {
+            Pop-Location
         }
-    } finally {
-        Pop-Location
+    }
+
+    Invoke-PythonCheck -Label "PyMuPDF (fitz)" -Code "import fitz"
+    Invoke-PythonCheck -Label "requests" -Code "import requests"
+    Invoke-PythonCheck -Label "feedparser" -Code "import feedparser"
+
+    $toolChecks = @(
+        @{ name = "tools/init_discovery.py"; import = "from init_discovery import prepare_inputs" },
+        @{ name = "tools/fetch_s2.py";       import = "from fetch_s2 import search" },
+        @{ name = "tools/fetch_arxiv.py";    import = "from fetch_arxiv import fetch_recent" },
+        @{ name = "tools/research_wiki.py";  import = "from research_wiki import slugify" },
+        @{ name = "tools/lint.py";           import = "from lint import check_missing_fields" }
+    )
+    foreach ($c in $toolChecks) {
+        Invoke-PythonCheck -Label $c.name -Code $c.import -WorkingDirectory (Join-Path $ProjectRoot "tools")
+    }
+
+    & $VenvPython -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)" 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        & $VenvPython -c "import deepxiv_sdk" 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Ok "deepxiv-sdk (optional)"
+        } else {
+            Write-Warn2 "deepxiv-sdk unavailable; DeepXiv features will degrade but setup can continue"
+            $script:VerificationWarnings++
+        }
+    } else {
+        Write-Warn2 "Python < 3.10 detected inside .venv; deepxiv-sdk may be unavailable, so DeepXiv features may degrade"
+        $script:VerificationWarnings++
     }
 } finally {
     Pop-Location
@@ -206,10 +230,12 @@ try {
 # -- Done ------------------------------------------------------------------
 Write-Host ""
 Write-Host "============================================"
-if ($errors -eq 0) {
+if ($script:VerificationErrors -eq 0 -and $script:VerificationWarnings -eq 0) {
     Write-Host "  Setup complete!" -ForegroundColor Green
+} elseif ($script:VerificationErrors -eq 0) {
+    Write-Host "  Setup complete with $script:VerificationWarnings warning(s)" -ForegroundColor Yellow
 } else {
-    Write-Host "  Setup complete with $errors warning(s)" -ForegroundColor Yellow
+    Write-Host "  Setup complete with $script:VerificationErrors error(s) and $script:VerificationWarnings warning(s)" -ForegroundColor Yellow
 }
 Write-Host "============================================"
 Write-Host ""
@@ -218,8 +244,10 @@ Write-Host ""
 Write-Host "  1. Authenticate Claude Code (if not already):"
 Write-Host "       claude login"
 Write-Host ""
-Write-Host "  2. Activate the venv in your shell (optional, for manual tool use):"
+Write-Host "  2. Activate the venv in your shell only if you want to run Python tools manually:"
 Write-Host "       .\.venv\Scripts\Activate.ps1"
+Write-Host "       setup.ps1 does not activate your current shell permanently."
+Write-Host "       /init will use .venv automatically when it exists."
 Write-Host ""
 Write-Host "  3. Start Claude Code:"
 Write-Host "       claude"

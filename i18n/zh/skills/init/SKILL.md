@@ -11,6 +11,7 @@ argument-hint: "[topic] [--no-introduction]"
 
 - `topic`（可选）：研究方向关键词；如果 `raw/papers/` 已经给出了 seed set，或 notes/web 已经表达了意图，就可以省略
 - `--no-introduction`（可选）：禁用外部找论文；只使用用户自有的 `raw/papers/`、`raw/notes/`、`raw/web/`
+- 参数护栏：把 `topic` 与 `--no-introduction` 视为用户输入，而不是 agent 自行决定的策略开关；不得仅根据仓库状态推断 `--no-introduction`。`raw/papers/` 非空、`raw/notes/` 或 `raw/web/` 为空、或用户省略 `topic`，都不能单独成为启用 local-only 模式的理由。只有当用户明确要求禁用外部发现时，才可使用 `--no-introduction`。
 - `raw/papers/`：用户自有论文来源（`.tex`、`.pdf`、压缩包）
 - `raw/notes/`：用户笔记
 - `raw/web/`：用户提供的网页存档
@@ -18,7 +19,7 @@ argument-hint: "[topic] [--no-introduction]"
 ## Outputs
 
 - 通过 `tools/research_wiki.py init` 建立 `wiki/` scaffold
-- `raw/tmp/` — `/init` 生成的本地 prepared 来源与翻译 sidecar
+- `raw/tmp/` — `/init` 生成的本地 prepared 来源
 - `raw/discovered/` — `/init` 选中的外部论文（在 `--no-introduction` 时关闭）
 - `wiki/Summary/{area}.md`、`wiki/topics/{topic}.md`、provisional `wiki/ideas/{slug}.md`、`wiki/concepts/{slug}.md`、`wiki/claims/{slug}.md`
 - 通过并行 `/ingest` 创建的 `wiki/papers/*.md` 与论文驱动的 concepts / claims / people
@@ -47,12 +48,23 @@ argument-hint: "[topic] [--no-introduction]"
 
 ## Workflow
 
-**前置条件**：当前目录为项目根，且包含 `wiki/`、`raw/`、`tools/`。设 `WIKI_ROOT=wiki/`。
+**前置条件**：当前目录为项目根，且包含 `wiki/`、`raw/`、`tools/`。设 `WIKI_ROOT=wiki/`。先解析一次 `PYTHON_BIN`，并在整个 `/init` 流程里复用它，确保运行时使用与 `setup.sh` 安装依赖时相同的解释器：
+
+```bash
+if [ -x .venv/bin/python ]; then
+  PYTHON_BIN=.venv/bin/python
+elif [ -x .venv/Scripts/python.exe ]; then
+  PYTHON_BIN=.venv/Scripts/python.exe
+else
+  PYTHON_BIN=python3
+fi
+export PYTHON_BIN
+```
 
 ### Step 1: 初始化 wiki 结构
 
 ```bash
-python3 tools/research_wiki.py init wiki/
+"$PYTHON_BIN" tools/research_wiki.py init wiki/
 ```
 
 创建标准目录、`graph/`、`outputs/`、`index.md` 与 `log.md`。这里不要重复写第二条 init 日志。
@@ -60,26 +72,27 @@ python3 tools/research_wiki.py init wiki/
 ### Step 2: 先把本地输入 prepare 到 `raw/tmp/`
 
 ```bash
-python3 tools/init_discovery.py prepare --raw-root raw --output-manifest .checkpoints/init-prepare.json
+"$PYTHON_BIN" tools/init_discovery.py prepare --raw-root raw --output-manifest .checkpoints/init-prepare.json
 ```
 
 - 本地 PDF 能 decode 时，先转成 `raw/tmp/` 下的 synthetic `.tex`
-- notes / web 翻译成功时，把英文 sidecar 写到 `raw/tmp/`
+- 对于不含嵌入 arXiv ID 的 PDF，尝试通过 Semantic Scholar 按标题搜索恢复 arXiv ID；恢复成功后，优先使用从 arXiv 抓取的原始 TeX 源码（`raw/tmp/papers/...-arxiv-src/`），而非 synthetic `.tex`
+- notes / web 保持原始来源路径，`/init` 在 planning 阶段直接读取
 - 本地论文若存在 usable 的 prepared `.tex`，其 `canonical_ingest_path` 必须指向 `raw/tmp/`
-- decode / translation 失败时记录 warning，而不是中止 `/init`
+- decode / arXiv 源码抓取失败时记录 warning，而不是中止 `/init`
 - 输出 manifest 到 `.checkpoints/init-prepare.json`
 
 ### Step 3: 基于 prepared 输入生成 plan、裁剪 shortlist，并写出最终 source manifest
 
 ```bash
-python3 tools/init_discovery.py plan [--topic "<topic>"] --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json
+"$PYTHON_BIN" tools/init_discovery.py plan [--topic "<topic>"] --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json
 ```
 
 - `mode=seeded` 取决于 `.checkpoints/init-prepare.json` 中是否存在可解析本地论文；否则为 `bootstrap`
 - `plan` 必须读取 prepare manifest，而不是重新扫描 `raw/`
-- notes/web 的用户信号若存在英文 sidecar，应优先读取 `raw/tmp/`
-- 如果同一篇本地论文出现多个副本，优先级必须明确：翻译/预处理后的 `.tex` > 原始本地 `.tex` > archive 解出的源码 `.tex` > 由 PDF 生成的 synthetic `.tex` > 原始 `.pdf`
-- 若检测到中文 notes 内容，要保留 planner warning：中文精细支持会在后续版本补上；当前 note/web 提取效果可能会降级
+- notes/web 的用户信号直接从原始来源文件读取
+- 如果同一篇本地论文出现多个副本，优先级必须明确：原始本地 `.tex` > archive 解出的源码 `.tex` 或抓取到的 arXiv 源码目录 > 由 PDF 生成的 synthetic `.tex` > 原始 `.pdf`
+- 若检测到中文 notes 或 web 内容，要保留 planner warning：当前 note/web 提取与排序对中文输入的可靠性可能更低，provisional 输出也应视为较低置信度
 - seeded 模式下如果省略 `topic`，要从本地论文标题/摘要以及 notes/web 信号里提取 discovery 与 ranking 线索，而不是直接拒绝初始化
 - 如果 seeded discovery 最终没有新增任何外部论文，也要继续用用户自带论文集往下走，而不是把它当成 fatal planner error
 - 如果 `topic` 与 notes/web 关键词都缺失，bootstrap discovery 就没有可搜索的 query；此时应把它记为 planner error，而不是发起空搜索
@@ -97,27 +110,35 @@ planner 评分策略：
 - survey/benchmark/overview bonus = 15
 - citation/centrality = 15
 - 有 survey 就优先保留
-- 最多保留一个偏旧 canonical anchor
+- 最多保留一个偏旧 canonical anchor，而且只应在 bootstrap 或 seeded 且最终新增容量非常宽裕时考虑
+- 在 seeded 模式且可新增论文空间有限时，不要预留偏旧 anchor；此时应让 freshness 主导，并防止偏旧的外部非 survey 论文仅凭 citation 优势堆积进入 shortlist
 - 其余近分时 freshness 优先
 - seeded 模式先看用户论文连接，再看 notes/web 偏好
 - bootstrap 模式先 search，再从最强初始候选做 citation/reference 扩展
 
 LLM 裁剪策略：
 
-- 把 over-pick 的 shortlist 裁到最终 **8-10** 篇
-- 默认保留所有可解析的用户论文
+- 在 `fetch` 前读取 `.checkpoints/init-plan.json`，并把 over-pick 的 `shortlist` 明确裁成最终 **8-10** 篇
+- 即使 shortlist 看起来已经“差不多”，也不得跳过裁剪步骤
+- 默认保留所有可解析的用户论文，再用剩余名额选择 introduced 论文
 - 若用户已提供超过 10 篇可解析论文，则不再新增外部论文
-- 优先保留 survey/overview、至多一篇偏旧 canonical anchor，以及来自不同 cluster 的近期代表作
+- 优先保留 survey/overview、在确有帮助时至多一篇偏旧 canonical anchor，以及来自不同 cluster 的近期代表作
+- 当用户已经提供较充足的 seed set 时，应优先 freshness，并进一步降低偏旧 canonical 论文的优先级
+- “至多一篇” 是上限，不代表必须保留一篇偏旧 canonical anchor
+- 在 `fetch` 前，必须在工作流/响应中给出一个明确的最终选择结果，至少包含：`shortlist_count`、`final_count`，以及按 shortlist 顺序排列的最终 `candidate_id` 列表
+- 若 `final_count` 不在 **8-10** 范围内，则必须先停止并修正最终选择，再执行 `fetch`；`--no-introduction` 或“用户已提供超过 10 篇可解析论文”这两种已说明例外除外
+- `fetch` 只能接收最终选中的那组 `candidate_id`；禁止把整个 shortlist 默认原样转发，或默认把所有 shortlist ID 都传进去
 
 若传入 `--no-introduction`：
 
+- 只有在用户明确要求只使用本地论文时，才走这一分支
 - 最终论文集 = `.checkpoints/init-prepare.json` 中所有可解析本地论文
 - 仍然要执行 `fetch`（不给外部 ID），以写出 `.checkpoints/init-sources.json`
 
 否则运行：
 
 ```bash
-python3 tools/init_discovery.py fetch --raw-root raw --plan-json .checkpoints/init-plan.json --prepared-manifest .checkpoints/init-prepare.json --output-sources .checkpoints/init-sources.json --id <candidate-id> --id <candidate-id>
+"$PYTHON_BIN" tools/init_discovery.py fetch --raw-root raw --plan-json .checkpoints/init-plan.json --prepared-manifest .checkpoints/init-prepare.json --output-sources .checkpoints/init-sources.json --id <candidate-id> --id <candidate-id>
 ```
 
 - `/init` 下载的论文只允许写入 `raw/discovered/`，绝不写入 `raw/papers/`
@@ -174,7 +195,7 @@ fi
 
 ```bash
 STASH_REF=$(git stash list | head -1 | cut -d: -f1)
-python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session stash_ref "$STASH_REF"
+"$PYTHON_BIN" tools/research_wiki.py checkpoint-set-meta wiki/ init-session stash_ref "$STASH_REF"
 ```
 
 - 在 worktree fan-out 前先记录当前 branch；`/init` 的 worktree 模式必须运行在一个有名字的 branch 上，不能处于 detached HEAD：
@@ -185,10 +206,10 @@ if [ -z "$BASE_BRANCH" ]; then
   echo "/init 的 worktree 模式要求当前位于一个命名分支；请先切换到或创建分支。" >&2
   exit 1
 fi
-python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session base_branch "$BASE_BRANCH"
+"$PYTHON_BIN" tools/research_wiki.py checkpoint-set-meta wiki/ init-session base_branch "$BASE_BRANCH"
 ```
 
-- 同时把 selected paper IDs 与 planner mode 写入 checkpoint metadata
+- 同时把最终选中的 paper IDs（post-trim 后的结果，不是 over-pick 的 shortlist）与 planner mode 写入 checkpoint metadata
 - 验证 `.gitattributes` 对 `wiki/log.md`、`wiki/graph/edges.jsonl`、`wiki/index.md` 使用了 `merge=union`
 - commit scaffold：
 
@@ -196,7 +217,7 @@ python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session base_branc
 git add wiki/ raw/papers/ raw/tmp/ raw/discovered/ .checkpoints/init-prepare.json .checkpoints/init-plan.json .checkpoints/init-sources.json
 git commit -m "init: scaffold before parallel ingest" --no-gpg-sign
 BASE_COMMIT=$(git rev-parse HEAD)
-python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session base_commit "$BASE_COMMIT"
+"$PYTHON_BIN" tools/research_wiki.py checkpoint-set-meta wiki/ init-session base_commit "$BASE_COMMIT"
 ```
 
 ### Step 5: 通过 worktree 隔离并行 ingest 论文
@@ -251,11 +272,11 @@ git switch "$BASE_BRANCH"
 git merge --no-ff "$WT_BRANCH" --no-edit
 git worktree remove "$WT_PATH"
 git branch -d "$WT_BRANCH"
-python3 tools/research_wiki.py dedup-edges wiki/
-python3 tools/research_wiki.py rebuild-index wiki/
-python3 tools/research_wiki.py rebuild-context-brief wiki/
-python3 tools/research_wiki.py rebuild-open-questions wiki/
-python3 tools/lint.py wiki/ --fix
+"$PYTHON_BIN" tools/research_wiki.py dedup-edges wiki/
+"$PYTHON_BIN" tools/research_wiki.py rebuild-index wiki/
+"$PYTHON_BIN" tools/research_wiki.py rebuild-context-brief wiki/
+"$PYTHON_BIN" tools/research_wiki.py rebuild-open-questions wiki/
+"$PYTHON_BIN" tools/lint.py wiki/ --fix
 ```
 
 ### Step 6: 最终报告与清理
@@ -297,9 +318,10 @@ python3 tools/lint.py wiki/ --fix
 
 - **`raw/papers/` 无可解析论文**：自动切换到 bootstrap 模式
 - **`raw/notes/` 与 `raw/web/` 为空**：跳过 provisional seeding，继续
-- **prepare 阶段的 PDF decode 或 translation 失败**：把 warning 记入 `.checkpoints/init-prepare.json`，必要时回退到原始路径
-- **`raw/notes/` 中检测到中文内容**：继续执行，但要保留 planner warning，明确说明中文精细支持会在后续版本补上，当前 note/web 提取效果可能降级
+- **prepare 阶段的 PDF decode 失败**：把 warning 记入 `.checkpoints/init-prepare.json`，必要时回退到原始路径
+- **`raw/notes/` 或 `raw/web/` 中检测到中文内容**：继续执行，但要保留 planner warning，说明当前 note/web 提取与排序对中文输入的可靠性可能更低，并把 rankings 与 provisional 页面视为较低置信度
 - **S2 或 DeepXiv 不可用**：planner 使用剩余来源并继续执行；把 warning 保留在 checkpoint plan 中，并在最终报告里注明 discovery 降级
+- **本地 PDF 的 arXiv ID 恢复或 TeX 源码抓取失败**：把 warning 记入 `.checkpoints/init-prepare.json`，回退到 synthetic `.tex` 或原始 PDF 路径，然后继续
 - **某篇外部论文下载失败**：保留其余最终论文集，报告失败项
 - **单篇 ingest 失败**：写 checkpoint，跳过该篇，继续其他论文，并在最终报告中列出
 - **当前 checkout 处于 detached HEAD**：在 worktree fan-out 前停止，并要求用户先切换到或创建一个命名分支
@@ -310,18 +332,18 @@ python3 tools/lint.py wiki/ --fix
 
 ### Tools (via Bash)
 
-- `python3 tools/research_wiki.py init wiki/`
-- `python3 tools/research_wiki.py checkpoint-set-meta wiki/ init-session <key> <value>`
-- `python3 tools/research_wiki.py checkpoint-save/load/clear wiki/ init-session ...`
-- `python3 tools/research_wiki.py dedup-edges wiki/`
-- `python3 tools/research_wiki.py rebuild-index wiki/`
-- `python3 tools/research_wiki.py rebuild-context-brief wiki/`
-- `python3 tools/research_wiki.py rebuild-open-questions wiki/`
-- `python3 tools/research_wiki.py log wiki/ "<message>"`
-- `python3 tools/init_discovery.py prepare --raw-root raw --output-manifest .checkpoints/init-prepare.json`
-- `python3 tools/init_discovery.py plan [--topic "<topic>"] --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json`
-- `python3 tools/init_discovery.py fetch --raw-root raw --plan-json .checkpoints/init-plan.json --prepared-manifest .checkpoints/init-prepare.json --output-sources .checkpoints/init-sources.json --id <candidate-id>`
-- `python3 tools/lint.py wiki/ --fix`
+- `"$PYTHON_BIN" tools/research_wiki.py init wiki/`
+- `"$PYTHON_BIN" tools/research_wiki.py checkpoint-set-meta wiki/ init-session <key> <value>`
+- `"$PYTHON_BIN" tools/research_wiki.py checkpoint-save/load/clear wiki/ init-session ...`
+- `"$PYTHON_BIN" tools/research_wiki.py dedup-edges wiki/`
+- `"$PYTHON_BIN" tools/research_wiki.py rebuild-index wiki/`
+- `"$PYTHON_BIN" tools/research_wiki.py rebuild-context-brief wiki/`
+- `"$PYTHON_BIN" tools/research_wiki.py rebuild-open-questions wiki/`
+- `"$PYTHON_BIN" tools/research_wiki.py log wiki/ "<message>"`
+- `"$PYTHON_BIN" tools/init_discovery.py prepare --raw-root raw --output-manifest .checkpoints/init-prepare.json`
+- `"$PYTHON_BIN" tools/init_discovery.py plan [--topic "<topic>"] --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json`
+- `"$PYTHON_BIN" tools/init_discovery.py fetch --raw-root raw --plan-json .checkpoints/init-plan.json --prepared-manifest .checkpoints/init-prepare.json --output-sources .checkpoints/init-sources.json --id <candidate-id>`
+- `"$PYTHON_BIN" tools/lint.py wiki/ --fix`
 
 ### Skills
 

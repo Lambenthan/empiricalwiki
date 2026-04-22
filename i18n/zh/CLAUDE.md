@@ -104,6 +104,7 @@
 ## 约束
 
 - **`raw/papers/`、`raw/notes/`、`raw/web/` 归用户所有**：把它们当作权威输入。`/init` 与 `/daily-arxiv` 只能把外部抓取论文追加到 `raw/discovered/`，并且只有 `/init` 能把本地来源的预处理 sidecar 写到 `raw/tmp/`（只增不改，绝不覆盖用户自有文件）。`/edit` 仅在用户明确要求时才允许新增 raw 来源。除此之外，所有 skill、tool，以及 `/init` 在 INIT MODE 下 fan-out 的 `/ingest` 子代理都必须把 `raw/` 视为严格只读。
+- **skill 的用户可见参数归用户所有**：skill 的 `argument-hint` 中列出的 flag 与取值属于用户命令，而不是 agent 可自行决定的策略开关。不得仅根据仓库状态擅自补出、切换或删除这些参数。若用户未提供某个参数，只有在该 skill 明确写出省略时的默认或推导规则时，才可使用该默认或推导值；否则应保持未设置，必要时询问用户。不是用户可见参数的内部派生设置，skill 仍可自行推断。
 - **INIT MODE 交接由 manifest 驱动**：当 `/init` 写出 `.checkpoints/init-sources.json` 后，该 manifest 就是 ingest 顺序与规范来源路径的唯一真相来源。预处理后的本地输入应指向 `raw/tmp/`；外部引入论文应指向 `raw/discovered/`。
 - **graph/ 自动生成**：不得手动编辑 `graph/` 下的文件，仅通过 `tools/research_wiki.py` 维护。
 - **双向链接**：写正向链接时同步写反向链接。

@@ -5,7 +5,7 @@ Validates:
 - Required SKILL.md sections are present (language-agnostic)
 - Referenced files exist (config/setup-guide.md, .env.example)
 - setup-guide.md covers all four configurable keys
-- setup.sh no longer contains interactive API key prompts
+- setup scripts keep dependency installation deterministic
 """
 
 from pathlib import Path
@@ -19,6 +19,8 @@ ACTIVE_SKILL = PROJECT_ROOT / ".claude" / "skills" / "setup" / "SKILL.md"
 SETUP_GUIDE = PROJECT_ROOT / "config" / "setup-guide.md"
 ENV_EXAMPLE = PROJECT_ROOT / "config" / ".env.example"
 SETUP_SH = PROJECT_ROOT / "setup.sh"
+SETUP_PS1 = PROJECT_ROOT / "setup.ps1"
+README_MD = PROJECT_ROOT / "README.md"
 
 
 # ── File existence ─────────────────────────────────────────────────────────
@@ -37,6 +39,10 @@ def test_setup_guide_exists():
 
 def test_env_example_exists():
     assert ENV_EXAMPLE.exists(), f"config/.env.example not found at {ENV_EXAMPLE}"
+
+
+def test_setup_ps1_exists():
+    assert SETUP_PS1.exists(), f"setup.ps1 not found at {SETUP_PS1}"
 
 
 # ── SKILL.md required sections ─────────────────────────────────────────────
@@ -189,6 +195,51 @@ def test_setup_sh_references_setup_skill():
     content = SETUP_SH.read_text(encoding="utf-8")
     assert "/setup" in content, \
         "setup.sh 'Next steps' should reference the /setup skill"
+
+
+def test_setup_sh_uses_project_venv_for_installs():
+    content = SETUP_SH.read_text(encoding="utf-8")
+    assert ".venv/bin/python" in content, "setup.sh should resolve the project .venv python"
+    assert "-m pip install -r requirements.txt" in content, "setup.sh should install with the resolved python"
+
+
+def test_setup_ps1_uses_project_venv_for_installs():
+    content = SETUP_PS1.read_text(encoding="utf-8")
+    assert ".venv\\Scripts\\python.exe" in content, "setup.ps1 should resolve the project .venv python"
+    assert "-m pip install -r requirements.txt" in content, "setup.ps1 should install with the resolved python"
+
+
+def test_setup_sh_verifies_runtime_dependencies():
+    content = SETUP_SH.read_text(encoding="utf-8")
+    assert "import fitz" in content, "setup.sh should verify PyMuPDF availability"
+    assert "import requests" in content, "setup.sh should verify requests availability"
+    assert "import feedparser" in content, "setup.sh should verify feedparser availability"
+    assert "deepxiv-sdk" in content, "setup.sh should surface DeepXiv diagnostics"
+
+
+def test_setup_ps1_verifies_runtime_dependencies():
+    content = SETUP_PS1.read_text(encoding="utf-8")
+    assert "import fitz" in content, "setup.ps1 should verify PyMuPDF availability"
+    assert "import requests" in content, "setup.ps1 should verify requests availability"
+    assert "import feedparser" in content, "setup.ps1 should verify feedparser availability"
+    assert "deepxiv-sdk" in content, "setup.ps1 should surface DeepXiv diagnostics"
+
+
+def test_setup_scripts_note_non_persistent_activation():
+    sh_content = SETUP_SH.read_text(encoding="utf-8")
+    ps1_content = SETUP_PS1.read_text(encoding="utf-8")
+    assert "does not activate your current shell permanently" in sh_content
+    assert "/init will use .venv/bin/python automatically" in sh_content
+    assert "does not activate your current shell permanently" in ps1_content
+    assert "/init will use .venv automatically" in ps1_content
+
+
+def test_readme_mentions_setup_venv_behavior():
+    content = README_MD.read_text(encoding="utf-8")
+    assert "setup creates .venv for OmegaWiki" in content
+    assert "/init will use .venv automatically" in content
+    assert "setup 会为 OmegaWiki 创建 .venv" in content
+    assert "/init 会自动使用 .venv" in content
 
 
 # ── Active skill file (after setup.sh --lang sync) ────────────────────────

@@ -25,7 +25,7 @@ wiki/
 raw/
 ├── papers/            ← 用户自有 .tex / .pdf 来源
 ├── discovered/        ← /init 与 /daily-arxiv 抓取的外部论文
-├── tmp/               ← /init 生成的本地预处理来源（合成 / 翻译 sidecar）
+├── tmp/               ← /init 生成的本地预处理来源（合成 tex、抓取到的源码目录）
 ├── notes/             ← 用户自有 .md 笔记
 └── web/               ← 用户自有 HTML / Markdown
 

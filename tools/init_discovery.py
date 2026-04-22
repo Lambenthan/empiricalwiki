@@ -41,14 +41,6 @@ except ImportError:
     fitz = None
     HAS_PYMUPDF = False
 
-try:
-    from anthropic import Anthropic
-
-    HAS_ANTHROPIC = True
-except ImportError:
-    Anthropic = None
-    HAS_ANTHROPIC = False
-
 STOP_WORDS = {
     "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
     "has", "have", "in", "into", "is", "it", "of", "on", "or", "that",
@@ -82,6 +74,8 @@ PREPARE_TEXT_SUFFIXES = {".md", ".txt", ".html", ".htm", ".tex"}
 SHORTLIST_TARGET = 12
 FINAL_TARGET_RANGE = [8, 10]
 CURRENT_YEAR = datetime.now(timezone.utc).year
+OLDER_PAPER_YEARS = 4
+ROOMY_INTRODUCED_CAPACITY = 6
 RANKING_WEIGHTS = {
     "relevance": 30,
     "freshness": 20,
@@ -91,7 +85,6 @@ RANKING_WEIGHTS = {
 }
 EXCLUSION_PENALTY = 12
 MAX_SOURCE_ARCHIVE_BYTES = 250_000_000
-TRANSLATION_MODEL = os.environ.get("OMEGAWIKI_TRANSLATION_MODEL", "claude-3-5-haiku-latest")
 
 
 def _paper_entry_match_key(entry: dict[str, Any]) -> tuple[str, str]:
@@ -99,19 +92,17 @@ def _paper_entry_match_key(entry: dict[str, Any]) -> tuple[str, str]:
 
 
 def _paper_entry_preference(entry: dict[str, Any]) -> tuple[int, int, int]:
-    canonical_path = str(entry.get("canonical_ingest_path") or "")
     original_format = str(entry.get("original_format") or "")
     ingest_format = str(entry.get("ingest_format") or "")
-    translated = bool(entry.get("translated_to_english"))
     abstract_len = len(str(entry.get("abstract_excerpt") or ""))
     has_arxiv = 1 if entry.get("arxiv_id") else 0
 
-    if translated and canonical_path.endswith(".tex"):
-        rank = 5
-    elif original_format == "tex" and ingest_format == "tex":
+    if original_format == "tex" and ingest_format == "tex":
         rank = 4
     elif original_format in {"archive", "directory"} and ingest_format in {"tex", "directory"}:
         rank = 3
+    elif original_format == "pdf" and ingest_format == "directory":
+        rank = 3  # fetched arXiv source for a PDF — equivalent to archive
     elif original_format == "pdf" and ingest_format == "tex":
         rank = 2
     elif ingest_format == "pdf":
@@ -174,6 +165,135 @@ def _extract_arxiv_id(text: str) -> str:
     return match.group(0) if match else ""
 
 
+def _recover_arxiv_id_by_title(title: str) -> str:
+    """Try to recover an arXiv ID by searching Semantic Scholar with the paper title.
+
+    Returns the bare arXiv ID (e.g. '2106.09685') or an empty string on failure.
+    """
+    if not title or len(title) < 8:
+        return ""
+    try:
+        results = s2_search(title, limit=5)
+    except Exception:
+        return ""
+    normalized_title = _normalize_text(title)
+    title_tokens = set(_tokenize(normalized_title))
+    for result in results:
+        result_title = _normalize_text(str(result.get("title") or ""))
+        if not result_title:
+            continue
+        arxiv_id = (result.get("externalIds") or {}).get("ArXiv", "")
+        if not arxiv_id:
+            continue
+        # Exact normalized match
+        if result_title == normalized_title:
+            return str(arxiv_id)
+        # High token-overlap match (at least 80% of tokens in common)
+        result_tokens = set(_tokenize(result_title))
+        if result_tokens and title_tokens:
+            overlap = len(result_tokens & title_tokens)
+            min_len = min(len(result_tokens), len(title_tokens))
+            if min_len > 0 and overlap / min_len >= 0.8:
+                return str(arxiv_id)
+    return ""
+
+
+def _download_arxiv_source(arxiv_id: str, dest_dir: Path) -> dict[str, Any]:
+    """Download arXiv TeX source tarball and extract to dest_dir.
+
+    Returns a dict with keys:
+        success (bool), format (str), error (str | None).
+    """
+    headers = {"User-Agent": "OmegaWiki-init-discovery/1.0"}
+    try:
+        src_resp = requests.get(f"https://arxiv.org/e-print/{arxiv_id}", timeout=30, headers=headers)
+        if src_resp.ok and src_resp.content:
+            with NamedTemporaryFile(suffix=".tar", delete=False) as tmp:
+                tmp.write(src_resp.content)
+                tmp_path = Path(tmp.name)
+            try:
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                _safe_extract_tar(tmp_path, dest_dir)
+                if not any(path.is_file() for path in dest_dir.rglob("*")):
+                    raise ValueError("source archive extracted no files")
+                return {"success": True, "format": "directory", "error": None}
+            except (tarfile.TarError, OSError, ValueError) as exc:
+                shutil.rmtree(dest_dir, ignore_errors=True)
+                return {"success": False, "format": "", "error": str(exc)}
+            finally:
+                tmp_path.unlink(missing_ok=True)
+    except requests.RequestException as exc:
+        return {"success": False, "format": "", "error": str(exc)}
+    return {"success": False, "format": "", "error": "empty response"}
+
+
+def _extract_arxiv_id_from_pdf_metadata(path: Path) -> str:
+    """Try to extract an arXiv ID from the PDF document info dict (metadata)."""
+    if not HAS_PYMUPDF:
+        return ""
+    try:
+        doc = fitz.open(path)
+        meta = doc.metadata or {}
+        doc.close()
+        for key in ("subject", "keywords", "title"):
+            text = str(meta.get(key) or "")
+            arxiv_id = _extract_arxiv_id(text)
+            if arxiv_id:
+                return arxiv_id
+    except Exception:
+        pass
+    return ""
+
+
+def _extract_arxiv_source_metadata(source_dir: Path) -> dict[str, str]:
+    """Extract title/abstract metadata from a fetched arXiv source dir."""
+    tex_files = sorted(source_dir.rglob("*.tex"))
+    if not tex_files:
+        return {"source_title": "", "source_abstract": ""}
+
+    # Find the .tex file that contains a title command — this is usually the main/master file.
+    # Conference templates use \icmltitle{}, \cvprtitle{}, \neuripstitle{}, etc.
+    source_text = ""
+    for tf in tex_files:
+        text = _read_text(tf, limit=15000)
+        if text and re.search(r"\\[a-z]*title[a-z]*\{", text, re.IGNORECASE):
+            source_text = text
+            break
+    if not source_text:
+        return {"source_title": "", "source_abstract": ""}
+
+    # Extract title from source (handle \title{}, \icmltitle{}, \icmltitlerunning{}, etc.)
+    source_title = ""
+    title_match = re.search(r"\\[a-z]*title[a-z]*\{", source_text, re.IGNORECASE)
+    if title_match:
+        start = title_match.end()
+        depth = 1
+        chars = []
+        idx = start
+        while idx < len(source_text) and depth > 0:
+            ch = source_text[idx]
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+            if depth > 0:
+                chars.append(ch)
+            idx += 1
+        raw_title = "".join(chars)
+        source_title = re.sub(r"\s+", " ", raw_title).strip()
+
+    # Extract abstract from source
+    source_abstract = ""
+    m = re.search(r"\\begin\{abstract\}(.+?)\\end\{abstract\}", source_text, re.DOTALL | re.IGNORECASE)
+    if m:
+        source_abstract = re.sub(r"\s+", " ", m.group(1)).strip()
+
+    return {
+        "source_title": source_title,
+        "source_abstract": source_abstract,
+    }
+
+
 def _guess_title_from_tex(text: str, fallback: str) -> str:
     match = re.search(r"\\title\{(.+?)\}", text, re.DOTALL)
     if match:
@@ -183,13 +303,44 @@ def _guess_title_from_tex(text: str, fallback: str) -> str:
     return fallback
 
 
+# Common PDF header/footer lines that should not be mistaken for paper titles.
+_NON_TITLE_PATTERNS = (
+    "published as a",
+    "proceedings of",
+    "conference",
+    "arxiv preprint",
+    "arxiv:",
+    "copyright",
+    "all rights reserved",
+    "https://",
+    "http://",
+    "doi:",
+    "ieee",
+    "acm",
+    "springer",
+    "elsevier",
+)
+
+
+def _is_likely_title(line: str) -> bool:
+    lower = line.lower()
+    if lower in {"abstract", "introduction", "contents", "references"}:
+        return False
+    for pat in _NON_TITLE_PATTERNS:
+        if pat in lower:
+            return False
+    # Skip lines that look like venue + year (e.g. "ICLR 2023")
+    if re.search(r"\b20\d{2}\b", line) and len(line) < 50:
+        return False
+    return True
+
+
 def _guess_title_from_text(text: str, fallback: str) -> str:
     for raw_line in text.splitlines():
         line = raw_line.strip().strip("#").strip()
         if len(line) < 8:
             continue
-        lower = line.lower()
-        if lower in {"abstract", "introduction", "contents"}:
+        if not _is_likely_title(line):
             continue
         return re.sub(r"\s+", " ", line)[:200]
     return fallback
@@ -347,47 +498,6 @@ def _extract_pdf_text(path: Path) -> tuple[str, list[str]]:
         return "", warnings
 
 
-def _translate_to_english(text: str, source_label: str = "") -> tuple[str, list[str]]:
-    if not text.strip():
-        return text, []
-    if _detect_language(text) != "zh":
-        return text, []
-    warnings: list[str] = []
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    if not HAS_ANTHROPIC or not api_key:
-        warnings.append(f"translation unavailable for {source_label or 'content'}; keeping original text")
-        return text, warnings
-    try:
-        client = Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model=TRANSLATION_MODEL,
-            max_tokens=4096,
-            temperature=0,
-            system=(
-                "Translate Chinese research content into concise, faithful English. "
-                "Preserve technical terminology and structure. Return only the translated text."
-            ),
-            messages=[
-                {
-                    "role": "user",
-                    "content": text[:120000],
-                }
-            ],
-        )
-        chunks = []
-        for block in message.content:
-            if getattr(block, "type", "") == "text":
-                chunks.append(block.text)
-        translated = "\n".join(chunks).strip()
-        if not translated:
-            warnings.append(f"translation returned empty output for {source_label or 'content'}")
-            return text, warnings
-        return translated, warnings
-    except Exception as exc:
-        warnings.append(f"translation failed for {source_label or 'content'}: {exc}")
-        return text, warnings
-
-
 def _build_synthetic_tex(title: str, text: str) -> str:
     abstract = _extract_abstract_excerpt(text, limit=1500)
     body = re.sub(r"\s+\n", "\n", text).strip()
@@ -423,34 +533,18 @@ def _prepare_text_entry(path: Path, raw_root: Path, kind: str) -> dict[str, Any]
     if not text.strip():
         return None
     source_rel = _relative_to_project(path, raw_root)
-    language = _detect_language(text)
-    translated_text = text
-    warnings: list[str] = []
-    prepared_path = ""
-    translated = False
-    if language == "zh":
-        translated_text, translate_warnings = _translate_to_english(text, source_rel)
-        warnings.extend(translate_warnings)
-        translated = translated_text != text
-        if translated:
-            tmp_path = raw_root / "tmp" / kind / f"{_path_slug(path.relative_to(raw_root))}.md"
-            _write_text(tmp_path, translated_text)
-            prepared_path = _relative_to_project(tmp_path, raw_root)
-    title = _guess_title_from_text(translated_text, path.stem)
-    canonical_rel = prepared_path or source_rel
+    title = _guess_title_from_text(text, path.stem)
     return {
         "entry_id": f"{kind}:{_path_slug(path.relative_to(raw_root))}",
         "source_kind": kind,
         "source_path": source_rel,
-        "prepared_path": prepared_path or None,
-        "canonical_ingest_path": canonical_rel,
-        "canonical_read_path": canonical_rel,
+        "prepared_path": None,
+        "canonical_ingest_path": source_rel,
+        "canonical_read_path": source_rel,
         "original_format": path.suffix.lower().lstrip(".") or "text",
-        "original_language": language,
-        "translated_to_english": translated,
         "title": title,
-        "abstract_excerpt": _extract_abstract_excerpt(translated_text, limit=400),
-        "warnings": warnings,
+        "abstract_excerpt": _extract_abstract_excerpt(text, limit=400),
+        "warnings": [],
         "usable": True,
     }
 
@@ -463,10 +557,8 @@ def _prepare_paper_entry(path: Path, raw_root: Path) -> dict[str, Any]:
     prepared_path = ""
     canonical_path = ""
     resolved_source_path = source_rel
-    translated = False
     title = _guess_local_title(path) if path.is_file() else (path.stem.replace("_", " ").replace("-", " ").strip() or "Untitled")
     abstract_excerpt = ""
-    language = "unknown"
     arxiv_id = ""
     usable = True
 
@@ -499,8 +591,6 @@ def _prepare_paper_entry(path: Path, raw_root: Path) -> dict[str, Any]:
             "canonical_ingest_path": source_rel,
             "original_format": original_format,
             "ingest_format": _ingest_format_from_path(source_rel),
-            "original_language": "unknown",
-            "translated_to_english": False,
             "title": title,
             "abstract_excerpt": "",
             "arxiv_id": "",
@@ -514,18 +604,44 @@ def _prepare_paper_entry(path: Path, raw_root: Path) -> dict[str, Any]:
         text, pdf_warnings = _extract_pdf_text(candidate_path)
         warnings.extend(pdf_warnings)
         if text:
-            language = _detect_language(text)
-            if language == "zh":
-                translated_text, translate_warnings = _translate_to_english(text, source_rel)
-                warnings.extend(translate_warnings)
-                translated = translated_text != text
-                text = translated_text
             title = _guess_title_from_text(text, _guess_local_title(candidate_path))
             abstract_excerpt = _extract_abstract_excerpt(text)
-            out_path = raw_root / "tmp" / "papers" / f"{_path_slug(path.relative_to(raw_root))}.tex"
-            _write_text(out_path, _build_synthetic_tex(title, text))
-            prepared_path = _relative_to_project(out_path, raw_root)
-            canonical_path = prepared_path
+            # Look up arXiv ID in order: filename -> metadata -> page-0 text -> S2 title search
+            arxiv_id = _extract_arxiv_id(path.name)
+            if not arxiv_id:
+                arxiv_id = _extract_arxiv_id_from_pdf_metadata(candidate_path)
+            if not arxiv_id:
+                arxiv_id = _extract_arxiv_id(text[:1000])
+            if not arxiv_id:
+                arxiv_id = _recover_arxiv_id_by_title(title)
+            if arxiv_id:
+                source_dir = raw_root / "tmp" / "papers" / f"{_path_slug(path.relative_to(raw_root))}-arxiv-src"
+                dl_result = _download_arxiv_source(arxiv_id, source_dir)
+                if dl_result["success"]:
+                    source_meta = _extract_arxiv_source_metadata(source_dir)
+                    if source_meta["source_title"]:
+                        title = source_meta["source_title"]
+                    if source_meta["source_abstract"]:
+                        abstract_excerpt = source_meta["source_abstract"][:1200]
+                    prepared_path = _relative_to_project(source_dir, raw_root)
+                    canonical_path = prepared_path
+                    warnings.append(
+                        f"recovered arXiv ID {arxiv_id}; using fetched TeX source"
+                    )
+                else:
+                    out_path = raw_root / "tmp" / "papers" / f"{_path_slug(path.relative_to(raw_root))}.tex"
+                    _write_text(out_path, _build_synthetic_tex(title, text))
+                    prepared_path = _relative_to_project(out_path, raw_root)
+                    canonical_path = prepared_path
+                    warnings.append(
+                        f"recovered arXiv ID {arxiv_id} but TeX source download failed; "
+                        f"falling back to synthetic tex ({dl_result.get('error', 'unknown error')})"
+                    )
+            else:
+                out_path = raw_root / "tmp" / "papers" / f"{_path_slug(path.relative_to(raw_root))}.tex"
+                _write_text(out_path, _build_synthetic_tex(title, text))
+                prepared_path = _relative_to_project(out_path, raw_root)
+                canonical_path = prepared_path
         else:
             title = _guess_local_title(candidate_path)
             canonical_path = resolved_source_path
@@ -534,21 +650,7 @@ def _prepare_paper_entry(path: Path, raw_root: Path) -> dict[str, Any]:
         title = _guess_local_title(candidate_path)
         arxiv_id = _extract_arxiv_id(f"{candidate_path.name} {title} {text[:2000]}")
         abstract_excerpt = _extract_abstract_excerpt(text)
-        language = _detect_language(text)
-        if language == "zh":
-            translated_text, translate_warnings = _translate_to_english(text, source_rel)
-            warnings.extend(translate_warnings)
-            translated = translated_text != text
-            if translated:
-                out_path = raw_root / "tmp" / "papers" / f"{_path_slug(path.relative_to(raw_root))}.tex"
-                title = _guess_title_from_text(translated_text, title)
-                _write_text(out_path, _build_synthetic_tex(title, translated_text))
-                prepared_path = _relative_to_project(out_path, raw_root)
-                canonical_path = prepared_path
-            else:
-                canonical_path = resolved_source_path
-        else:
-            canonical_path = resolved_source_path
+        canonical_path = resolved_source_path
 
     if not arxiv_id:
         arxiv_id = _extract_arxiv_id(f"{path.name} {title} {abstract_excerpt}")
@@ -563,8 +665,6 @@ def _prepare_paper_entry(path: Path, raw_root: Path) -> dict[str, Any]:
         "canonical_ingest_path": canonical_path,
         "original_format": original_format or candidate_path.suffix.lower().lstrip(".") or "file",
         "ingest_format": _ingest_format_from_path(canonical_path),
-        "original_language": language,
-        "translated_to_english": translated,
         "title": title,
         "abstract_excerpt": abstract_excerpt,
         "arxiv_id": arxiv_id,
@@ -576,8 +676,7 @@ def _prepare_paper_entry(path: Path, raw_root: Path) -> dict[str, Any]:
 def prepare_inputs(raw_root: Path) -> dict[str, Any]:
     raw_root = raw_root.resolve()
     tmp_root = raw_root / "tmp"
-    for sub in ("papers", "notes", "web"):
-        (tmp_root / sub).mkdir(parents=True, exist_ok=True)
+    (tmp_root / "papers").mkdir(parents=True, exist_ok=True)
     paper_entries: list[dict[str, Any]] = []
     other_entries: list[dict[str, Any]] = []
 
@@ -723,65 +822,52 @@ def scan_local_papers(raw_root: Path, prepared_manifest: dict[str, Any] | None =
     return results
 
 
-def scan_notes_web(raw_root: Path, prepared_manifest: dict[str, Any] | None = None) -> dict[str, Any]:
-    files: list[dict[str, Any]] = []
-    combined_text = ""
-    chinese_note_count = 0
-    chinese_web_count = 0
-    untranslated_chinese_count = 0
+def _iter_notes_web_sources(raw_root: Path, prepared_manifest: dict[str, Any] | None = None) -> list[dict[str, str]]:
+    sources: list[dict[str, str]] = []
     if prepared_manifest:
         for entry in prepared_manifest.get("entries", []):
             if entry.get("source_kind") not in {"notes", "web"} or not entry.get("usable", True):
                 continue
-            canonical_rel = entry.get("prepared_path") or entry["source_path"]
-            text = _read_text(_resolve_project_path(raw_root, canonical_rel), limit=120000)
-            if not text.strip():
+            source_path = str(entry.get("source_path") or "")
+            if not source_path:
                 continue
-            original_language = str(entry.get("original_language") or "")
-            translated = bool(entry.get("translated_to_english"))
-            if original_language == "zh":
-                if entry["source_kind"] == "notes":
-                    chinese_note_count += 1
-                else:
-                    chinese_web_count += 1
-                if not translated:
-                    untranslated_chinese_count += 1
-            files.append({
-                "path": entry["source_path"],
-                "canonical_path": canonical_rel,
-                "kind": entry["source_kind"],
-                "keywords": _top_terms(text, limit=8),
-                "translated_to_english": translated,
-                "original_language": original_language or _detect_language(text),
+            sources.append({
+                "path": source_path,
+                "canonical_path": source_path,
+                "kind": str(entry["source_kind"]),
             })
-            combined_text += "\n" + text
-    else:
-        for sub in ("notes", "web"):
-            base = raw_root / sub
-            if not base.exists():
+        return sources
+
+    for sub in ("notes", "web"):
+        base = raw_root / sub
+        if not base.exists():
+            continue
+        for path in sorted(base.rglob("*")):
+            if path.is_dir() or path.name == ".gitkeep" or path.suffix.lower() not in TEXT_SUFFIXES:
                 continue
-            for path in sorted(base.rglob("*")):
-                if path.is_dir() or path.name == ".gitkeep" or path.suffix.lower() not in TEXT_SUFFIXES:
-                    continue
-                text = _read_text(path)
-                if not text.strip():
-                    continue
-                language = _detect_language(text)
-                if language == "zh":
-                    if sub == "notes":
-                        chinese_note_count += 1
-                    else:
-                        chinese_web_count += 1
-                    untranslated_chinese_count += 1
-                files.append({
-                    "path": str(path.relative_to(raw_root.parent)),
-                    "canonical_path": str(path.relative_to(raw_root.parent)),
-                    "kind": sub,
-                    "keywords": _top_terms(text, limit=8),
-                    "translated_to_english": False,
-                    "original_language": language,
-                })
-                combined_text += "\n" + text
+            rel_path = str(path.relative_to(raw_root.parent))
+            sources.append({
+                "path": rel_path,
+                "canonical_path": rel_path,
+                "kind": sub,
+            })
+    return sources
+
+
+def scan_notes_web(raw_root: Path, prepared_manifest: dict[str, Any] | None = None) -> dict[str, Any]:
+    files: list[dict[str, Any]] = []
+    combined_text = ""
+    for item in _iter_notes_web_sources(raw_root, prepared_manifest):
+        text = _read_text(_resolve_project_path(raw_root, item["canonical_path"]), limit=120000)
+        if not text.strip():
+            continue
+        files.append({
+            "path": item["path"],
+            "canonical_path": item["canonical_path"],
+            "kind": item["kind"],
+            "keywords": _top_terms(text, limit=8),
+        })
+        combined_text += "\n" + text
 
     sentences = _split_sentences(combined_text)
     exclusions = [s for s in sentences if any(p in s.lower() for p in EXCLUSION_PATTERNS)]
@@ -794,10 +880,15 @@ def scan_notes_web(raw_root: Path, prepared_manifest: dict[str, Any] | None = No
         "exclusions": exclusions[:8],
         "assertions": assertions,
         "ideas": ideas,
-        "chinese_note_count": chinese_note_count,
-        "chinese_web_count": chinese_web_count,
-        "untranslated_chinese_count": untranslated_chinese_count,
     }
+
+
+def _notes_web_contains_chinese(raw_root: Path, prepared_manifest: dict[str, Any] | None = None) -> bool:
+    for item in _iter_notes_web_sources(raw_root, prepared_manifest):
+        text = _read_text(_resolve_project_path(raw_root, item["canonical_path"]), limit=120000)
+        if text.strip() and _detect_language(text) == "zh":
+            return True
+    return False
 
 
 def _title_key(title: str) -> str:
@@ -922,6 +1013,24 @@ def _freshness_score(year: int | None) -> float:
     if age <= 8:
         return 0.4
     return 0.15
+
+
+def _is_older_paper(candidate: dict[str, Any]) -> bool:
+    year = candidate.get("year")
+    if not year:
+        return False
+    try:
+        return CURRENT_YEAR - int(year) >= OLDER_PAPER_YEARS
+    except (TypeError, ValueError):
+        return False
+
+
+def _is_older_external_non_survey(candidate: dict[str, Any]) -> bool:
+    return (
+        not candidate.get("user_owned")
+        and not candidate.get("is_survey")
+        and _is_older_paper(candidate)
+    )
 
 
 def _survey_score(title: str, abstract: str) -> float:
@@ -1065,6 +1174,9 @@ def _select_shortlist(
     shortlist = list(protected)
     target = SHORTLIST_TARGET if mode == "bootstrap" else max(10, min(SHORTLIST_TARGET, local_count + 4))
     target = max(target, len(shortlist))
+    introduced_capacity = max(FINAL_TARGET_RANGE[1] - local_count, 0)
+    allow_old_anchor_promotion = mode == "bootstrap" or introduced_capacity >= ROOMY_INTRODUCED_CAPACITY
+    scarce_seeded_mode = mode != "bootstrap" and introduced_capacity < ROOMY_INTRODUCED_CAPACITY
 
     survey_pool = [c for c in candidates if c.get("is_survey") and c["candidate_id"] not in protected_ids]
     if survey_pool and len(shortlist) < target:
@@ -1075,11 +1187,9 @@ def _select_shortlist(
     older_candidates = [
         c
         for c in candidates
-        if c["candidate_id"] not in protected_ids
-        and c.get("year")
-        and CURRENT_YEAR - int(c["year"]) >= 4
+        if c["candidate_id"] not in protected_ids and _is_older_external_non_survey(c)
     ]
-    if older_candidates and len(shortlist) < target:
+    if allow_old_anchor_promotion and older_candidates and len(shortlist) < target:
         older = max(older_candidates, key=lambda c: (c["citation_count"], c["total_score"]))
         shortlist.append(older)
         protected_ids.add(older["candidate_id"])
@@ -1088,6 +1198,7 @@ def _select_shortlist(
     cluster_counts: defaultdict[str, int] = defaultdict(int)
     for item in shortlist:
         cluster_counts[item["cluster"]] += 1
+    older_external_selected = sum(1 for item in shortlist if _is_older_external_non_survey(item))
 
     for candidate in candidates:
         if candidate["candidate_id"] in protected_ids:
@@ -1095,7 +1206,7 @@ def _select_shortlist(
         if len(shortlist) >= target:
             break
         old_penalty = 0.0
-        if candidate.get("year") and CURRENT_YEAR - int(candidate["year"]) >= 4 and anchor_added:
+        if _is_older_external_non_survey(candidate) and (anchor_added or scarce_seeded_mode):
             old_penalty = 12.0
         diversity_penalty = 12.0 * cluster_counts[candidate["cluster"]]
         penalized_score = candidate["total_score"] - diversity_penalty - old_penalty
@@ -1110,11 +1221,13 @@ def _select_shortlist(
     for candidate in remaining:
         if len(shortlist) >= target:
             break
-        if anchor_added and candidate.get("year") and CURRENT_YEAR - int(candidate["year"]) >= 4:
+        if _is_older_external_non_survey(candidate) and older_external_selected >= 1:
             continue
         shortlist.append(candidate)
         protected_ids.add(candidate["candidate_id"])
         cluster_counts[candidate["cluster"]] += 1
+        if _is_older_external_non_survey(candidate):
+            older_external_selected += 1
 
     return shortlist
 
@@ -1300,13 +1413,14 @@ def build_plan(
             "semantic_scholar",
             "SEMANTIC_SCHOLAR_API_KEY is unset; Semantic Scholar discovery will run with the slower public rate limit.",
         )
-    if notes_web.get("chinese_note_count", 0) > 0:
+    if _notes_web_contains_chinese(raw_root, prepared_manifest=prepared_manifest):
         _record_issue(
             warnings,
             "notes_web_chinese",
             (
-                "Chinese note content detected. Curated Chinese support is planned for a later release; "
-                "current note/web extraction and ranking may perform worse, so treat rankings and provisional pages as lower-confidence."
+                "Chinese note or web content detected. Current note/web extraction and ranking may be "
+                "less reliable for Chinese-heavy inputs, so treat rankings and provisional pages as "
+                "lower-confidence."
             ),
         )
 
@@ -1382,32 +1496,19 @@ def _download_source(candidate: dict[str, Any], raw_root: Path) -> dict[str, Any
     if not arxiv_id:
         return {"candidate_id": candidate["candidate_id"], "status": "skipped_no_arxiv", "path": ""}
 
-    headers = {"User-Agent": "OmegaWiki-init-discovery/1.0"}
-    try:
-        src_resp = requests.get(f"https://arxiv.org/e-print/{arxiv_id}", timeout=30, headers=headers)
-        if src_resp.ok and src_resp.content:
-            with NamedTemporaryFile(suffix=".tar", delete=False) as tmp:
-                tmp.write(src_resp.content)
-                tmp_path = Path(tmp.name)
-            try:
-                dest_dir.mkdir(parents=True, exist_ok=True)
-                _safe_extract_tar(tmp_path, dest_dir)
-                if not any(path.is_file() for path in dest_dir.rglob("*")):
-                    raise ValueError("source archive extracted no files")
-                return {
-                    "candidate_id": candidate["candidate_id"],
-                    "status": "downloaded_source",
-                    "path": str(dest_dir),
-                    "canonical_ingest_path": str(dest_dir),
-                    "ingest_format": "directory",
-                }
-            except (tarfile.TarError, OSError, ValueError):
-                shutil.rmtree(dest_dir, ignore_errors=True)
-            finally:
-                tmp_path.unlink(missing_ok=True)
-    except requests.RequestException:
-        pass
+    # Try TeX source first
+    source_result = _download_arxiv_source(arxiv_id, dest_dir)
+    if source_result["success"]:
+        return {
+            "candidate_id": candidate["candidate_id"],
+            "status": "downloaded_source",
+            "path": str(dest_dir),
+            "canonical_ingest_path": str(dest_dir),
+            "ingest_format": "directory",
+        }
 
+    # Fall back to PDF
+    headers = {"User-Agent": "OmegaWiki-init-discovery/1.0"}
     try:
         pdf_resp = requests.get(f"https://arxiv.org/pdf/{arxiv_id}", timeout=30, headers=headers)
         pdf_resp.raise_for_status()
