@@ -357,7 +357,8 @@ Then run `claude` as usual. That's it — zero extra setup.
 
 ## Community / 交流群
 
-<img src="assets/wechat-group.png" width="240" alt="WeChat Group QR Code">
+<img src="assets/wechat_group_2.jpg" width="240" alt="WeChat Group QR Code">
+<img src="assets/wechat_group_1.jpg" width="240" alt="WeChat Group QR Code">
 
 Scan to join the ΩmegaWiki WeChat group / 扫码加入微信交流群
 
