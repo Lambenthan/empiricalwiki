@@ -25,7 +25,7 @@ wiki/
 raw/
 ├── papers/            ← 用户自有 .tex / .pdf 来源
 ├── discovered/        ← /init 与 /daily-arxiv 抓取的外部论文
-├── tmp/               ← /init 生成的本地预处理来源（合成 tex、抓取到的源码目录）
+├── tmp/               ← /init 与直接本地 /ingest 生成的本地预处理来源
 ├── notes/             ← 用户自有 .md 笔记
 └── web/               ← 用户自有 HTML / Markdown
 
@@ -40,5 +40,5 @@ config/
 
 - `raw/papers/`、`raw/notes/`、`raw/web/` 是用户自有输入。
 - `raw/discovered/` 用于外部抓取论文，不是用户随手放文件的目录。
-- `raw/tmp/` 是 `/init` 的生成型中间状态。
+- `raw/tmp/` 是 `/init` 与直接本地 `/ingest` 的生成型中间状态。
 - `graph/` 是派生目录，只能通过 `tools/research_wiki.py` 维护。

@@ -25,7 +25,7 @@ wiki/
 raw/
 ├── papers/            ← user-owned .tex / .pdf sources
 ├── discovered/        ← externally fetched papers from /init and /daily-arxiv
-├── tmp/               ← /init-generated prepared local sources (synthetic tex, fetched source dirs)
+├── tmp/               ← generated prepared local sources for /init and direct local /ingest
 ├── notes/             ← user-owned .md notes
 └── web/               ← user-owned HTML / Markdown
 
@@ -40,5 +40,5 @@ config/
 
 - `raw/papers/`, `raw/notes/`, and `raw/web/` are user-owned inputs.
 - `raw/discovered/` is for fetched external papers, not user drop-ins.
-- `raw/tmp/` is generated intermediate state for `/init`.
+- `raw/tmp/` is generated intermediate state for `/init` and direct local `/ingest`.
 - `graph/` is derived and should be maintained only through `tools/research_wiki.py`.

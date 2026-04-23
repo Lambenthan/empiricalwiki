@@ -63,7 +63,7 @@ argument-hint: <local-path-or-arXiv-URL>
 1. 检测 source 类型：
    - **arXiv URL**：尝试获取 tex source（ar5iv HTML 或直接下载 .tex）；若失败则下载 PDF
    - **本地 .tex**：直接读取
-   - **本地 .pdf**：提取文本（PyMuPDF 或 vision API fallback）
+   - **本地 .pdf**：先读取 PDF，在有把握时恢复标题；如果 agent 已经拿到可信 arXiv ID，也一并保留；然后运行 `python3 tools/prepare_paper_source.py --raw-root raw --source <local-path> [--title "<recovered-title>"] [--arxiv-id "<recovered-arxiv-id>"]`；该 helper 会优先使用 handoff 进来的或 filename/path 中的 arXiv ID，再尝试 agent 标题经 Semantic Scholar 的恢复，否则就直接回退到 synthetic `.tex`。如果 agent 已经提供标题，就把它当作 authoritative title；抓取源码里的标题只能作为清洗后的 fallback metadata
    - **INIT MODE 规范交接路径**：若 `/init` 传入来自 `.checkpoints/init-sources.json` 的路径，则直接 ingest 该 `canonical_ingest_path`，不要重新扫描相邻 raw 目录
 2. 提取元数据：标题、摘要、作者列表（含机构）、发表日期、venue
 3. 提取参考文献列表（BibTeX entries 或 reference section）
@@ -383,7 +383,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 
 ## Constraints
 
-- **raw/ 只读**：不得修改 `raw/` 下的文件
+- **raw/ 除 canonical source prep 外只读**：把 `raw/papers/`、`raw/notes/`、`raw/web/` 当作用户自有输入。直接本地 `/ingest` 只能把生成的 prepared local sidecar 写到 `raw/tmp/`，直接 arXiv ingest 只能把抓取到的来源写到 `raw/discovered/`。INIT MODE `/ingest` 仍然只读，并且必须直接消费交接的 canonical path。
 - **INIT MODE 的来源交接具有最高优先级**：当 `/init` 从 `.checkpoints/init-sources.json` 传入 `canonical_ingest_path` 时，直接 ingest 该路径，不要重新扫描 `raw/papers/`、`raw/tmp/` 或 `raw/discovered/`
 - **graph/ 仅通过 tools 维护**：不得手动编辑 `graph/` 下的文件，仅通过 `python3 tools/research_wiki.py` 操作
 - **双向链接**：写正向链接时同步写反向链接（参照 CLAUDE.md Cross Reference 规则表）
@@ -399,7 +399,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 
 ## Error Handling
 
-- **来源解析失败**：tex 失败 → PDF 解析 → vision API → 报告用户手动处理。INIT MODE 下，`raw/tmp/` 中的合成 `.tex` 与 `raw/discovered/` 中的抓取源码目录 / PDF 都是合法输入，应按交接路径直接消费。
+- **来源解析失败**：tex 失败 → PDF 解析 → vision API → 报告用户手动处理。对于直接本地 PDF，如果没有恢复出可信标题，就在不带 `--title` 的情况下调用 `tools/prepare_paper_source.py`；这意味着只允许 filename/path arXiv-ID 恢复，然后立刻回退到 synthetic `.tex`。metadata 或 filename 标题只用于显示，不能驱动按标题检索。INIT MODE 下，`raw/tmp/` 中的合成 `.tex` 与 `raw/discovered/` 中的抓取源码目录 / PDF 都是合法输入，应按交接路径直接消费。
 - **S2 API 不可用**：跳过 S2 相关步骤（citations 回填、importance 使用默认值 3），在报告中注明
 - **DeepXiv API 不可用**：跳过 DeepXiv 增强步骤（TLDR、结构验证、社交指标），仅依赖 S2 + 源文件解析
 - **slug 冲突**：若生成的 slug 已存在但内容不同，追加数字后缀（如 `attention-mechanism-2`）
@@ -416,6 +416,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 - `python3 tools/research_wiki.py rebuild-context-brief wiki/` — 重建压缩上下文
 - `python3 tools/research_wiki.py rebuild-open-questions wiki/` — 重建知识缺口地图
 - `python3 tools/research_wiki.py log wiki/ "<message>"` — 追加日志
+- `python3 tools/prepare_paper_source.py --raw-root raw --source <local-path> [--title "<recovered-title>"]` — 把本地来源规范化成 canonical ingest path
 - `python3 tools/fetch_s2.py paper <arxiv_id>` — 查询 Semantic Scholar
 - `python3 tools/fetch_s2.py citations <arxiv_id>` — 查询引用
 - `python3 tools/fetch_s2.py references <arxiv_id>` — 查询参考文献

@@ -63,7 +63,7 @@ Set `WIKI_ROOT=wiki/`.
 1. Detect source type:
    - **arXiv URL**: fetch tex source (ar5iv HTML or direct .tex download); fall back to PDF if unavailable
    - **local .tex**: read directly
-   - **local .pdf**: extract text (PyMuPDF or vision API fallback)
+   - **local .pdf**: inspect the PDF to recover a confident title when possible, and if the agent already recovered a confident arXiv ID keep that too; then run `python3 tools/prepare_paper_source.py --raw-root raw --source <local-path> [--title "<recovered-title>"] [--arxiv-id "<recovered-arxiv-id>"]`; the helper uses handed-off or filename/path arXiv IDs first, then agent-title Semantic Scholar recovery, and otherwise falls back directly to synthetic `.tex`. When a title was supplied by the agent, keep it authoritative; fetched/source titles are sanitized fallback metadata only.
    - **INIT MODE canonical handoff path**: if `/init` passes a path from `.checkpoints/init-sources.json`, ingest that exact `canonical_ingest_path` rather than rescanning sibling raw folders
 2. Extract metadata: title, abstract, author list (with affiliations), publication date, venue
 3. Extract reference list (BibTeX entries or reference section)
@@ -383,7 +383,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 
 ## Constraints
 
-- **raw/ is read-only**: do not modify files under `raw/`
+- **raw/ is read-only except canonical source prep**: treat `raw/papers/`, `raw/notes/`, and `raw/web/` as user-owned inputs. Direct local `/ingest` may write generated prepared local sidecars only under `raw/tmp/`, and direct arXiv ingests may write fetched source artifacts only under `raw/discovered/`. INIT MODE `/ingest` remains read-only and must consume the handed-off canonical path directly.
 - **INIT MODE source handoff is authoritative**: when `/init` passes a `canonical_ingest_path` from `.checkpoints/init-sources.json`, ingest that exact path rather than rescanning `raw/papers/`, `raw/tmp/`, or `raw/discovered/`
 - **graph/ via tools only**: do not manually edit files in `graph/` — use `python3 tools/research_wiki.py` only
 - **Bidirectional links**: always write the reverse link when writing a forward link (see CLAUDE.md Cross-Reference Rules table)
@@ -399,7 +399,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 
 ## Error Handling
 
-- **Source parse failure**: tex fails → PDF parse → vision API → report to user for manual handling. In INIT MODE, synthetic `.tex` under `raw/tmp/` and fetched source dirs / PDFs under `raw/discovered/` are valid inputs and should be consumed as handed off.
+- **Source parse failure**: tex fails → PDF parse → vision API → report to user for manual handling. For direct local PDFs, if no confident title is recovered, call `tools/prepare_paper_source.py` without `--title`; that means filename/path arXiv-ID recovery only, then immediate synthetic-`.tex` fallback. Metadata or filename titles are display-only and must not drive title-based lookup. In INIT MODE, synthetic `.tex` under `raw/tmp/` and fetched source dirs / PDFs under `raw/discovered/` are valid inputs and should be consumed as handed off.
 - **S2 API unavailable**: skip S2 steps (citations backfill, default importance to 3); note in report
 - **DeepXiv API unavailable**: skip DeepXiv enrichment (TLDR, structure verification, social metrics); fall back to S2 + source file parsing
 - **Slug conflict**: if generated slug already exists but content differs, append numeric suffix (e.g. `attention-mechanism-2`)
@@ -416,6 +416,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges | Maturity: {level} ({cov
 - `python3 tools/research_wiki.py rebuild-context-brief wiki/` — rebuild compressed context
 - `python3 tools/research_wiki.py rebuild-open-questions wiki/` — rebuild knowledge gap map
 - `python3 tools/research_wiki.py log wiki/ "<message>"` — append log entry
+- `python3 tools/prepare_paper_source.py --raw-root raw --source <local-path> [--title "<recovered-title>"]` — normalize a local source into a canonical ingest path
 - `python3 tools/fetch_s2.py paper <arxiv_id>` — query Semantic Scholar
 - `python3 tools/fetch_s2.py citations <arxiv_id>` — query citations
 - `python3 tools/fetch_s2.py references <arxiv_id>` — query references

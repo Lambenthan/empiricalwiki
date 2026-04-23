@@ -164,15 +164,7 @@ for src in "$I18N_DIR/skills"/*/SKILL.md; do
     skill_dir=$(dirname "$src")
     name=$(basename "$skill_dir")
     mkdir -p ".claude/skills/$name"
-    cp "$src" ".claude/skills/$name/SKILL.md"
-    # Copy any sibling resource files (e.g. prefill/foundations-catalog.yaml)
-    for extra in "$skill_dir"/*; do
-        [ -f "$extra" ] || continue
-        case "$(basename "$extra")" in
-            SKILL.md) ;;
-            *) cp "$extra" ".claude/skills/$name/" ;;
-        esac
-    done
+    cp -R "$skill_dir"/. ".claude/skills/$name/"
 done
 mkdir -p ".claude/skills/shared-references"
 cp "$I18N_DIR/shared-references"/*.md ".claude/skills/shared-references/"

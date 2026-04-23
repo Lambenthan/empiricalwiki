@@ -139,6 +139,13 @@ class TestWorkflow:
         steps = re.findall(r"^### Step \d+", workflow, re.MULTILINE)
         assert len(steps) >= 8, f"Expected >= 8 workflow steps, found {len(steps)}"
 
+    def test_local_pdf_flow_is_agent_first(self, skill_text):
+        lowered = skill_text.lower()
+        assert "filename/path arxiv" in lowered
+        assert "--arxiv-id" in skill_text
+        assert "authoritative" in lowered
+        assert "synthetic `.tex`" in skill_text
+
 
 # ── 4. Tool references ─────────────────────────────────────────────────
 
@@ -148,6 +155,7 @@ REQUIRED_TOOL_CALLS = [
     ("research_wiki.py rebuild-context-brief", "Must use research_wiki.py rebuild-context-brief"),
     ("research_wiki.py rebuild-open-questions", "Must use research_wiki.py rebuild-open-questions"),
     ("research_wiki.py log", "Must use research_wiki.py log for audit logging"),
+    ("prepare_paper_source.py", "Must reference prepare_paper_source.py for direct local PDF normalization"),
 ]
 
 
@@ -165,6 +173,10 @@ class TestToolReferences:
     def test_fetch_s2_tool_exists(self):
         assert (TOOLS_DIR / "fetch_s2.py").exists(), \
             "tools/fetch_s2.py must exist"
+
+    def test_prepare_paper_source_tool_exists(self):
+        assert (TOOLS_DIR / "prepare_paper_source.py").exists(), \
+            "tools/prepare_paper_source.py must exist"
 
     def test_references_fetch_s2(self, skill_text):
         assert "fetch_s2.py" in skill_text, \

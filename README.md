@@ -73,7 +73,7 @@ chmod +x setup.sh && ./setup.sh        # Linux / macOS
 
 # 4. Put your own papers in raw/papers/ (.tex or .pdf)
 #    Optional: add intent notes to raw/notes/ and saved pages to raw/web/
-#    /init will manage generated inputs under raw/discovered/ and raw/tmp/
+#    /init and direct local /ingest will manage generated inputs under raw/discovered/ and raw/tmp/
 
 # 5. Build your wiki
 claude
@@ -220,7 +220,7 @@ OmegaWiki/
 ├── raw/                         # Source materials
 │   ├── papers/                  #   User-owned .tex / .pdf files
 │   ├── discovered/              #   /init and /daily-arxiv-downloaded external papers
-│   ├── tmp/                     #   /init-generated prepared local sidecars
+│   ├── tmp/                     #   generated prepared local sidecars for /init and direct local /ingest
 │   ├── notes/                   #   User-owned .md notes
 │   └── web/                     #   User-owned HTML / Markdown
 ├── tools/                       # Deterministic Python helpers
@@ -415,7 +415,7 @@ chmod +x setup.sh && ./setup.sh --lang zh        # Linux / macOS
 
 # 把你自己的论文放入 raw/papers/（.tex 或 .pdf）
 # 可选：把意图笔记放入 raw/notes/，网页存档放入 raw/web/
-# /init 会自动管理 raw/discovered/ 与 raw/tmp/ 下的生成内容
+# /init 与直接本地 /ingest 会自动管理 raw/discovered/ 与 raw/tmp/ 下的生成内容
 # 启动 Claude Code
 claude
 # 输入：/init [你的研究方向]
