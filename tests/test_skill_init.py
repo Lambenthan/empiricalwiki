@@ -186,7 +186,7 @@ class TestWorkflow:
         assert "rebuild-index" in en_skill_text
         assert "rebuild-context-brief" in en_skill_text
         assert "rebuild-open-questions" in en_skill_text
-        assert 'tools/lint.py wiki/ --fix' in en_skill_text
+        assert 'tools/lint.py --wiki-dir wiki/ --fix' in en_skill_text
 
 
 class TestReferenceDocs:
