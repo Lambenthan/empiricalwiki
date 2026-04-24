@@ -18,8 +18,11 @@ Commands:
     set-meta <path> <field> <value> [--append]
 
     # Graph operations
-    add-edge <wiki_root> --from <id> --to <id> --type <type> [--evidence "..."]
+    add-edge <wiki_root> --from <id> --to <id> --type <type> [--evidence "..."] [--confidence high|medium|low]
+    add-citation <wiki_root> --from papers/a --to papers/b [--source semantic_scholar]
     batch-edges <wiki_root>                          # reads JSON array from stdin
+    dedup-edges <wiki_root>
+    dedup-citations <wiki_root>
 
     # Knowledge queries
     find <wiki_root> <entity_type> [--field value ...]
@@ -62,9 +65,21 @@ from pathlib import Path
 # Constants
 # ---------------------------------------------------------------------------
 
-# ENTITY_DIRS / VALID_EDGE_TYPES are re-exported from _schemas so this module
-# and lint.py share a single source of truth — see tools/_schemas.py.
-from _schemas import ENTITY_DIRS, VALID_EDGE_TYPES  # noqa: E402
+# Schema constants are re-exported from _schemas so this module and lint.py
+# share a single source of truth — see tools/_schemas.py.
+from _schemas import (  # noqa: E402
+    CITATION_SOURCES,
+    EDGE_CONFIDENCE_VALUES,
+    ENTITY_DIRS,
+    SYMMETRIC_EDGE_TYPES,
+    VALID_EDGE_TYPES,
+    edge_is_legacy_for_endpoint,
+    edge_endpoint_matches,
+    edge_expected_endpoint,
+    edge_is_symmetric,
+    edge_legacy_replacement_message,
+    edge_requires_confidence,
+)
 
 DERIVED_DIR = "graph"
 
@@ -117,7 +132,7 @@ def init_wiki(wiki_root: str) -> None:
 
     Creates:
       - 9 entity directories (papers, concepts, topics, people, ideas, experiments, claims, Summary, foundations)
-      - graph/ with empty edges.jsonl, context_brief.md, open_questions.md
+      - graph/ with empty edges.jsonl, citations.jsonl, context_brief.md, open_questions.md
       - outputs/
       - index.md, log.md (if they don't exist)
     """
@@ -138,6 +153,7 @@ def init_wiki(wiki_root: str) -> None:
     _write_if_missing(root / "index.md", _initial_index())
     _write_if_missing(root / "log.md", _initial_log())
     _write_if_missing(graph / "edges.jsonl", "")
+    _write_if_missing(graph / "citations.jsonl", "")
     _write_if_missing(graph / "context_brief.md",
                       "# Query Pack\n\n_Auto-generated compressed context. Do not edit._\n")
     _write_if_missing(graph / "open_questions.md",
@@ -164,11 +180,105 @@ def _initial_log() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Edge management
+# Edge and citation management
 # ---------------------------------------------------------------------------
 
+def _today() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _truthy(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y"}
+    return bool(value)
+
+
+def _node_kind(node_id: str) -> str:
+    return node_id.split("/", 1)[0] if "/" in node_id else ""
+
+
+def _validate_node_refs(root: Path, *node_ids: str) -> list[str]:
+    warnings: list[str] = []
+    for node_id in node_ids:
+        if "/" in node_id:
+            entity_path = root / f"{node_id}.md"
+            if not entity_path.exists():
+                warnings.append(f"{node_id}.md not found")
+    return warnings
+
+
+def _semantic_edge_warnings(edge_type: str, from_id: str, to_id: str,
+                            confidence: str = "",
+                            evidence: str = "") -> list[str]:
+    warnings: list[str] = []
+    from_kind = _node_kind(from_id)
+    to_kind = _node_kind(to_id)
+
+    if not edge_endpoint_matches(edge_type, from_kind, to_kind):
+        expected_from = edge_expected_endpoint(edge_type, "from")
+        expected_to = edge_expected_endpoint(edge_type, "to")
+        warnings.append(f"{edge_type} should connect {expected_from}/* -> {expected_to}/*")
+    if (edge_expected_endpoint(edge_type, "from") == "papers"
+            and edge_expected_endpoint(edge_type, "to") == "papers"
+            and from_id == to_id):
+        warnings.append(f"{edge_type} should not connect a paper to itself")
+    if edge_requires_confidence(edge_type) and not confidence:
+        warnings.append(f"{edge_type} should include confidence=high|medium|low")
+    if edge_requires_confidence(edge_type) and not evidence.strip():
+        warnings.append(f"{edge_type} should include evidence text")
+    return warnings
+
+
+def _semantic_edge_errors(edge_type: str, from_id: str, to_id: str,
+                          confidence: str = "",
+                          evidence: str = "") -> list[str]:
+    """Hard validation for new writes. Legacy graph rows remain lint-readable."""
+    errors: list[str] = []
+    from_kind = _node_kind(from_id)
+    to_kind = _node_kind(to_id)
+
+    if edge_is_legacy_for_endpoint(edge_type, from_kind, to_kind):
+        errors.append(edge_legacy_replacement_message(edge_type, from_kind, to_kind))
+    if not edge_endpoint_matches(edge_type, from_kind, to_kind):
+        expected_from = edge_expected_endpoint(edge_type, "from")
+        expected_to = edge_expected_endpoint(edge_type, "to")
+        errors.append(f"{edge_type} must connect {expected_from}/* -> {expected_to}/*")
+    if (edge_expected_endpoint(edge_type, "from") == "papers"
+            and edge_expected_endpoint(edge_type, "to") == "papers"
+            and from_id == to_id):
+        errors.append(f"{edge_type} must not connect a paper to itself")
+    if edge_requires_confidence(edge_type) and not confidence:
+        errors.append(f"{edge_type} requires --confidence high|medium|low")
+    if edge_requires_confidence(edge_type) and not evidence.strip():
+        errors.append(f"{edge_type} requires --evidence text")
+    return errors
+
+
+def _canonical_edge_ids(from_id: str, to_id: str, edge_type: str,
+                        symmetric: bool = False) -> tuple[str, str, bool, str]:
+    is_symmetric = symmetric or edge_is_symmetric(edge_type)
+    if is_symmetric and not edge_is_symmetric(edge_type):
+        return from_id, to_id, False, f"symmetric is only valid for {sorted(SYMMETRIC_EDGE_TYPES)}"
+    if is_symmetric:
+        left, right = sorted([from_id, to_id])
+        return left, right, True, ""
+    return from_id, to_id, False, ""
+
+
+def _edge_key(edge: dict) -> tuple[str, str, str]:
+    from_id = str(edge.get("from", ""))
+    to_id = str(edge.get("to", ""))
+    edge_type = str(edge.get("type", ""))
+    if edge.get("symmetric") is True or edge_is_symmetric(edge_type):
+        from_id, to_id = sorted([from_id, to_id])
+    return from_id, to_id, edge_type
+
+
 def add_edge(wiki_root: str, from_id: str, to_id: str,
-             edge_type: str, evidence: str = "") -> None:
+             edge_type: str, evidence: str = "", confidence: str = "",
+             symmetric: bool = False) -> None:
     """Append a typed edge to graph/edges.jsonl with dedup and entity validation."""
     if edge_type not in VALID_EDGE_TYPES:
         print(json.dumps({
@@ -176,22 +286,42 @@ def add_edge(wiki_root: str, from_id: str, to_id: str,
             "message": f"Unknown edge type '{edge_type}'. Valid: {sorted(VALID_EDGE_TYPES)}"
         }))
         sys.exit(1)
+    if confidence and confidence not in EDGE_CONFIDENCE_VALUES:
+        print(json.dumps({
+            "status": "error",
+            "message": f"Unknown confidence '{confidence}'. Valid: {sorted(EDGE_CONFIDENCE_VALUES)}"
+        }))
+        sys.exit(1)
+
+    from_id, to_id, is_symmetric, error = _canonical_edge_ids(
+        from_id, to_id, edge_type, symmetric
+    )
+    if error:
+        print(json.dumps({"status": "error", "message": error}))
+        sys.exit(1)
 
     root = Path(wiki_root)
     edges_path = root / DERIVED_DIR / "edges.jsonl"
     edges_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Entity existence validation
-    warnings: list[str] = []
-    for node_id in (from_id, to_id):
-        if "/" in node_id:
-            entity_path = root / f"{node_id}.md"
-            if not entity_path.exists():
-                msg = f"{node_id}.md not found"
-                warnings.append(msg)
-                print(msg, file=sys.stderr)
+    errors = _semantic_edge_errors(edge_type, from_id, to_id, confidence, evidence)
+    if errors:
+        print(json.dumps({"status": "error", "errors": errors},
+                         ensure_ascii=False))
+        sys.exit(1)
+
+    warnings = _validate_node_refs(root, from_id, to_id)
+    warnings.extend(_semantic_edge_warnings(
+        edge_type, from_id, to_id, confidence, evidence
+    ))
+    for msg in warnings:
+        print(msg, file=sys.stderr)
 
     # Dedup: check existing edges
+    target_key = _edge_key({
+        "from": from_id, "to": to_id, "type": edge_type,
+        "symmetric": is_symmetric,
+    })
     if edges_path.exists():
         for line in edges_path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
@@ -201,9 +331,7 @@ def add_edge(wiki_root: str, from_id: str, to_id: str,
                 e = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if (e.get("from") == from_id
-                    and e.get("to") == to_id
-                    and e.get("type") == edge_type):
+            if _edge_key(e) == target_key:
                 result: dict = {"status": "exists",
                                 "message": f"{from_id} --{edge_type}--> {to_id}"}
                 if warnings:
@@ -216,14 +344,89 @@ def add_edge(wiki_root: str, from_id: str, to_id: str,
         "to": to_id,
         "type": edge_type,
         "evidence": evidence,
-        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "date": _today(),
     }
+    if confidence:
+        edge["confidence"] = confidence
+    if is_symmetric:
+        edge["symmetric"] = True
 
     with open(edges_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(edge, ensure_ascii=False) + "\n")
 
     result2: dict = {"status": "ok",
                      "edge": f"{from_id} --{edge_type}--> {to_id}"}
+    if warnings:
+        result2["warnings"] = warnings
+    print(json.dumps(result2))
+
+
+def load_citations(wiki_root: str) -> list[dict]:
+    """Load all bibliographic citation rows from citations.jsonl."""
+    citations_path = Path(wiki_root) / DERIVED_DIR / "citations.jsonl"
+    citations = []
+    if not citations_path.exists():
+        return citations
+    for line in citations_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            citations.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return citations
+
+
+def add_citation(wiki_root: str, from_id: str, to_id: str,
+                 source: str = "semantic_scholar") -> None:
+    """Append a deterministic bibliographic paper citation to graph/citations.jsonl."""
+    if source not in CITATION_SOURCES:
+        print(json.dumps({
+            "status": "error",
+            "message": f"Unknown citation source '{source}'. Valid: {sorted(CITATION_SOURCES)}"
+        }))
+        sys.exit(1)
+
+    root = Path(wiki_root)
+    citations_path = root / DERIVED_DIR / "citations.jsonl"
+    citations_path.parent.mkdir(parents=True, exist_ok=True)
+
+    warnings = _validate_node_refs(root, from_id, to_id)
+    if _node_kind(from_id) != "papers" or _node_kind(to_id) != "papers":
+        warnings.append("cites should connect papers/* -> papers/*")
+    for msg in warnings:
+        print(msg, file=sys.stderr)
+
+    if citations_path.exists():
+        for line in citations_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                c = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if c.get("from") == from_id and c.get("to") == to_id:
+                result: dict = {"status": "exists",
+                                "citation": f"{from_id} --cites--> {to_id}"}
+                if warnings:
+                    result["warnings"] = warnings
+                print(json.dumps(result))
+                return
+
+    citation = {
+        "from": from_id,
+        "to": to_id,
+        "type": "cites",
+        "source": source,
+        "date": _today(),
+    }
+    with open(citations_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(citation, ensure_ascii=False) + "\n")
+
+    result2: dict = {"status": "ok",
+                     "citation": f"{from_id} --cites--> {to_id}"}
     if warnings:
         result2["warnings"] = warnings
     print(json.dumps(result2))
@@ -247,7 +450,7 @@ def load_edges(wiki_root: str) -> list[dict]:
 
 
 def dedup_edges(wiki_root: str) -> None:
-    """Deduplicate edges.jsonl by (from, to, type), keeping first occurrence.
+    """Deduplicate edges.jsonl by canonical (from, to, type), keeping first occurrence.
 
     Intended for use after parallel ingest: multiple agents may have added
     identical edges in their isolated worktrees, resulting in duplicates after
@@ -269,16 +472,54 @@ def dedup_edges(wiki_root: str) -> None:
             continue
         try:
             e = json.loads(stripped)
-            triple = (e.get("from", ""), e.get("to", ""), e.get("type", ""))
+            edge_type = str(e.get("type", ""))
+            if edge_is_symmetric(edge_type) or e.get("symmetric") is True:
+                e["from"], e["to"] = sorted([str(e.get("from", "")),
+                                             str(e.get("to", ""))])
+                e["symmetric"] = True
+            triple = _edge_key(e)
             if triple not in seen:
                 seen.add(triple)
-                kept.append(stripped)
+                kept.append(json.dumps(e, ensure_ascii=False))
             else:
                 removed += 1
         except json.JSONDecodeError:
             kept.append(stripped)  # preserve malformed lines
 
     edges_path.write_text(
+        "\n".join(kept) + ("\n" if kept else ""), encoding="utf-8"
+    )
+    print(json.dumps({"status": "ok", "kept": len(kept), "removed": removed}))
+
+
+def dedup_citations(wiki_root: str) -> None:
+    """Deduplicate citations.jsonl by (from, to), keeping first occurrence."""
+    citations_path = Path(wiki_root) / DERIVED_DIR / "citations.jsonl"
+    if not citations_path.exists():
+        print(json.dumps({"status": "ok", "kept": 0, "removed": 0}))
+        return
+
+    lines = citations_path.read_text(encoding="utf-8").splitlines()
+    seen: set[tuple[str, str]] = set()
+    kept: list[str] = []
+    removed = 0
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            c = json.loads(stripped)
+            key = (str(c.get("from", "")), str(c.get("to", "")))
+            if key not in seen:
+                seen.add(key)
+                kept.append(stripped)
+            else:
+                removed += 1
+        except json.JSONDecodeError:
+            kept.append(stripped)
+
+    citations_path.write_text(
         "\n".join(kept) + ("\n" if kept else ""), encoding="utf-8"
     )
     print(json.dumps({"status": "ok", "kept": len(kept), "removed": removed}))
@@ -930,6 +1171,11 @@ def neighbors(wiki_root: str, node_id: str, depth: int = 1,
                              "evidence": e.get("evidence", "")})
         adj_in[dst].append({"id": src, "edge": etype, "direction": "incoming",
                             "evidence": e.get("evidence", "")})
+        if e.get("symmetric") is True or edge_is_symmetric(etype):
+            adj_out[dst].append({"id": src, "edge": etype, "direction": "symmetric",
+                                 "evidence": e.get("evidence", "")})
+            adj_in[src].append({"id": dst, "edge": etype, "direction": "symmetric",
+                                "evidence": e.get("evidence", "")})
 
     # BFS
     visited: set[str] = {node_id}
@@ -1177,6 +1423,7 @@ def get_stats(wiki_root: str, as_json: bool = False) -> dict:
         "claims_challenged": count_by_field("claims", "status", "challenged"),
         "summaries": count_md("Summary"),
         "edges": len(load_edges(wiki_root)),
+        "citations": len(load_citations(wiki_root)),
     }
 
     if as_json:
@@ -1194,6 +1441,7 @@ def get_stats(wiki_root: str, as_json: bool = False) -> dict:
               f"({stats['claims_supported']} supported, {stats['claims_challenged']} challenged)")
         print(f"  Summaries:   {stats['summaries']}")
         print(f"  Edges:       {stats['edges']}")
+        print(f"  Citations:   {stats['citations']}")
 
     return stats
 
@@ -1474,48 +1722,80 @@ def batch_edges(wiki_root: str) -> None:
                 continue
             try:
                 e = json.loads(line)
-                existing.add((e.get("from", ""), e.get("to", ""), e.get("type", "")))
+                existing.add(_edge_key(e))
             except json.JSONDecodeError:
                 continue
 
     added = 0
     existed = 0
     warnings: list[str] = []
+    errors: list[str] = []
     root = Path(wiki_root)
 
     new_lines: list[str] = []
-    for item in data:
+    for index, item in enumerate(data, start=1):
         from_id = item.get("from", "")
         to_id = item.get("to", "")
         edge_type = item.get("type", "")
         evidence = item.get("evidence", "")
+        confidence = item.get("confidence", "")
+        symmetric = _truthy(item.get("symmetric", False))
+        item_label = f"item {index} ({from_id} -> {to_id}, type={edge_type})"
 
         if edge_type not in VALID_EDGE_TYPES:
-            warnings.append(f"Unknown edge type '{edge_type}' for {from_id} -> {to_id}")
+            errors.append(f"{item_label}: unknown edge type '{edge_type}'")
+            continue
+        if confidence and confidence not in EDGE_CONFIDENCE_VALUES:
+            errors.append(f"{item_label}: unknown confidence '{confidence}'")
             continue
 
-        triple = (from_id, to_id, edge_type)
+        from_id, to_id, is_symmetric, error = _canonical_edge_ids(
+            from_id, to_id, edge_type, symmetric
+        )
+        if error:
+            errors.append(f"{item_label}: {error}")
+            continue
+        item_errors = _semantic_edge_errors(
+            edge_type, from_id, to_id, confidence, evidence
+        )
+        if item_errors:
+            errors.extend(f"{item_label}: {msg}" for msg in item_errors)
+            continue
+
+        triple = _edge_key({
+            "from": from_id, "to": to_id, "type": edge_type,
+            "symmetric": is_symmetric,
+        })
         if triple in existing:
             existed += 1
             continue
 
         # Entity validation
-        for node_id in (from_id, to_id):
-            if "/" in node_id:
-                entity_path = root / f"{node_id}.md"
-                if not entity_path.exists():
-                    warnings.append(f"{node_id}.md not found")
+        warnings.extend(_validate_node_refs(root, from_id, to_id))
+        warnings.extend(_semantic_edge_warnings(
+            edge_type, from_id, to_id, confidence, evidence
+        ))
 
         edge = {
             "from": from_id,
             "to": to_id,
             "type": edge_type,
             "evidence": evidence,
-            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "date": _today(),
         }
+        if confidence:
+            edge["confidence"] = confidence
+        if is_symmetric:
+            edge["symmetric"] = True
         new_lines.append(json.dumps(edge, ensure_ascii=False))
         existing.add(triple)
         added += 1
+
+    if errors:
+        print(json.dumps({"status": "error", "added": 0, "existed": existed,
+                          "errors": errors, "warnings": warnings},
+                         ensure_ascii=False))
+        sys.exit(1)
 
     if new_lines:
         with open(edges_path, "a", encoding="utf-8") as f:
@@ -2302,6 +2582,17 @@ def main():
     p.add_argument("--to", dest="to_id", required=True)
     p.add_argument("--type", dest="edge_type", required=True)
     p.add_argument("--evidence", default="")
+    p.add_argument("--confidence", default="",
+                   choices=["", *sorted(EDGE_CONFIDENCE_VALUES)])
+    p.add_argument("--symmetric", action="store_true")
+
+    # add-citation
+    p = sub.add_parser("add-citation", help="Add paper citation to graph/citations.jsonl")
+    p.add_argument("wiki_root")
+    p.add_argument("--from", dest="from_id", required=True)
+    p.add_argument("--to", dest="to_id", required=True)
+    p.add_argument("--source", default="semantic_scholar",
+                   choices=sorted(CITATION_SOURCES))
 
     # rebuild-context-brief
     p = sub.add_parser("rebuild-context-brief", help="Regenerate context_brief.md")
@@ -2404,6 +2695,11 @@ def main():
                        help="Deduplicate edges.jsonl after parallel ingest merge")
     p.add_argument("wiki_root")
 
+    # dedup-citations
+    p = sub.add_parser("dedup-citations",
+                       help="Deduplicate citations.jsonl by paper pair")
+    p.add_argument("wiki_root")
+
     # rebuild-index
     p = sub.add_parser("rebuild-index", help="Regenerate index.md from entity dirs")
     p.add_argument("wiki_root")
@@ -2454,7 +2750,10 @@ def main():
         print(slugify(args.title))
     elif args.command == "add-edge":
         add_edge(args.wiki_root, args.from_id, args.to_id,
-                 args.edge_type, args.evidence)
+                 args.edge_type, args.evidence, args.confidence,
+                 args.symmetric)
+    elif args.command == "add-citation":
+        add_citation(args.wiki_root, args.from_id, args.to_id, args.source)
     elif args.command == "rebuild-context-brief":
         rebuild_context_brief(args.wiki_root, args.max_chars)
     elif args.command == "rebuild-open-questions":
@@ -2518,6 +2817,8 @@ def main():
         batch_edges(args.wiki_root)
     elif args.command == "dedup-edges":
         dedup_edges(args.wiki_root)
+    elif args.command == "dedup-citations":
+        dedup_citations(args.wiki_root)
     elif args.command == "rebuild-index":
         rebuild_index(args.wiki_root)
     elif args.command == "topic-backfill":

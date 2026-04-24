@@ -29,9 +29,9 @@ When both signals are absent, treat the invocation as a direct user call and run
 
 Even outside INIT MODE, assume another `/ingest` may be running concurrently — batch ingest is already on the roadmap. Three rules make concurrent writes safe:
 
-1. **Every shared-file write goes through a tool.** `graph/edges.jsonl`, `index.md`, and `log.md` are written via `tools/research_wiki.py add-edge`, index updates, and `log`. The tool layer uses append semantics and the repository's `.gitattributes` declares `merge=union` for these paths, so parallel worktrees can merge without conflict.
+1. **Every shared-file write goes through a tool.** `graph/edges.jsonl`, `graph/citations.jsonl`, `index.md`, and `log.md` are written via `tools/research_wiki.py add-edge`, `add-citation`, index updates, and `log`. The tool layer uses append semantics and the repository's `.gitattributes` declares `merge=union` for these paths, so parallel worktrees can merge without conflict.
 2. **Slugs are allocated deterministically.** `tools/research_wiki.py slug "<title>"` produces the same slug from the same title regardless of which worktree runs it. Collisions are resolved by numeric suffix via the tool, not by ad-hoc renaming.
-3. **Never lock or in-place-rewrite a shared file.** Rewriting `wiki/index.md` or `wiki/graph/edges.jsonl` as a block replaces parallel peers' work when the worktrees merge. Use the tool commands, which append.
+3. **Never lock or in-place-rewrite a shared file.** Rewriting `wiki/index.md`, `wiki/graph/edges.jsonl`, or `wiki/graph/citations.jsonl` as a block replaces parallel peers' work when the worktrees merge. Use the tool commands, which append.
 
 ## Creating a new page in parallel
 

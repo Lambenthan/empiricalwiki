@@ -185,9 +185,9 @@ and are best run from WSL2 or Linux/macOS.
 
 ### Knowledge Graph
 
-9 typed relationships stored in `graph/edges.jsonl`:
+Semantic relationships are stored in `graph/edges.jsonl`; bibliographic paper citations are stored separately in `graph/citations.jsonl`.
 
-`extends` · `contradicts` · `supports` · `inspired_by` · `tested_by` · `invalidates` · `supersedes` · `addresses_gap` · `derived_from`
+Paper-paper semantic edges include `same_problem_as`, `similar_method_to`, `complementary_to`, `builds_on`, `compares_against`, `improves_on`, `challenges`, and `surveys`. Paper-concept edges use `introduces_concept`, `uses_concept`, `extends_concept`, and `critiques_concept`. Existing claim / experiment / idea / provenance edges remain available where appropriate.
 
 All pages use **Obsidian `[[wikilink]]` format** — open `wiki/` in Obsidian for visual graph exploration.
 
@@ -263,7 +263,7 @@ python -m pytest tests/ -v
 
 ## Roadmap
 
-- [x] Wiki knowledge engine (20 CLI commands, 9 entity types, 9 edge types)
+- [x] Wiki knowledge engine (20+ CLI commands, 9 entity types, semantic graph + citation layer)
 - [x] 23 Claude Code skills (full research lifecycle)
 - [x] Cross-model review (any OpenAI-compatible API)
 - [x] Daily arXiv automation (GitHub Actions)

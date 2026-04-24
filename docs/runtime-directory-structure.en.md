@@ -19,6 +19,7 @@ wiki/
 ├── outputs/           ← generated artifacts (Related Work, paper drafts)
 └── graph/             ← auto-generated (do not edit)
     ├── edges.jsonl
+    ├── citations.jsonl
     ├── context_brief.md
     └── open_questions.md
 

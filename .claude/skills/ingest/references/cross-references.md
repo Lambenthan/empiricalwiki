@@ -27,19 +27,60 @@ Never modify a foundation page from `/ingest`. No `key_papers` field, no back-re
 
 Foundations are created only by `/prefill`. `/ingest` never creates foundations, even when a concept candidate looks foundational and has no match. In that case, route the candidate through the ordinary concept path (possibly creating a new concept page), and let the user seed a foundation later if they want to.
 
+## Paper-to-concept semantic edges
+
+Papers relate to concepts by using, introducing, extending, or critiquing
+them. Every paper-to-concept semantic edge must include `--confidence high|medium|low`.
+
+Edge-type selection:
+
+- **`introduces_concept`** — strict novelty only: the paper explicitly proposes, coins, defines, or names the concept as a contribution.
+- **`uses_concept`** — default for an existing concept that the paper relies on without materially changing it.
+- **`extends_concept`** — the paper modifies, generalizes, specializes, or formalizes an existing concept.
+- **`critiques_concept`** — the paper argues that a concept has limitations, failure modes, or invalid assumptions.
+
+When uncertain between `introduces_concept` and `uses_concept`, choose
+`uses_concept`. When uncertain between `uses_concept` and `extends_concept`,
+choose `uses_concept`. Do not emit `paper → concept` edges of type `supports` or
+plain `extends`.
+The tool rejects missing confidence/evidence and legacy paper-to-concept edge
+types on new writes.
+
 ## Paper-to-paper edges
 
-Emit a paper-to-paper edge only when the cited paper already has a page under `wiki/papers/`. Do not speculate: if the reference is not yet in the wiki, skip the edge and surface the reference in the final report as a follow-up suggestion.
+The bibliographic layer is separate from the semantic layer:
 
-Edge-type selection, by cue:
+- always write `graph/citations.jsonl` with `type: cites` when a reference resolves to an existing `wiki/papers/{slug}.md`
+- write `graph/edges.jsonl` only when the paper text gives a clear semantic cue
+- do not force every citation into a semantic edge
 
-- **`extends`** — the paper explicitly builds its method on top of the cited paper's method. Phrases in the paper like "we extend", "building on", "we follow X but".
-- **`supersedes`** — the paper claims to replace the cited baseline on its own terms (same task, stronger results or cleaner formulation) and positions it as the thing to replace. Reserve this for explicit claims; do not infer from benchmark tables alone.
-- **`inspired_by`** — the paper cites the earlier work as motivation or conceptual lineage but does not build on its method directly. Common for survey-style or cross-domain borrowings.
-- **`contradicts`** — the paper explicitly disputes a cited finding, either by replicating and failing, or by presenting a direct counterexample. Must be grounded in a specific sentence in the paper.
+Paper-to-paper semantic edges are intentionally sparse. They require a concrete
+relationship between the papers' contributions, not just shared topic,
+modality, architecture family, benchmark family, or high-level method words. If
+the same statement would be true for dozens of papers in the wiki, skip the
+paper-to-paper edge and rely on topic/concept links plus citations instead.
+
+Semantic edge-type selection:
+
+- **`same_problem_as`** — symmetric; both papers attack the same concrete task, research question, or problem formulation, so their proposed answers are directly comparable. Do not use this for broad areas like "attention", "video generation", or "LLM evaluation".
+- **`similar_method_to`** — symmetric; both papers share a distinctive mechanism, formulation, training strategy, or algorithmic design. Do not use this for generic families like "uses transformers", "uses diffusion", or "uses RL".
+- **`complementary_to`** — symmetric; the approaches or components can be combined in a technically specific way, and the paper text or method details give evidence for that compatibility. Do not use this merely because both could belong to the same future system.
+- **`builds_on`** — directional; this paper directly depends on, adapts, or extends the other paper's specific method, formulation, dataset, result, or system. Do not use this for vague inspiration.
+- **`compares_against`** — directional; this paper uses the other paper as an explicit baseline, comparator, or ablation reference.
+- **`improves_on`** — directional; this paper explicitly claims better quality, efficiency, robustness, simplicity, or scope than the other paper in a comparable setting.
+- **`challenges`** — directional; this paper disputes, weakens, or presents counter-evidence against the other paper's result, assumption, or framing.
+- **`surveys`** — directional; this paper is a survey, benchmark, taxonomy, or position work that summarizes the other paper or its line of work.
+
+All paper-to-paper semantic edges must include `--confidence high|medium|low`.
+For symmetric types, `tools/research_wiki.py add-edge` canonicalizes the
+endpoint order and writes `symmetric: true`.
+The tool rejects missing confidence/evidence and legacy paper-paper edge types
+on new writes.
+
 - **none / skip** — if none of the above cleanly fits, skip the edge. Graph noise is worse than a missing edge.
 
-One edge per ordered paper pair is enough. If you are uncertain between two types, pick the weaker claim (`inspired_by` over `extends`, `extends` over `supersedes`).
+When in doubt, skip. Paper-paper semantic edges are for high-signal local
+relationships, not clustering by field.
 
 ## Writing both sides atomically
 
@@ -48,7 +89,8 @@ For every link `/ingest` writes, the reverse should land in the same turn. In pr
 1. Decide on the link.
 2. Write the forward entry on the originating page.
 3. Write the reverse entry on the target page.
-4. If the link also corresponds to a graph edge (paper↔concept, paper↔claim, paper↔paper, paper→foundation), emit it via `tools/research_wiki.py add-edge`.
+4. If the link also corresponds to a semantic graph edge (paper↔concept, paper↔claim, paper↔paper, paper→foundation), emit it via `tools/research_wiki.py add-edge`.
+5. If a paper reference resolves to an existing paper page, emit the bibliographic row via `tools/research_wiki.py add-citation`.
 
 This pattern keeps `/check` from flagging half-written links in its next run. It also makes rollbacks straightforward: if a paper ingest is aborted, you can undo both sides together by reverting the paper's edits.
 

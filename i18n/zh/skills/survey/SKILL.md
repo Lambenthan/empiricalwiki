@@ -39,7 +39,7 @@ argument-hint: <research-question-or-claim-slugs> [--format latex|markdown] [--m
 - `wiki/ideas/*.md` — Motivation（了解本文定位）
 - `wiki/index.md` — 内容目录，按 importance 筛选
 - `wiki/graph/context_brief.md` — 全局上下文
-- `wiki/graph/edges.jsonl` — 论文间关系（extends、contradicts、supersedes）
+- `wiki/graph/edges.jsonl` — 论文间语义关系（same_problem_as、similar_method_to、complementary_to、builds_on、compares_against、improves_on、challenges、surveys）
 - `.claude/skills/shared-references/academic-writing.md` — Related Work 写作规则
 - `.claude/skills/shared-references/citation-verification.md` — 引用纪律
 
@@ -62,7 +62,7 @@ argument-hint: <research-question-or-claim-slugs> [--format latex|markdown] [--m
    - 若为 claim slugs：读取每个 claim 的 source_papers，收集相关论文
    - 若为 PAPER_PLAN 路径：读取 Related Work section 的 groupings 和 citations
 2. **读取 wiki/graph/context_brief.md** 获取全局上下文
-3. **读取 wiki/graph/edges.jsonl**：提取论文间关系（extends、contradicts、supersedes）
+3. **读取 wiki/graph/edges.jsonl**：提取论文间语义关系（same_problem_as、similar_method_to、complementary_to、builds_on、compares_against、improves_on、challenges、surveys）
 4. **生成候选论文列表**：
    - 从 index.md 按 importance 降序排列
    - 按 tags 和 domain 匹配度排序
@@ -80,7 +80,7 @@ argument-hint: <research-question-or-claim-slugs> [--format latex|markdown] [--m
 记录每篇论文的：
 - 核心贡献（一句话）
 - 方法类别（属于哪个研究方向）
-- 与本文的关系（extends / contradicts / orthogonal / baseline）
+- 与本文的关系（same problem / similar method / complementary / builds on / compares against / improves on / challenges / surveys）
 - 局限性（从 Limitations 或 My take 提取）
 
 ### Step 3: 主题分组
