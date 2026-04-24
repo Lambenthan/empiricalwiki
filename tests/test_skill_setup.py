@@ -242,6 +242,13 @@ def test_readme_mentions_setup_venv_behavior():
     assert "/init 会自动使用 .venv" in content
 
 
+def test_setup_sh_recursively_syncs_skill_subtrees():
+    content = SETUP_SH.read_text(encoding="utf-8")
+    assert 'cp -R "$skill_dir"/. ".claude/skills/$name/"' in content, (
+        "setup.sh should recursively copy skill subtrees so local references sync with SKILL.md"
+    )
+
+
 # ── Active skill file (after setup.sh --lang sync) ────────────────────────
 
 def test_active_skill_exists_if_setup_was_run():

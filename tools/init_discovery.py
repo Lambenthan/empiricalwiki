@@ -2,7 +2,7 @@
 """Source preparation + discovery planner for /init.
 
 Usage:
-    python3 tools/init_discovery.py prepare --raw-root raw --output-manifest .checkpoints/init-prepare.json
+    python3 tools/init_discovery.py prepare --raw-root raw --pdf-titles-json .checkpoints/init-pdf-titles.json --output-manifest .checkpoints/init-prepare.json
     python3 tools/init_discovery.py plan [--topic "efficient llm finetuning"] --prepared-manifest .checkpoints/init-prepare.json --output-plan .checkpoints/init-plan.json
     python3 tools/init_discovery.py fetch --raw-root raw --plan-json .checkpoints/init-plan.json --prepared-manifest .checkpoints/init-prepare.json --output-sources .checkpoints/init-sources.json --id arxiv:2106.09685
     python3 tools/init_discovery.py download --raw-root raw --arxiv-id 2106.09685 --title "Example Paper"
@@ -27,6 +27,7 @@ from typing import Any
 
 import requests
 
+import prepare_paper_source as paper_source
 from fetch_deepxiv import search as deepxiv_search
 from fetch_s2 import citations as s2_citations
 from fetch_s2 import references as s2_references
@@ -47,8 +48,9 @@ STOP_WORDS = {
     "the", "their", "this", "to", "we", "with", "you", "your",
 }
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+/_-]*|[\u4e00-\u9fff]{2,}")
-ARXIV_ID_PATTERN = re.compile(
-    r"\b(?:\d{4}\.\d{4,5}(?:v\d+)?|[a-z\-]+(?:\.[A-Z]{2})?/\d{7}(?:v\d+)?)\b",
+ARXIV_NEW_ID_PATTERN = re.compile(r"(?<!\d)(\d{4}\.\d{4,5}(?:v\d+)?)(?!\d)", re.IGNORECASE)
+ARXIV_OLD_ID_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9])([a-z\-]+(?:\.[A-Z]{2})?/\d{7}(?:v\d+)?)(?!\d)",
     re.IGNORECASE,
 )
 CHINESE_CHAR_PATTERN = re.compile(r"[\u4e00-\u9fff]")
@@ -91,6 +93,16 @@ def _paper_entry_match_key(entry: dict[str, Any]) -> tuple[str, str]:
     return (str(entry.get("arxiv_id") or ""), _normalize_text(str(entry.get("title") or "")))
 
 
+def _paper_entry_source_key(entry: dict[str, Any]) -> str:
+    source_path = Path(str(entry.get("source_path") or ""))
+    name = source_path.name.lower()
+    if name.endswith(".tar.gz"):
+        base = source_path.name[:-7]
+    else:
+        base = source_path.stem
+    return _normalize_text(base.replace("_", " ").replace("-", " "))
+
+
 def _paper_entry_preference(entry: dict[str, Any]) -> tuple[int, int, int]:
     original_format = str(entry.get("original_format") or "")
     ingest_format = str(entry.get("ingest_format") or "")
@@ -122,6 +134,70 @@ def _relative_to_project(path: Path, raw_root: Path) -> str:
 
 def _resolve_project_path(raw_root: Path, rel_path: str) -> Path:
     return _project_root(raw_root) / rel_path
+
+
+def _local_candidate_id(path: Path, raw_root: Path) -> str:
+    return f"local:{_path_slug(path.relative_to(raw_root))}"
+
+
+def _normalize_prepare_source_path(raw_root: Path, source_path: str) -> str:
+    raw_source = str(source_path or "").strip()
+    if not raw_source:
+        return ""
+
+    candidate = Path(raw_source)
+    if candidate.is_absolute():
+        resolved = candidate.resolve()
+    else:
+        project_root = _project_root(raw_root)
+        resolved = (project_root / raw_source).resolve()
+        if not resolved.exists() and not raw_source.startswith("raw/"):
+            resolved = (raw_root / raw_source).resolve()
+
+    try:
+        return _relative_to_project(resolved, raw_root)
+    except ValueError:
+        return ""
+
+
+def _normalize_arxiv_id(arxiv_id: str) -> str:
+    arxiv_id = str(arxiv_id or "").strip()
+    if not arxiv_id:
+        return ""
+    return re.sub(r"v\d+$", "", arxiv_id, flags=re.IGNORECASE)
+
+
+def _normalize_pdf_titles_map(
+    raw_root: Path,
+    pdf_titles: dict[str, Any] | None,
+    warning_sink: list[str] | None = None,
+) -> tuple[dict[str, dict[str, str]], dict[str, str]]:
+    normalized_payloads: dict[str, dict[str, str]] = {}
+    original_keys: dict[str, str] = {}
+    for raw_key, raw_title in (pdf_titles or {}).items():
+        key = _normalize_prepare_source_path(raw_root, str(raw_key))
+        if isinstance(raw_title, dict):
+            title = " ".join(str(raw_title.get("title") or "").split())
+            arxiv_id = _normalize_arxiv_id(str(raw_title.get("arxiv_id") or ""))
+        else:
+            title = " ".join(str(raw_title or "").split())
+            arxiv_id = ""
+        if not key:
+            if warning_sink is not None:
+                warning_sink.append(f"ignored invalid PDF title mapping: {raw_key}")
+            continue
+        if not title and not arxiv_id:
+            continue
+        normalized_payloads[key] = {"title": title, "arxiv_id": arxiv_id}
+        original_keys[key] = str(raw_key)
+    return normalized_payloads, original_keys
+
+
+def _load_pdf_titles_json(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("expected a JSON object mapping source paths to titles or {title, arxiv_id} records")
+    return payload
 
 
 def _read_text(path: Path, limit: int = 20000) -> str:
@@ -161,8 +237,11 @@ def _top_terms(text: str, limit: int = 12) -> list[str]:
 
 
 def _extract_arxiv_id(text: str) -> str:
-    match = ARXIV_ID_PATTERN.search(text)
-    return match.group(0) if match else ""
+    for pattern in (ARXIV_NEW_ID_PATTERN, ARXIV_OLD_ID_PATTERN):
+        match = pattern.search(text)
+        if match:
+            return _normalize_arxiv_id(match.group(1))
+    return ""
 
 
 def _recover_arxiv_id_by_title(title: str) -> str:
@@ -187,14 +266,14 @@ def _recover_arxiv_id_by_title(title: str) -> str:
             continue
         # Exact normalized match
         if result_title == normalized_title:
-            return str(arxiv_id)
+            return _normalize_arxiv_id(str(arxiv_id))
         # High token-overlap match (at least 80% of tokens in common)
         result_tokens = set(_tokenize(result_title))
         if result_tokens and title_tokens:
             overlap = len(result_tokens & title_tokens)
             min_len = min(len(result_tokens), len(title_tokens))
             if min_len > 0 and overlap / min_len >= 0.8:
-                return str(arxiv_id)
+                return _normalize_arxiv_id(str(arxiv_id))
     return ""
 
 
@@ -549,158 +628,46 @@ def _prepare_text_entry(path: Path, raw_root: Path, kind: str) -> dict[str, Any]
     }
 
 
-def _prepare_paper_entry(path: Path, raw_root: Path) -> dict[str, Any]:
-    warnings: list[str] = []
-    source_rel = _relative_to_project(path, raw_root)
-    working_entry = path
-    original_format = "directory" if path.is_dir() else path.suffix.lower().lstrip(".")
-    prepared_path = ""
-    canonical_path = ""
-    resolved_source_path = source_rel
-    title = _guess_local_title(path) if path.is_file() else (path.stem.replace("_", " ").replace("-", " ").strip() or "Untitled")
-    abstract_excerpt = ""
-    arxiv_id = ""
-    usable = True
-
-    if path.is_file() and _is_archive(path):
-        extract_dir = raw_root / "tmp" / "papers" / f"{_path_slug(path.relative_to(raw_root))}-src"
-        warnings.extend(_extract_archive_to_tmp(path, extract_dir))
-        if extract_dir.exists():
-            working_entry = extract_dir
-            prepared_path = _relative_to_project(extract_dir, raw_root)
-            original_format = "archive"
-
-    candidate_path: Path | None
-    if working_entry.is_dir():
-        candidate_path = _scan_paper_dir(working_entry)
-    else:
-        candidate_path = working_entry
-
-    if candidate_path is None:
-        usable = False
-        warnings.append("no parseable .tex or .pdf found for local paper source")
-        title = path.stem.replace("_", " ").replace("-", " ").strip() or "Untitled"
-        candidate_id = f"local:{slugify(title)}"
-        return {
-            "entry_id": candidate_id,
-            "candidate_id": candidate_id,
-            "source_kind": "paper",
-            "source_path": source_rel,
-            "resolved_source_path": source_rel,
-            "prepared_path": prepared_path or None,
-            "canonical_ingest_path": source_rel,
-            "original_format": original_format,
-            "ingest_format": _ingest_format_from_path(source_rel),
-            "title": title,
-            "abstract_excerpt": "",
-            "arxiv_id": "",
-            "warnings": warnings,
-            "usable": usable,
-        }
-
-    resolved_source_path = _relative_to_project(candidate_path, raw_root)
-    text = ""
-    if candidate_path.suffix.lower() == ".pdf":
-        text, pdf_warnings = _extract_pdf_text(candidate_path)
-        warnings.extend(pdf_warnings)
-        if text:
-            title = _guess_title_from_text(text, _guess_local_title(candidate_path))
-            abstract_excerpt = _extract_abstract_excerpt(text)
-            # Look up arXiv ID in order: filename -> metadata -> page-0 text -> S2 title search
-            arxiv_id = _extract_arxiv_id(path.name)
-            if not arxiv_id:
-                arxiv_id = _extract_arxiv_id_from_pdf_metadata(candidate_path)
-            if not arxiv_id:
-                arxiv_id = _extract_arxiv_id(text[:1000])
-            if not arxiv_id:
-                arxiv_id = _recover_arxiv_id_by_title(title)
-            if arxiv_id:
-                source_dir = raw_root / "tmp" / "papers" / f"{_path_slug(path.relative_to(raw_root))}-arxiv-src"
-                dl_result = _download_arxiv_source(arxiv_id, source_dir)
-                if dl_result["success"]:
-                    source_meta = _extract_arxiv_source_metadata(source_dir)
-                    if source_meta["source_title"]:
-                        title = source_meta["source_title"]
-                    if source_meta["source_abstract"]:
-                        abstract_excerpt = source_meta["source_abstract"][:1200]
-                    prepared_path = _relative_to_project(source_dir, raw_root)
-                    canonical_path = prepared_path
-                    warnings.append(
-                        f"recovered arXiv ID {arxiv_id}; using fetched TeX source"
-                    )
-                else:
-                    out_path = raw_root / "tmp" / "papers" / f"{_path_slug(path.relative_to(raw_root))}.tex"
-                    _write_text(out_path, _build_synthetic_tex(title, text))
-                    prepared_path = _relative_to_project(out_path, raw_root)
-                    canonical_path = prepared_path
-                    warnings.append(
-                        f"recovered arXiv ID {arxiv_id} but TeX source download failed; "
-                        f"falling back to synthetic tex ({dl_result.get('error', 'unknown error')})"
-                    )
-            else:
-                out_path = raw_root / "tmp" / "papers" / f"{_path_slug(path.relative_to(raw_root))}.tex"
-                _write_text(out_path, _build_synthetic_tex(title, text))
-                prepared_path = _relative_to_project(out_path, raw_root)
-                canonical_path = prepared_path
-        else:
-            title = _guess_local_title(candidate_path)
-            canonical_path = resolved_source_path
-    else:
-        text = _read_text(candidate_path, limit=120000)
-        title = _guess_local_title(candidate_path)
-        arxiv_id = _extract_arxiv_id(f"{candidate_path.name} {title} {text[:2000]}")
-        abstract_excerpt = _extract_abstract_excerpt(text)
-        canonical_path = resolved_source_path
-
-    if not arxiv_id:
-        arxiv_id = _extract_arxiv_id(f"{path.name} {title} {abstract_excerpt}")
-    candidate_id = f"local:{slugify(title)}"
-    return {
-        "entry_id": candidate_id,
-        "candidate_id": candidate_id,
-        "source_kind": "paper",
-        "source_path": source_rel,
-        "resolved_source_path": resolved_source_path,
-        "prepared_path": prepared_path or None,
-        "canonical_ingest_path": canonical_path,
-        "original_format": original_format or candidate_path.suffix.lower().lstrip(".") or "file",
-        "ingest_format": _ingest_format_from_path(canonical_path),
-        "title": title,
-        "abstract_excerpt": abstract_excerpt,
-        "arxiv_id": arxiv_id,
-        "warnings": warnings,
-        "usable": usable,
-    }
+def _prepare_paper_entry(path: Path, raw_root: Path, title: str = "", arxiv_id: str = "") -> dict[str, Any]:
+    return paper_source.prepare_paper_source(path, raw_root, title=title, arxiv_id=arxiv_id)
 
 
-def prepare_inputs(raw_root: Path) -> dict[str, Any]:
+def prepare_inputs(
+    raw_root: Path,
+    pdf_titles: dict[str, Any] | None = None,
+    warning_sink: list[str] | None = None,
+) -> dict[str, Any]:
     raw_root = raw_root.resolve()
     tmp_root = raw_root / "tmp"
     (tmp_root / "papers").mkdir(parents=True, exist_ok=True)
     paper_entries: list[dict[str, Any]] = []
     other_entries: list[dict[str, Any]] = []
+    normalized_handoffs, original_title_keys = _normalize_pdf_titles_map(raw_root, pdf_titles, warning_sink=warning_sink)
+    seen_title_keys: set[str] = set()
 
     papers_root = raw_root / "papers"
     if papers_root.exists():
         for entry in sorted(papers_root.iterdir()):
             if entry.name == ".gitkeep":
                 continue
-            paper_entries.append(_prepare_paper_entry(entry, raw_root))
+            source_rel = _relative_to_project(entry, raw_root)
+            recovered = normalized_handoffs.get(source_rel, {})
+            recovered_title = recovered.get("title", "")
+            recovered_arxiv_id = recovered.get("arxiv_id", "")
+            if recovered_title or recovered_arxiv_id:
+                seen_title_keys.add(source_rel)
+            paper_entries.append(
+                _prepare_paper_entry(entry, raw_root, title=recovered_title, arxiv_id=recovered_arxiv_id)
+            )
 
     deduped_papers: dict[str, dict[str, Any]] = {}
-    title_index: dict[str, str] = {}
     for entry in paper_entries:
-        key = entry["candidate_id"]
-        arxiv_id, title_key = _paper_entry_match_key(entry)
-        if arxiv_id:
-            key = f"arxiv:{arxiv_id}"
-        elif title_key in title_index:
-            key = title_index[title_key]
+        arxiv_id, _title_key = _paper_entry_match_key(entry)
+        key = f"arxiv:{arxiv_id}" if arxiv_id else entry["candidate_id"]
 
         existing = deduped_papers.get(key)
         if existing is None:
             deduped_papers[key] = entry
-            title_index[title_key] = key
             continue
 
         if _paper_entry_preference(entry) > _paper_entry_preference(existing):
@@ -713,7 +680,11 @@ def prepare_inputs(raw_root: Path) -> dict[str, Any]:
             + list(dropped.get("warnings", []))
             + [f"duplicate local source skipped in favor of preferred source: {kept['source_path']}"]
         ))
-        title_index[title_key] = key
+
+    if warning_sink is not None:
+        for source_rel, original_key in sorted(original_title_keys.items()):
+            if source_rel not in seen_title_keys:
+                warning_sink.append(f"ignored unknown PDF title mapping: {original_key}")
 
     for kind in ("notes", "web"):
         base = raw_root / kind
@@ -804,7 +775,7 @@ def scan_local_papers(raw_root: Path, prepared_manifest: dict[str, Any] | None =
         title = _guess_local_title(candidate_path)
         arxiv_id = _extract_arxiv_id(f"{entry.name} {title} {_read_text(candidate_path, 2000)}")
         results.append({
-            "candidate_id": f"local:{slugify(title)}",
+            "candidate_id": _local_candidate_id(entry, raw_root),
             "title": title,
             "arxiv_id": arxiv_id,
             "path": str(candidate_path.relative_to(raw_root.parent)),
@@ -1657,6 +1628,7 @@ def main() -> None:
 
     p_prepare = sub.add_parser("prepare", help="Prepare local raw inputs into raw/tmp/ and emit a manifest")
     p_prepare.add_argument("--raw-root", default="raw")
+    p_prepare.add_argument("--pdf-titles-json")
     p_prepare.add_argument("--output-manifest", required=True)
 
     p_plan = sub.add_parser("plan", help="Build a deterministic discovery plan for /init")
@@ -1684,10 +1656,19 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "prepare":
-        manifest = prepare_inputs(Path(args.raw_root))
+        pdf_titles = None
+        if args.pdf_titles_json:
+            try:
+                pdf_titles = _load_pdf_titles_json(Path(args.pdf_titles_json))
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                parser.error(f"--pdf-titles-json: {exc}")
+        warnings: list[str] = []
+        manifest = prepare_inputs(Path(args.raw_root), pdf_titles=pdf_titles, warning_sink=warnings)
         output_path = Path(args.output_manifest)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        for warning in warnings:
+            print(f"warning: {warning}", file=sys.stderr)
         _print_json(manifest)
         return
 

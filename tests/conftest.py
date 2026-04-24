@@ -59,24 +59,24 @@ def ideate_phase_keywords(current_lang):
 
 INGEST_WORKFLOW_STEPS = {
     "en": [
-        "Parse Source",
-        "Preprocessing",
+        "Resolve the source",
+        "enrichment",
         "paper page",
         "claims",
-        "Cross-References",
-        "Authors",
-        "Navigation",
+        "paper-to-paper",
+        "Topics",
+        "Log",
         "Report",
     ],
     "zh": [
         "解析来源",
-        "预处理",
+        "enrichment",
         "paper 页面",
         "claims",
-        "交叉引用",
-        "作者",
-        "导航",
-        "报告",
+        "paper-to-paper",
+        "topic",
+        "日志",
+        "汇报",
     ],
 }
 

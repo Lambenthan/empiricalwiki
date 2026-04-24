@@ -13,6 +13,7 @@ import pytest
 
 sys.path.insert(0, "tools")
 import init_discovery as disc  # noqa: E402
+import prepare_paper_source as prep  # noqa: E402
 
 
 def _s2_paper(
@@ -74,11 +75,11 @@ def raw_root(tmp_path):
 def test_prepare_pdf_emits_canonical_tmp_tex(raw_root, monkeypatch):
     (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
     monkeypatch.setattr(
-        disc,
+        prep,
         "_extract_pdf_text",
         lambda _path: ("Adapter Tuning for LLMs\nAbstract\nImproves multilingual transfer.", []),
     )
-    monkeypatch.setattr(disc, "s2_search", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(prep, "s2_search", lambda *_args, **_kwargs: [])
 
     manifest = disc.prepare_inputs(raw_root)
 
@@ -91,28 +92,31 @@ def test_prepare_pdf_emits_canonical_tmp_tex(raw_root, monkeypatch):
     assert (raw_root.parent / entry["canonical_ingest_path"]).exists()
 
 
-def test_prepare_prefers_local_tex_over_pdf_for_same_paper(raw_root, monkeypatch):
+def test_prepare_keeps_unresolved_local_sources_distinct(raw_root, monkeypatch):
     (raw_root / "papers" / "paper.tex").write_text(
         "\\title{Adapter Tuning for LLMs}\n\\begin{abstract}tex version\\end{abstract}\n",
         encoding="utf-8",
     )
     (raw_root / "papers" / "paper.pdf").write_bytes(b"%PDF")
     monkeypatch.setattr(
-        disc,
+        prep,
         "_extract_pdf_text",
         lambda _path: ("Adapter Tuning for LLMs\nAbstract\npdf version", []),
     )
-    monkeypatch.setattr(disc, "s2_search", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(prep, "s2_search", lambda *_args, **_kwargs: [])
 
     manifest = disc.prepare_inputs(raw_root)
     paper_entries = [item for item in manifest["entries"] if item["source_kind"] == "paper"]
 
-    assert len(paper_entries) == 1
-    assert paper_entries[0]["source_path"] == "raw/papers/paper.tex"
-    assert paper_entries[0]["canonical_ingest_path"] == "raw/papers/paper.tex"
-    assert "translated_to_english" not in paper_entries[0]
-    assert "original_language" not in paper_entries[0]
-    assert any("duplicate local source skipped" in warning for warning in paper_entries[0]["warnings"])
+    assert len(paper_entries) == 2
+    assert {item["candidate_id"] for item in paper_entries} == {
+        "local:papers-paper-pdf",
+        "local:papers-paper-tex",
+    }
+    assert any(item["source_path"] == "raw/papers/paper.tex" for item in paper_entries)
+    assert any(item["source_path"] == "raw/papers/paper.pdf" for item in paper_entries)
+    assert all("translated_to_english" not in item for item in paper_entries)
+    assert all("original_language" not in item for item in paper_entries)
 
 
 def test_prepare_notes_keep_original_paths(raw_root):
@@ -243,11 +247,11 @@ def test_seeded_mode_without_topic_uses_local_terms_for_search_query(raw_root, m
 def test_plan_uses_prepared_manifest_canonical_paths(raw_root, monkeypatch):
     (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
     monkeypatch.setattr(
-        disc,
+        prep,
         "_extract_pdf_text",
         lambda _path: ("Adapter Tuning for LLMs\nAbstract\nImproves multilingual transfer.", []),
     )
-    monkeypatch.setattr(disc, "s2_search", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(prep, "s2_search", lambda *_args, **_kwargs: [])
     manifest = disc.prepare_inputs(raw_root)
     monkeypatch.setattr(disc, "s2_citations", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(disc, "s2_references", lambda *_args, **_kwargs: [])
@@ -848,6 +852,10 @@ def test_extract_old_style_arxiv_id():
     assert disc._extract_arxiv_id("classic identifier cs/9901001 in title") == "cs/9901001"
 
 
+def test_extract_embedded_filename_arxiv_id_strips_version():
+    assert disc._extract_arxiv_id("YOLO1506.02640v5.pdf") == "1506.02640"
+
+
 def test_download_source_rejects_archive_escape_and_falls_back_to_pdf(raw_root, monkeypatch):
     archive_bytes = io.BytesIO()
     with tarfile.open(fileobj=archive_bytes, mode="w:gz") as tar:
@@ -907,21 +915,23 @@ def test_fetch_writes_into_raw_discovered_only(raw_root, monkeypatch, tmp_path):
 def test_fetch_skips_prepared_local_duplicate_and_writes_source_manifest(raw_root, monkeypatch, tmp_path):
     (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
     monkeypatch.setattr(
-        disc,
+        prep,
         "_extract_pdf_text",
         lambda _path: ("Fetched Paper\nAbstract\nAdapter tuning setup.", []),
     )
-    monkeypatch.setattr(disc, "s2_search", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(prep, "s2_search", lambda *_args, **_kwargs: [])
+    prep.prepare_paper_source(raw_root / "papers" / "seed.pdf", raw_root, title="Fetched Paper")
     prepare_manifest = disc.prepare_inputs(raw_root)
     prepare_json = tmp_path / "prepare.json"
     prepare_json.write_text(json.dumps(prepare_manifest), encoding="utf-8")
+    local_entry = next(item for item in prepare_manifest["entries"] if item["source_kind"] == "paper")
 
     plan_json = tmp_path / "plan.json"
     plan_json.write_text(json.dumps({
         "shortlist": [
             {
-                "candidate_id": "local:fetched-paper",
-                "title": "Fetched Paper",
+                "candidate_id": local_entry["candidate_id"],
+                "title": local_entry["title"],
                 "user_owned": True,
                 "shortlist_rank": 1,
             },
@@ -957,21 +967,23 @@ def test_fetch_skips_prepared_local_duplicate_and_writes_source_manifest(raw_roo
 def test_fetch_writes_mixed_source_manifest_from_tmp_and_discovered(raw_root, monkeypatch, tmp_path):
     (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
     monkeypatch.setattr(
-        disc,
+        prep,
         "_extract_pdf_text",
         lambda _path: ("Seed Paper\nAbstract\nLocal adapter seed.", []),
     )
-    monkeypatch.setattr(disc, "s2_search", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(prep, "s2_search", lambda *_args, **_kwargs: [])
+    prep.prepare_paper_source(raw_root / "papers" / "seed.pdf", raw_root, title="Seed Paper")
     prepare_manifest = disc.prepare_inputs(raw_root)
     prepare_json = tmp_path / "prepare.json"
     prepare_json.write_text(json.dumps(prepare_manifest), encoding="utf-8")
+    local_entry = next(item for item in prepare_manifest["entries"] if item["source_kind"] == "paper")
 
     plan_json = tmp_path / "plan.json"
     plan_json.write_text(json.dumps({
         "shortlist": [
             {
-                "candidate_id": "local:seed-paper",
-                "title": "Seed Paper",
+                "candidate_id": local_entry["candidate_id"],
+                "title": local_entry["title"],
                 "user_owned": True,
                 "shortlist_rank": 1,
             },
@@ -1039,130 +1051,20 @@ def test_download_to_discovered_writes_under_raw_discovered(raw_root, monkeypatc
     assert Path(result["canonical_ingest_path"]).exists()
 
 
-def test_prepare_pdf_recovers_arxiv_id_by_title(raw_root, monkeypatch):
+def test_prepare_inputs_skips_title_search_without_agent_title(raw_root, monkeypatch):
     (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
     monkeypatch.setattr(
-        disc,
+        prep,
         "_extract_pdf_text",
-        lambda _path: ("Adapter Tuning for LLMs\nAbstract\nImproves multilingual transfer.", []),
+        lambda _path: ("Adapter Tuning for LLMs\nAbstract\nSome content.", []),
     )
+    calls = []
 
-    def _fake_s2_search(query, limit=5):
-        if "adapter tuning" in query.lower():
-            return [
-                {
-                    "title": "Adapter Tuning for LLMs",
-                    "abstract": "Improves multilingual transfer.",
-                    "authors": [{"name": "Author"}],
-                    "year": 2024,
-                    "citationCount": 50,
-                    "venue": "TestConf",
-                    "externalIds": {"ArXiv": "2401.00001"},
-                    "url": "https://arxiv.org/abs/2401.00001",
-                }
-            ]
+    def _spy_s2_search(query, limit=5):
+        calls.append(query)
         return []
 
-    monkeypatch.setattr(disc, "s2_search", _fake_s2_search)
-
-    def _fake_download(arxiv_id, dest_dir):
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        (dest_dir / "main.tex").write_text(
-            "\\title{Adapter Tuning for LLMs}\n"
-            "\\begin{abstract}\nImproves multilingual transfer.\n\\end{abstract}\n",
-            encoding="utf-8",
-        )
-        return {"success": True, "format": "directory", "error": None}
-
-    monkeypatch.setattr(disc, "_download_arxiv_source", _fake_download)
-
-    manifest = disc.prepare_inputs(raw_root)
-    entry = next(item for item in manifest["entries"] if item["source_kind"] == "paper")
-
-    assert entry["arxiv_id"] == "2401.00001"
-    assert entry["canonical_ingest_path"].endswith("-arxiv-src")
-    assert entry["ingest_format"] == "directory"
-    assert (raw_root.parent / entry["canonical_ingest_path"]).exists()
-
-
-def test_prepare_pdf_prefers_arxiv_tex_over_synthetic(raw_root, monkeypatch):
-    (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
-    monkeypatch.setattr(
-        disc,
-        "_extract_pdf_text",
-        lambda _path: ("Adapter Tuning for LLMs\nAbstract\nSome content.", []),
-    )
-    monkeypatch.setattr(
-        disc,
-        "s2_search",
-        lambda query, limit=5: [
-            {
-                "title": "Adapter Tuning for LLMs",
-                "externalIds": {"ArXiv": "2401.00002"},
-            }
-        ],
-    )
-
-    def _fake_download(arxiv_id, dest_dir):
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        (dest_dir / "main.tex").write_text("\\title{Adapter Tuning for LLMs}\n", encoding="utf-8")
-        return {"success": True, "format": "directory", "error": None}
-
-    monkeypatch.setattr(disc, "_download_arxiv_source", _fake_download)
-
-    manifest = disc.prepare_inputs(raw_root)
-    entry = next(item for item in manifest["entries"] if item["source_kind"] == "paper")
-
-    assert entry["original_format"] == "pdf"
-    assert entry["ingest_format"] == "directory"
-    assert entry["canonical_ingest_path"].endswith("-arxiv-src")
-    assert "recovered arXiv ID" in entry["warnings"][0]
-
-
-def test_prepare_pdf_falls_back_to_synthetic_when_tex_unavailable(raw_root, monkeypatch):
-    (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
-    monkeypatch.setattr(
-        disc,
-        "_extract_pdf_text",
-        lambda _path: ("Adapter Tuning for LLMs\nAbstract\nSome content.", []),
-    )
-    monkeypatch.setattr(
-        disc,
-        "s2_search",
-        lambda query, limit=5: [
-            {
-                "title": "Adapter Tuning for LLMs",
-                "externalIds": {"ArXiv": "2401.00003"},
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        disc,
-        "_download_arxiv_source",
-        lambda _arxiv_id, _dest: {"success": False, "format": "", "error": "no source tarball"},
-    )
-
-    manifest = disc.prepare_inputs(raw_root)
-    entry = next(item for item in manifest["entries"] if item["source_kind"] == "paper")
-
-    assert entry["arxiv_id"] == "2401.00003"
-    assert entry["canonical_ingest_path"].endswith(".tex")
-    assert entry["ingest_format"] == "tex"
-    assert any("TeX source download failed" in w for w in entry["warnings"])
-
-
-def test_prepare_pdf_arxiv_recovery_warns_on_api_failure(raw_root, monkeypatch):
-    (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
-    monkeypatch.setattr(
-        disc,
-        "_extract_pdf_text",
-        lambda _path: ("Adapter Tuning for LLMs\nAbstract\nSome content.", []),
-    )
-    monkeypatch.setattr(
-        disc,
-        "s2_search",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("network down")),
-    )
+    monkeypatch.setattr(prep, "s2_search", _spy_s2_search)
 
     manifest = disc.prepare_inputs(raw_root)
     entry = next(item for item in manifest["entries"] if item["source_kind"] == "paper")
@@ -1170,223 +1072,173 @@ def test_prepare_pdf_arxiv_recovery_warns_on_api_failure(raw_root, monkeypatch):
     assert entry["usable"] is True
     assert entry["canonical_ingest_path"].endswith(".tex")
     assert entry["arxiv_id"] == ""
+    assert entry["title"] == "seed"
+    assert entry["candidate_id"] == "local:papers-seed-pdf"
+    assert "title_source" not in entry
+    assert not calls
 
 
-def test_prepare_pdf_skips_title_search_when_arxiv_id_in_text(raw_root, monkeypatch):
+def test_prepare_inputs_passes_pdf_titles_map(raw_root, monkeypatch):
     (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
     monkeypatch.setattr(
-        disc,
+        prep,
         "_extract_pdf_text",
-        lambda _path: (
-            "arXiv:2401.00004\nAdapter Tuning for LLMs\nAbstract\nSome content.",
-            [],
-        ),
+        lambda _path: ("Recovered Title\nAbstract\nSome content.", []),
     )
+    queries = []
 
-    calls = []
-
-    def _spy_s2_search(query, limit=5):
-        calls.append(query)
-        return []
-
-    monkeypatch.setattr(disc, "s2_search", _spy_s2_search)
+    def _fake_s2_search(query, limit=5):
+        queries.append(query)
+        return [{"title": "Recovered Title", "externalIds": {"ArXiv": "2401.00004"}}]
 
     def _fake_download(arxiv_id, dest_dir):
         dest_dir.mkdir(parents=True, exist_ok=True)
         (dest_dir / "main.tex").write_text(
-            "\\title{Adapter Tuning for LLMs}\n"
+            "\\title{Recovered Title}\n"
             "\\begin{abstract}\nSome content.\n\\end{abstract}\n",
             encoding="utf-8",
         )
         return {"success": True, "format": "directory", "error": None}
 
-    monkeypatch.setattr(disc, "_download_arxiv_source", _fake_download)
+    monkeypatch.setattr(prep, "s2_search", _fake_s2_search)
+    monkeypatch.setattr(prep, "_download_arxiv_source", _fake_download)
 
+    manifest = disc.prepare_inputs(
+        raw_root,
+        pdf_titles={"raw/papers/seed.pdf": "Recovered Title"},
+    )
+    entry = next(item for item in manifest["entries"] if item["source_kind"] == "paper")
+
+    assert queries == ["Recovered Title"]
+    assert entry["arxiv_id"] == "2401.00004"
+    assert entry["canonical_ingest_path"].endswith("-arxiv-src")
+    assert entry["title"] == "Recovered Title"
+
+
+def test_prepare_inputs_keeps_agent_title_when_fetched_source_title_is_latex(raw_root, monkeypatch):
+    (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
+    monkeypatch.setattr(
+        prep,
+        "_extract_pdf_text",
+        lambda _path: ("Recovered Title\nAbstract\nSome content.", []),
+    )
+
+    monkeypatch.setattr(
+        prep,
+        "s2_search",
+        lambda query, limit=5: [{"title": "Recovered Title", "externalIds": {"ArXiv": "2401.00004"}}],
+    )
+
+    def _fake_download(arxiv_id, dest_dir):
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        (dest_dir / "main.tex").write_text(
+            "\\title{\\vspace{-1cm}Recovered Title\\\\Extra Formatting\\vspace{-.25cm}}\n"
+            "\\begin{abstract}\\vspace{-.25cm} Some content.\\end{abstract}\n",
+            encoding="utf-8",
+        )
+        return {"success": True, "format": "directory", "error": None}
+
+    monkeypatch.setattr(prep, "_download_arxiv_source", _fake_download)
+
+    manifest = disc.prepare_inputs(
+        raw_root,
+        pdf_titles={"raw/papers/seed.pdf": "Recovered Title"},
+    )
+    entry = next(item for item in manifest["entries"] if item["source_kind"] == "paper")
+
+    assert entry["title"] == "Recovered Title"
+    assert entry["arxiv_id"] == "2401.00004"
+    assert entry["canonical_ingest_path"].endswith("-arxiv-src")
+
+
+def test_prepare_inputs_passes_pdf_arxiv_id_map(raw_root, monkeypatch):
+    (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
+    monkeypatch.setattr(
+        prep,
+        "_extract_pdf_text",
+        lambda _path: ("Recovered Title\nAbstract\nSome content.", []),
+    )
+    queries = []
+
+    def _spy_s2_search(query, limit=5):
+        queries.append(query)
+        return []
+
+    def _fake_download(arxiv_id, dest_dir):
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        (dest_dir / "main.tex").write_text(
+            "\\title{Recovered Title}\n"
+            "\\begin{abstract}\nSome content.\n\\end{abstract}\n",
+            encoding="utf-8",
+        )
+        return {"success": True, "format": "directory", "error": None}
+
+    monkeypatch.setattr(prep, "s2_search", _spy_s2_search)
+    monkeypatch.setattr(prep, "_download_arxiv_source", _fake_download)
+
+    manifest = disc.prepare_inputs(
+        raw_root,
+        pdf_titles={"raw/papers/seed.pdf": {"title": "Recovered Title", "arxiv_id": "2401.00004v3"}},
+    )
+    entry = next(item for item in manifest["entries"] if item["source_kind"] == "paper")
+
+    assert not queries
+    assert entry["arxiv_id"] == "2401.00004"
+    assert entry["canonical_ingest_path"].endswith("-arxiv-src")
+    assert entry["title"] == "Recovered Title"
+
+
+def test_prepare_inputs_warns_for_unknown_pdf_title_mapping(raw_root, monkeypatch):
+    (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
+    monkeypatch.setattr(
+        prep,
+        "_extract_pdf_text",
+        lambda _path: ("Recovered Title\nAbstract\nSome content.", []),
+    )
+    monkeypatch.setattr(prep, "s2_search", lambda *_args, **_kwargs: [])
+    warnings: list[str] = []
+
+    manifest = disc.prepare_inputs(
+        raw_root,
+        pdf_titles={"raw/papers/missing.pdf": "Recovered Title"},
+        warning_sink=warnings,
+    )
+
+    entry = next(item for item in manifest["entries"] if item["source_kind"] == "paper")
+    assert entry["title"] == "seed"
+    assert warnings == ["ignored unknown PDF title mapping: raw/papers/missing.pdf"]
+
+
+def test_prepare_inputs_reuses_agent_staged_artifact(raw_root, monkeypatch):
+    (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
+    monkeypatch.setattr(
+        prep,
+        "_extract_pdf_text",
+        lambda _path: ("Recovered Title\nAbstract\nSome content.", []),
+    )
+
+    monkeypatch.setattr(
+        prep,
+        "s2_search",
+        lambda query, limit=5: [{"title": "Recovered Title", "externalIds": {"ArXiv": "2401.00004"}}],
+    )
+
+    def _fake_download(arxiv_id, dest_dir):
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        (dest_dir / "main.tex").write_text(
+            "\\title{Recovered Title}\n"
+            "\\begin{abstract}\nSome content.\n\\end{abstract}\n",
+            encoding="utf-8",
+        )
+        return {"success": True, "format": "directory", "error": None}
+
+    monkeypatch.setattr(prep, "_download_arxiv_source", _fake_download)
+    prep.prepare_paper_source(raw_root / "papers" / "seed.pdf", raw_root, title="Recovered Title")
+    monkeypatch.setattr(prep, "s2_search", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected search")))
     manifest = disc.prepare_inputs(raw_root)
     entry = next(item for item in manifest["entries"] if item["source_kind"] == "paper")
 
     assert entry["arxiv_id"] == "2401.00004"
-    assert not calls  # s2_search should not have been called
-
-
-def test_guess_title_skips_conference_header():
-    text = "Published as a conference paper at ICLR 2023\nReal Paper Title Here\nAbstract\nSome content."
-    assert disc._guess_title_from_text(text, "fallback") == "Real Paper Title Here"
-
-
-def test_guess_title_skips_arxiv_line():
-    text = "arXiv:2401.00001 [cs.CL]\nActual Paper Title\nAbstract\nContent."
-    assert disc._guess_title_from_text(text, "fallback") == "Actual Paper Title"
-
-
-def test_extract_arxiv_id_from_pdf_metadata(raw_root, monkeypatch):
-    pdf_path = raw_root / "papers" / "meta.pdf"
-    pdf_path.write_bytes(b"%PDF")
-
-    class FakeDoc:
-        def __init__(self, metadata):
-            self.metadata = metadata
-        def close(self):
-            pass
-
-    class FakeFitz:
-        @staticmethod
-        def open(path):
-            return FakeDoc({"subject": "See arXiv:2106.09685", "keywords": "", "title": ""})
-
-    monkeypatch.setattr(disc, "HAS_PYMUPDF", True)
-    monkeypatch.setattr(disc, "fitz", FakeFitz())
-
-    result = disc._extract_arxiv_id_from_pdf_metadata(pdf_path)
-    assert result == "2106.09685"
-
-
-def test_extract_arxiv_id_from_pdf_metadata_tries_all_fields(raw_root, monkeypatch):
-    pdf_path = raw_root / "papers" / "meta.pdf"
-    pdf_path.write_bytes(b"%PDF")
-
-    class FakeDoc:
-        def __init__(self, metadata):
-            self.metadata = metadata
-        def close(self):
-            pass
-
-    class FakeFitz:
-        @staticmethod
-        def open(path):
-            return FakeDoc({"subject": "", "keywords": "", "title": "Paper on arXiv:2107.00001"})
-
-    monkeypatch.setattr(disc, "HAS_PYMUPDF", True)
-    monkeypatch.setattr(disc, "fitz", FakeFitz())
-
-    result = disc._extract_arxiv_id_from_pdf_metadata(pdf_path)
-    assert result == "2107.00001"
-
-
-def test_extract_arxiv_source_metadata_reads_title_and_abstract(tmp_path):
-    source_dir = tmp_path / "source"
-    source_dir.mkdir()
-    (source_dir / "main.tex").write_text(
-        "\\title{Adapter Tuning for LLMs}\n"
-        "\\begin{abstract}\nImproves multilingual transfer.\n\\end{abstract}\n",
-        encoding="utf-8",
-    )
-    result = disc._extract_arxiv_source_metadata(source_dir)
-    assert result["source_title"] == "Adapter Tuning for LLMs"
-    assert result["source_abstract"] == "Improves multilingual transfer."
-
-
-def test_extract_arxiv_source_metadata_handles_missing_title_tex(tmp_path):
-    source_dir = tmp_path / "source"
-    source_dir.mkdir()
-    (source_dir / "main.tex").write_text(
-        "\\section{Body}\nNo title here.\n",
-        encoding="utf-8",
-    )
-    result = disc._extract_arxiv_source_metadata(source_dir)
-    assert result == {"source_title": "", "source_abstract": ""}
-
-
-def test_prepare_pdf_refreshes_metadata_from_accepted_arxiv_source(raw_root, monkeypatch):
-    (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
-    monkeypatch.setattr(
-        disc,
-        "_extract_pdf_text",
-        lambda _path: (
-            "Adapter Tuning\n"
-            "Abstract\n"
-            "We study efficient multilingual transfer for large language models with low-rank adapters "
-            "and parameter-efficient finetuning.",
-            [],
-        ),
-    )
-    monkeypatch.setattr(
-        disc,
-        "s2_search",
-        lambda query, limit=5: [
-            {
-                "title": "Adapter Tuning for Large Language Models",
-                "externalIds": {"ArXiv": "2401.00005"},
-            }
-        ],
-    )
-
-    def _fake_download(arxiv_id, dest_dir):
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        (dest_dir / "main.tex").write_text(
-            "\\title{Adapter Tuning for Large Language Models}\n"
-            "\\begin{abstract}\n"
-            "We study efficient multilingual transfer for large language models with low-rank adapters "
-            "and parameter-efficient finetuning.\n"
-            "\\end{abstract}\n",
-            encoding="utf-8",
-        )
-        return {"success": True, "format": "directory", "error": None}
-
-    monkeypatch.setattr(disc, "_download_arxiv_source", _fake_download)
-
-    manifest = disc.prepare_inputs(raw_root)
-    entry = next(item for item in manifest["entries"] if item["source_kind"] == "paper")
-
-    assert entry["title"] == "Adapter Tuning for Large Language Models"
-    assert entry["candidate_id"] == f"local:{disc.slugify('Adapter Tuning for Large Language Models')}"
-    assert entry["abstract_excerpt"].startswith("We study efficient multilingual transfer")
     assert entry["canonical_ingest_path"].endswith("-arxiv-src")
-
-
-def test_prepare_pdf_keeps_fetched_source_with_weak_local_abstract(raw_root, monkeypatch):
-    (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
-    monkeypatch.setattr(
-        disc,
-        "_extract_pdf_text",
-        lambda _path: ("Adapter Tuning\nAbstract\nBrief note.", []),
-    )
-    monkeypatch.setattr(disc, "s2_search", lambda *_args, **_kwargs: [
-        {"title": "Adapter Tuning for Large Language Models", "externalIds": {"ArXiv": "2401.00001"}}
-    ])
-
-    def _fake_download(arxiv_id, dest_dir):
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        (dest_dir / "main.tex").write_text(
-            "\\title{Adapter Tuning for Large Language Models}\n"
-            "\\begin{abstract}\nWe study efficient multilingual transfer for large language models.\n\\end{abstract}\n",
-            encoding="utf-8",
-        )
-        return {"success": True, "format": "directory", "error": None}
-
-    monkeypatch.setattr(disc, "_download_arxiv_source", _fake_download)
-
-    manifest = disc.prepare_inputs(raw_root)
-    entry = next(item for item in manifest["entries"] if item["source_kind"] == "paper")
-
-    assert entry["arxiv_id"] == "2401.00001"
-    assert entry["canonical_ingest_path"].endswith("-arxiv-src")
-    assert entry["ingest_format"] == "directory"
-    assert any("using fetched TeX source" in w for w in entry["warnings"])
-
-
-def test_prepare_pdf_keeps_fetched_source_without_source_metadata(raw_root, monkeypatch):
-    (raw_root / "papers" / "seed.pdf").write_bytes(b"%PDF")
-    monkeypatch.setattr(
-        disc,
-        "_extract_pdf_text",
-        lambda _path: ("Adapter Tuning\nAbstract\nBrief note.", []),
-    )
-    monkeypatch.setattr(disc, "s2_search", lambda *_args, **_kwargs: [
-        {"title": "Adapter Tuning for Large Language Models", "externalIds": {"ArXiv": "2401.00006"}}
-    ])
-
-    def _fake_download(arxiv_id, dest_dir):
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        (dest_dir / "main.tex").write_text("\\section{Body}\nNo title metadata.\n", encoding="utf-8")
-        return {"success": True, "format": "directory", "error": None}
-
-    monkeypatch.setattr(disc, "_download_arxiv_source", _fake_download)
-
-    manifest = disc.prepare_inputs(raw_root)
-    entry = next(item for item in manifest["entries"] if item["source_kind"] == "paper")
-
-    assert entry["arxiv_id"] == "2401.00006"
-    assert entry["title"] == "Adapter Tuning"
-    assert entry["abstract_excerpt"] == "Brief note."
-    assert entry["canonical_ingest_path"].endswith("-arxiv-src")
+    assert entry["title"] == "Recovered Title"
+    assert entry["candidate_id"] == "local:papers-seed-pdf"
