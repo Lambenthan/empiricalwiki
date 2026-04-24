@@ -146,7 +146,7 @@ Skip this whole step in INIT MODE — the parent `/init` handles it at fan-in.
 ```
 
 - For each reference whose arXiv ID or title resolves to an existing `wiki/papers/{slug}.md`, add a single paper-to-paper edge. Edge-type selection is in `references/cross-references.md`. If no existing wiki paper matches, **do not speculate** — skip.
-- For each citation already in the wiki, append this paper's slug to the citer's `cited_by`.
+- For each citation already in the wiki, append the citer's slug to this paper's `cited_by`.
 - Surface unmatched high-citation references in the final report so the user can decide whether to follow up with another `/ingest`.
 
 ### Step 6: Topics and index
