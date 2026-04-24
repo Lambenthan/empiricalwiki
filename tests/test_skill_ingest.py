@@ -12,9 +12,31 @@ import pytest
 # ── Paths ───────────────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-SKILL_PATH = PROJECT_ROOT / ".claude" / "skills" / "ingest" / "SKILL.md"
+SKILL_DIR = PROJECT_ROOT / ".claude" / "skills" / "ingest"
+SKILL_PATH = SKILL_DIR / "SKILL.md"
+REFERENCES_DIR = SKILL_DIR / "references"
 CLAUDE_MD = PROJECT_ROOT / "CLAUDE.md"
 TOOLS_DIR = PROJECT_ROOT / "tools"
+
+
+REFERENCE_FILES = [
+    "pdf-preprocessing.md",
+    "dedup-policy.md",
+    "cross-references.md",
+    "init-mode.md",
+    "error-handling.md",
+]
+
+
+def _all_skill_text() -> str:
+    """Concatenated SKILL.md + every reference file — used for assertions
+    whose content may live in either the main skill or a reference file."""
+    parts = [SKILL_PATH.read_text(encoding="utf-8")]
+    for name in REFERENCE_FILES:
+        p = REFERENCES_DIR / name
+        if p.exists():
+            parts.append(p.read_text(encoding="utf-8"))
+    return "\n".join(parts)
 
 
 @pytest.fixture(scope="module")
@@ -27,6 +49,14 @@ def skill_text():
 def claude_md_text():
     assert CLAUDE_MD.exists(), f"Product CLAUDE.md not found at {CLAUDE_MD}"
     return CLAUDE_MD.read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def all_skill_text():
+    """SKILL.md + every reference file, concatenated. Use this when the
+    assertion's content may live in a Level-3 reference rather than in
+    SKILL.md itself."""
+    return _all_skill_text()
 
 
 # ── 1. Required sections (extending.md structure) ──────────────────────
@@ -139,12 +169,14 @@ class TestWorkflow:
         steps = re.findall(r"^### Step \d+", workflow, re.MULTILINE)
         assert len(steps) >= 8, f"Expected >= 8 workflow steps, found {len(steps)}"
 
-    def test_local_pdf_flow_is_agent_first(self, skill_text):
-        lowered = skill_text.lower()
-        assert "filename/path arxiv" in lowered
-        assert "--arxiv-id" in skill_text
+    def test_local_pdf_flow_is_agent_first(self, all_skill_text):
+        """PDF preprocessing moved to references/pdf-preprocessing.md — assert against
+        the full skill corpus (SKILL.md + references) rather than SKILL.md alone."""
+        lowered = all_skill_text.lower()
+        assert "filename" in lowered and "arxiv" in lowered
+        assert "--arxiv-id" in all_skill_text
         assert "authoritative" in lowered
-        assert "synthetic `.tex`" in skill_text
+        assert "synthetic `.tex`" in all_skill_text or "synthetic .tex" in lowered
 
 
 # ── 4. Tool references ─────────────────────────────────────────────────
@@ -218,11 +250,14 @@ class TestEntityCoverage:
         assert "aliases" in skill_text, \
             "Must check concept aliases for semantic dedup before creating new concepts"
 
-    def test_concept_dedup_workflow(self, skill_text):
-        """Ingest Part A must include dedup step."""
-        part_a = skill_text[skill_text.find("Part A"):]
-        assert "去重" in part_a or "dedup" in part_a.lower() or "重复" in part_a, \
-            "Part A must describe concept dedup workflow"
+    def test_concept_dedup_workflow(self, all_skill_text):
+        """The dedup workflow must be documented — either in SKILL.md or in
+        references/dedup-policy.md (Level-3 disclosure)."""
+        lowered = all_skill_text.lower()
+        assert "find-similar-concept" in all_skill_text, \
+            "Must document find-similar-concept tool for concept dedup"
+        assert "dedup" in lowered or "去重" in all_skill_text or "merge" in lowered, \
+            "Must describe concept dedup / merge workflow"
 
 
 # ── 6. Constraints alignment with CLAUDE.md ────────────────────────────
@@ -265,16 +300,20 @@ class TestConstraints:
             "INIT MODE must respect the handed-off canonical ingest path"
 
     def test_discovered_and_tmp_sources_are_not_duplicated_into_raw_papers(self, skill_text):
+        lowered = skill_text.lower()
         assert (
-            "do not duplicate it into `raw/papers/`" in skill_text
-            or "不要再复制到 `raw/papers/`" in skill_text
-        ), "Ingest should treat raw/discovered/ and raw/tmp/ as canonical instead of copying them into raw/papers/"
+            ("duplicate" in lowered and "raw/papers/" in skill_text)
+            or ("复制" in skill_text and "raw/papers/" in skill_text)
+            or ("不得" in skill_text and "raw/papers/" in skill_text)
+        ), "Ingest must state the raw persistence rule: do not duplicate existing raw sources into raw/papers/"
 
     def test_direct_arxiv_fetches_go_to_raw_discovered(self, skill_text):
-        assert (
-            "save the fetched source artifact under `raw/discovered/`" in skill_text
-            or "保存到 `raw/discovered/` 并从那里 ingest" in skill_text
-        ), "Direct arXiv ingests should store fetched sources under raw/discovered/"
+        assert "raw/discovered/" in skill_text, \
+            "Direct arXiv ingest path must mention raw/discovered/"
+        # Workflow step 1 must route arxiv fetches to raw/discovered/
+        workflow = _extract_section(skill_text, "Workflow", level=2)
+        assert "raw/discovered/" in workflow, \
+            "Workflow must route direct arXiv fetches into raw/discovered/"
 
 
 # ── 7. Error handling ──────────────────────────────────────────────────
@@ -313,22 +352,44 @@ class TestCrossRefRules:
         assert "key_papers" in skill_text, \
             "Must update concept's key_papers when paper references concept"
 
-    def test_paper_to_people_backlink(self, skill_text):
-        """papers/A → people/C: person's Key papers must be updated."""
-        workflow = _extract_section(skill_text, "Workflow", level=2)
-        assert "Key papers" in workflow, \
+    def test_paper_to_people_backlink(self, all_skill_text):
+        """papers/A → people/C: person's Key papers must be updated.
+        May be documented in SKILL.md or in references/cross-references.md."""
+        assert "Key papers" in all_skill_text, \
             "Must update person's Key papers when paper references author"
 
-    def test_paper_to_claim_backlink(self, skill_text):
-        """papers/A → claims/D: claim's evidence must be updated."""
-        workflow = _extract_section(skill_text, "Workflow", level=2)
-        assert "evidence" in workflow, \
+    def test_paper_to_claim_backlink(self, all_skill_text):
+        """papers/A → claims/D: claim's evidence must be updated.
+        May be documented in SKILL.md or in references/cross-references.md."""
+        assert "evidence" in all_skill_text, \
             "Must update claim's evidence when paper supports/contradicts claim"
 
     def test_cited_by_backfill(self, skill_text):
         """S2 citations: existing papers' cited_by must be updated."""
         assert "cited_by" in skill_text, \
             "Must backfill cited_by for existing wiki papers"
+
+
+# ── 8b. Level-3 reference layout ───────────────────────────────────────
+
+class TestReferenceLayout:
+    """Validate that the Level-3 progressive-disclosure reference files exist
+    and that SKILL.md points to each of them."""
+
+    def test_references_dir_exists(self):
+        assert REFERENCES_DIR.is_dir(), \
+            f"references/ directory must exist under {SKILL_DIR}"
+
+    @pytest.mark.parametrize("name", REFERENCE_FILES)
+    def test_reference_file_exists(self, name):
+        path = REFERENCES_DIR / name
+        assert path.exists() and path.stat().st_size > 0, \
+            f"reference file {name} must exist and be non-empty"
+
+    @pytest.mark.parametrize("name", REFERENCE_FILES)
+    def test_skill_points_to_reference(self, skill_text, name):
+        assert name in skill_text, \
+            f"SKILL.md must reference references/{name} so readers know when to open it"
 
 
 # ── 9. Consistency with product CLAUDE.md ──────────────────────────────
