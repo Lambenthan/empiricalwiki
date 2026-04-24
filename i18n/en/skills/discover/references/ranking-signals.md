@@ -44,13 +44,13 @@ This is where `/discover` deliberately differs from `/init`'s planner (`tools/in
 
 If a future ranking signal seems shared between `/init` and `/discover`, prefer keeping two implementations rather than extracting a shared scorer. The objectives genuinely differ; a shared scorer would force one skill to compromise.
 
-## Field-set restrictions on list endpoints
+## Field-set restrictions on S2 endpoints
 
 `tools/fetch_s2.py` uses two field sets:
 
-- `FIELDS` — full rich set, accepted only by `/paper/{id}`. Includes `authors.hIndex`, `tldr`.
-- `FLAT_FIELDS` — flat authors, no `tldr`, no nested selectors. Used by everything else: `/paper/search`, `/paper/{id}/citations`, `/paper/{id}/references`, and the recommendations endpoints.
+- `FIELDS` — full rich set. Accepted by `/paper/{id}` **and** `/paper/search`. Includes `authors.hIndex`, `tldr`, and every other nested selector we use.
+- `FLAT_FIELDS` — flat authors, no `tldr`, no nested selectors. Required by `/paper/{id}/citations`, `/paper/{id}/references`, and `/recommendations/*` — these three endpoints return 400 Bad Request when passed nested selectors or `tldr`.
 
-The list endpoints reject nested selectors with a 400 Bad Request — this was a real issue during development and is why the two sets exist. Do not re-merge them.
+Do not re-merge the two sets: the restricted endpoints really do reject the nested form, verified with live probes.
 
-Practical consequence: candidates that enter via a list channel lack `hIndex` and `tldr` in their rationale. A follow-up `fetch_s2.paper(arxiv_id)` call per candidate would enrich them, but the discovery tool deliberately does not do this — it would multiply the per-run cost by (shortlist_size × latency) for a small rationale improvement. `/ingest` does the enrichment when the user actually picks a candidate to ingest.
+Practical consequence for anchor mode: candidates that enter only via `references` / `citations` / `recommend` lack `hIndex` and `tldr` in their rationale. Topic mode candidates (which enter via `/paper/search`) carry both. A follow-up `fetch_s2.paper(arxiv_id)` call per candidate would enrich the missing ones, but the discovery tool deliberately does not do this — it would multiply per-run cost by (shortlist_size × latency) for a small rationale improvement. `/ingest` does the enrichment when the user actually picks a candidate to ingest.

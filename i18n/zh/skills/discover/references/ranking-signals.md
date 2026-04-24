@@ -44,13 +44,13 @@ Topic / wiki 模式：相同信号，去掉 anchor overlap 与 anchor-influence 
 
 如果将来出现一个看起来 `/init` 和 `/discover` 可以共享的 ranking 信号，**优先保持两份实现**，而不是抽出共享 scorer。目标确实不同，共享 scorer 会迫使其中一方妥协。
 
-## list endpoint 的字段限制
+## S2 endpoint 的字段限制
 
 `tools/fetch_s2.py` 使用两套字段集：
 
-- `FIELDS` —— 完整 rich 字段集，仅 `/paper/{id}` 接受。包含 `authors.hIndex`、`tldr`。
-- `FLAT_FIELDS` —— 扁平 authors，无 `tldr`，无嵌套 selector。其余所有 endpoint 都用这套：`/paper/search`、`/paper/{id}/citations`、`/paper/{id}/references`、recommendations endpoints。
+- `FIELDS` —— 完整 rich 字段集。`/paper/{id}` **和** `/paper/search` 都接受。包含 `authors.hIndex`、`tldr`，以及我们用到的所有嵌套 selector。
+- `FLAT_FIELDS` —— 扁平 authors，无 `tldr`，无嵌套 selector。仅以下三个 endpoint 必须用：`/paper/{id}/citations`、`/paper/{id}/references`、`/recommendations/*`。这三个端点在收到嵌套 selector 或 `tldr` 时会返回 400 Bad Request。
 
-list endpoints 会对嵌套 selector 返回 400 Bad Request —— 开发期间真实踩过这个坑，所以留下两套字段集。不要把它们合并回去。
+不要把两套字段集合回一套 —— 上述三个端点确实会拒绝嵌套形式，已用线上探测确认。
 
-实际影响：从 list 通道进来的候选，rationale 里不带 `hIndex` 与 `tldr`。理论上对每个候选再 `fetch_s2.paper(arxiv_id)` 一次可以 enrich，但 discovery 工具有意不做 —— 这会把每次运行的成本乘以 (shortlist_size × latency)，只为了让 rationale 看起来更丰富一点。用户选中某个候选去 `/ingest` 时再 enrich 就够了。
+实际影响（anchor 模式）：只从 `references` / `citations` / `recommend` 通道进来的候选，rationale 里不带 `hIndex` 与 `tldr`。topic 模式的候选（通过 `/paper/search`）两者都带。理论上对每个候选再 `fetch_s2.paper(arxiv_id)` 一次可以补齐缺的，但 discovery 工具有意不做 —— 这会把每次运行的成本乘以 (shortlist_size × latency)，只为了让 rationale 看起来更丰富一点。用户选中某个候选去 `/ingest` 时再 enrich 就够了。

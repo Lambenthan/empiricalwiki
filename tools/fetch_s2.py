@@ -25,22 +25,22 @@ import requests
 BASE_URL = "https://api.semanticscholar.org/graph/v1"
 RECS_BASE_URL = "https://api.semanticscholar.org/recommendations/v1"
 
-# Full rich field set for single-paper detail (`/paper/{id}`). This is the
-# only endpoint that accepts nested selectors like `authors.hIndex` and the
-# `tldr` field. Extra keys are harmless to existing callers — they read
-# specific keys — so the discovery flow picks up hIndex, influentialCitationCount,
-# fieldsOfStudy, and tldr here without paying for a second round-trip.
+# Full rich field set. Accepted by `/paper/{id}` and `/paper/search` — both
+# honor nested selectors like `authors.hIndex` and the `tldr` field. Extra
+# keys are harmless to existing callers (they read specific keys), so the
+# discovery flow picks up hIndex, influentialCitationCount, fieldsOfStudy,
+# and tldr without a second round-trip.
 FIELDS = (
     "paperId,title,abstract,authors.authorId,authors.name,authors.hIndex,"
     "authors.paperCount,year,citationCount,influentialCitationCount,venue,"
     "publicationTypes,fieldsOfStudy,tldr,externalIds,url"
 )
 
-# Flat field set for every list-returning endpoint: `/paper/search`,
+# Flat field set for the endpoints that reject nested selectors and `tldr`:
 # `/paper/{id}/citations`, `/paper/{id}/references`, and `/recommendations/*`.
-# These endpoints reject nested selectors (e.g. `authors.hIndex`) and `tldr`.
 # Authors come back as `{authorId, name}` only — h-index enrichment requires
-# a follow-up `paper()` call per candidate if needed.
+# a follow-up `paper()` call per candidate if needed. (`/paper/search` does NOT
+# share this restriction and still uses the full `FIELDS`.)
 FLAT_FIELDS = (
     "paperId,title,abstract,authors,year,citationCount,influentialCitationCount,"
     "venue,publicationTypes,fieldsOfStudy,externalIds,url"
@@ -89,11 +89,11 @@ def _post(endpoint: str, params: dict | None = None, json_body: dict | None = No
 
 
 def search(query: str, limit: int = 10) -> list[dict]:
-    """Search papers by query string."""
+    """Search papers by query string. Accepts the full rich FIELDS."""
     data = _get("/paper/search", {
         "query": query,
         "limit": limit,
-        "fields": FLAT_FIELDS,
+        "fields": FIELDS,
     })
     return data.get("data", [])
 
