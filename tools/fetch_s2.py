@@ -6,6 +6,8 @@ Usage:
     python3 tools/fetch_s2.py paper 2106.09685
     python3 tools/fetch_s2.py citations 2106.09685
     python3 tools/fetch_s2.py references 2106.09685
+    python3 tools/fetch_s2.py recommend 2106.09685
+    python3 tools/fetch_s2.py recommend 2106.09685 2305.14314 --negative 1810.04805
 """
 
 from __future__ import annotations
@@ -21,7 +23,29 @@ import _env  # noqa: F401 — load .env files for API keys
 import requests
 
 BASE_URL = "https://api.semanticscholar.org/graph/v1"
-FIELDS = "paperId,title,abstract,authors,year,citationCount,venue,externalIds,url"
+RECS_BASE_URL = "https://api.semanticscholar.org/recommendations/v1"
+
+# Full rich field set for single-paper detail (`/paper/{id}`). This is the
+# only endpoint that accepts nested selectors like `authors.hIndex` and the
+# `tldr` field. Extra keys are harmless to existing callers — they read
+# specific keys — so the discovery flow picks up hIndex, influentialCitationCount,
+# fieldsOfStudy, and tldr here without paying for a second round-trip.
+FIELDS = (
+    "paperId,title,abstract,authors.authorId,authors.name,authors.hIndex,"
+    "authors.paperCount,year,citationCount,influentialCitationCount,venue,"
+    "publicationTypes,fieldsOfStudy,tldr,externalIds,url"
+)
+
+# Flat field set for every list-returning endpoint: `/paper/search`,
+# `/paper/{id}/citations`, `/paper/{id}/references`, and `/recommendations/*`.
+# These endpoints reject nested selectors (e.g. `authors.hIndex`) and `tldr`.
+# Authors come back as `{authorId, name}` only — h-index enrichment requires
+# a follow-up `paper()` call per candidate if needed.
+FLAT_FIELDS = (
+    "paperId,title,abstract,authors,year,citationCount,influentialCitationCount,"
+    "venue,publicationTypes,fieldsOfStudy,externalIds,url"
+)
+
 S2_API_KEY = os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "")
 RATE_LIMIT_DELAY = 1.0 if S2_API_KEY else 3.0  # faster with API key
 MAX_RETRIES = 3
@@ -34,12 +58,18 @@ def _bare_arxiv_id(arxiv_id: str) -> str:
     return arxiv_id.removeprefix("ARXIV:").removeprefix("arxiv:")
 
 
-def _get(endpoint: str, params: dict | None = None) -> dict | list:
-    """Make a GET request to S2 API with basic rate limiting."""
+def _request(method: str, url: str, *, params: dict | None = None, json_body: dict | None = None) -> dict | list:
+    """Shared HTTP path with rate limit + 429 retry."""
     time.sleep(RATE_LIMIT_DELAY)
-    url = f"{BASE_URL}{endpoint}"
     for attempt in range(MAX_RETRIES):
-        resp = requests.get(url, params=params or {}, headers=_HEADERS, timeout=30)
+        resp = requests.request(
+            method,
+            url,
+            params=params or {},
+            json=json_body,
+            headers=_HEADERS,
+            timeout=30,
+        )
         if resp.status_code == 429:
             wait = 60 * (attempt + 1)  # 60s, 120s, 180s
             print(f"Rate limited, waiting {wait}s... (attempt {attempt+1}/{MAX_RETRIES})", file=sys.stderr)
@@ -50,37 +80,113 @@ def _get(endpoint: str, params: dict | None = None) -> dict | list:
     raise RuntimeError(f"S2 API rate limited after {MAX_RETRIES} retries")
 
 
+def _get(endpoint: str, params: dict | None = None) -> dict | list:
+    return _request("GET", f"{BASE_URL}{endpoint}", params=params)
+
+
+def _post(endpoint: str, params: dict | None = None, json_body: dict | None = None, base_url: str = BASE_URL) -> dict | list:
+    return _request("POST", f"{base_url}{endpoint}", params=params, json_body=json_body)
+
+
 def search(query: str, limit: int = 10) -> list[dict]:
     """Search papers by query string."""
     data = _get("/paper/search", {
         "query": query,
         "limit": limit,
-        "fields": FIELDS,
+        "fields": FLAT_FIELDS,
     })
     return data.get("data", [])
 
 
 def paper(arxiv_id: str) -> dict:
-    """Get paper details by arXiv ID."""
+    """Get paper details by arXiv ID. This endpoint accepts the full rich FIELDS."""
     return _get(f"/paper/ARXIV:{_bare_arxiv_id(arxiv_id)}", {"fields": FIELDS})
 
 
 def citations(arxiv_id: str, limit: int = 100) -> list[dict]:
-    """Get papers that cite the given paper."""
+    """Get papers that cite the given paper.
+
+    Each returned paper dict carries `_is_influential_edge: bool`, lifted from
+    the envelope's `isInfluential` field — S2's per-edge signal for whether this
+    specific citation substantively built on the anchor (not just a name-check).
+    The key is underscore-prefixed so existing key-based consumers
+    (`init_discovery.py`, `/ingest`) ignore it without change.
+    """
     data = _get(f"/paper/ARXIV:{_bare_arxiv_id(arxiv_id)}/citations", {
         "limit": limit,
-        "fields": FIELDS,
+        "fields": f"isInfluential,{FLAT_FIELDS}",
     })
-    return [item.get("citingPaper", {}) for item in data.get("data", [])]
+    out: list[dict] = []
+    for item in data.get("data", []):
+        paper_obj = item.get("citingPaper") or {}
+        if paper_obj:
+            paper_obj["_is_influential_edge"] = bool(item.get("isInfluential"))
+            out.append(paper_obj)
+    return out
 
 
 def references(arxiv_id: str, limit: int = 100) -> list[dict]:
-    """Get papers referenced by the given paper."""
+    """Get papers referenced by the given paper.
+
+    Each returned paper dict carries `_is_influential_edge: bool` — see `citations`.
+    """
     data = _get(f"/paper/ARXIV:{_bare_arxiv_id(arxiv_id)}/references", {
         "limit": limit,
-        "fields": FIELDS,
+        "fields": f"isInfluential,{FLAT_FIELDS}",
     })
-    return [item.get("citedPaper", {}) for item in data.get("data", [])]
+    out: list[dict] = []
+    for item in data.get("data", []):
+        paper_obj = item.get("citedPaper") or {}
+        if paper_obj:
+            paper_obj["_is_influential_edge"] = bool(item.get("isInfluential"))
+            out.append(paper_obj)
+    return out
+
+
+def recommend(
+    positive_ids: list[str],
+    negative_ids: list[str] | None = None,
+    limit: int = 50,
+) -> list[dict]:
+    """Recommend papers similar to the given anchors.
+
+    Uses the lightweight forpaper GET endpoint when there is exactly one
+    positive anchor and no negatives; otherwise uses the multi-anchor POST
+    endpoint that supports negative examples.
+
+    IDs accepted: bare arXiv IDs, "ARXIV:..." form, or S2 paperIds.
+    """
+    negative_ids = negative_ids or []
+    if not positive_ids:
+        raise ValueError("recommend() requires at least one positive_id")
+
+    def _normalize(pid: str) -> str:
+        # arXiv-style IDs need the ARXIV: prefix; S2 paperIds (40-char hex) pass through.
+        if pid.startswith(("ARXIV:", "arxiv:")):
+            return f"ARXIV:{_bare_arxiv_id(pid)}"
+        if "/" in pid or len(pid) == 40 or pid.isdigit() and len(pid) > 12:
+            return pid  # looks like an S2 paperId already
+        # Heuristic: contains a dot and starts with a digit → arXiv-style (e.g. 2106.09685)
+        if pid and pid[0].isdigit() and "." in pid:
+            return f"ARXIV:{pid}"
+        return pid
+
+    positive = [_normalize(p) for p in positive_ids]
+    negative = [_normalize(p) for p in negative_ids]
+
+    if len(positive) == 1 and not negative:
+        url = f"{RECS_BASE_URL}/papers/forpaper/{positive[0]}"
+        data = _request("GET", url, params={"limit": limit, "fields": FLAT_FIELDS})
+    else:
+        data = _post(
+            "/papers",
+            params={"limit": limit, "fields": FLAT_FIELDS},
+            json_body={"positivePaperIds": positive, "negativePaperIds": negative},
+            base_url=RECS_BASE_URL,
+        )
+
+    # Both endpoints return {"recommendedPapers": [...]}.
+    return data.get("recommendedPapers", [])
 
 
 def main():
@@ -100,6 +206,17 @@ def main():
     p_refs = sub.add_parser("references", help="Get references")
     p_refs.add_argument("arxiv_id", help="arXiv ID")
 
+    p_rec = sub.add_parser("recommend", help="Recommend papers similar to one or more anchors")
+    p_rec.add_argument("positive_ids", nargs="+", help="One or more anchor paper IDs (arXiv or S2)")
+    p_rec.add_argument(
+        "--negative",
+        action="append",
+        default=[],
+        metavar="ID",
+        help="Paper ID to push recommendations away from (repeatable)",
+    )
+    p_rec.add_argument("--limit", type=int, default=50, help="Max recommendations to return (default 50)")
+
     args = parser.parse_args()
 
     if args.command == "search":
@@ -110,6 +227,8 @@ def main():
         result = citations(args.arxiv_id)
     elif args.command == "references":
         result = references(args.arxiv_id)
+    elif args.command == "recommend":
+        result = recommend(args.positive_ids, args.negative, args.limit)
     else:
         result = {}
 

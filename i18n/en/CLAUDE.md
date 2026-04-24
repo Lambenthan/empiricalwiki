@@ -136,6 +136,7 @@ Standard log line:
 | `/init` | `skills/init/SKILL.md` | manual |
 | `/prefill` | `skills/prefill/SKILL.md` | manual (`[domain] [--add concept]`) |
 | `/ingest` | `skills/ingest/SKILL.md` | manual |
+| `/discover` | `skills/discover/SKILL.md` | manual / internal (called by `/ingest --discover`) |
 | `/ask` | `skills/ask/SKILL.md` | manual |
 | `/edit` | `skills/edit/SKILL.md` | manual |
 | `/check` | `skills/check/SKILL.md` | biweekly/manual |

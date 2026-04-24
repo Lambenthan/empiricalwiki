@@ -1,6 +1,6 @@
 ---
 description: 把一篇论文 ingest 进 wiki —— 建立 papers + concepts + people + claims 页面，并完成所有双向交叉引用与 graph edge。当用户说 "ingest"、"加入这篇论文"、丢 `.pdf` / `.tex` / arXiv URL 或要求把论文折叠进知识库时触发。
-argument-hint: <local-path-or-arXiv-URL>
+argument-hint: <local-path-or-arXiv-URL> [--discover]
 ---
 
 # /ingest
@@ -20,6 +20,7 @@ argument-hint: <local-path-or-arXiv-URL>
 ## Inputs
 
 - `source`：四种之一 —— arXiv URL（例如 `https://arxiv.org/abs/2106.09685`）、本地 `.tex`、本地 `.pdf`、或 `/init` 通过 `.checkpoints/init-sources.json` 交接的 `canonical_ingest_path`
+- `--discover`（可选，默认 **关闭**）：在最终 report 之后调用 `/discover --anchor <this-paper's-arxiv-id>`，把 shortlist 作为 "接下来可能想 ingest 的相关论文" 附在 report 里。从不自动 ingest 推荐结果。INIT MODE 下自动跳过。视为用户可见参数：不得仅根据仓库状态擅自开启。
 
 ## Outputs
 
@@ -179,6 +180,23 @@ INIT MODE 下整步跳过 —— 由上层 `/init` 在 fan-in 时统一处理。
 Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges
 ```
 
+### Step 9: 可选的 discovery（仅当 `--discover` 显式开启）
+
+如果用户没有显式传 `--discover`，跳过本步骤。INIT MODE 下也一律跳过 —— 是否在 fan-in 之后跑 discovery，是 `/init` 父流程的决定，不是单个子代理的决定。
+
+开启时，用刚 ingest 论文作为单 anchor 调用 `/discover`：
+
+```bash
+"$PYTHON_BIN" tools/discover.py from-anchors \
+  --id <arxiv-id-of-this-paper> \
+  --wiki-root wiki \
+  --limit 10 \
+  --output-checkpoint .checkpoints/ \
+  --markdown
+```
+
+把 markdown 输出附在 report 下一个 "接下来可能想 ingest 的相关论文" 小节里。**不要**自动 ingest 列表里的任何东西 —— 由用户挑选。若 discovery 失败（S2 故障、所有通道返回空），在 report 里一行说明并继续 —— discovery 失败不应让一次成功的 `/ingest` 也算失败。
+
 ## Constraints
 
 - `raw/papers/`、`raw/notes/`、`raw/web/` 归用户所有且只读。直接本地 `/ingest` 可在 `raw/tmp/` 下新增 prepared sidecar；直接 arXiv ingest 可把源归档写到 `raw/discovered/`。INIT MODE 下 `raw/` 全部只读。
@@ -213,6 +231,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges
 - `"$PYTHON_BIN" tools/fetch_arxiv.py <arxiv-id-or-url>` —— arXiv 源下载
 - `"$PYTHON_BIN" tools/fetch_s2.py paper|citations|references <arxiv-id>`
 - `"$PYTHON_BIN" tools/fetch_deepxiv.py brief|head|social <arxiv-id>`
+- `"$PYTHON_BIN" tools/discover.py from-anchors --id <arxiv-id> --wiki-root wiki --limit 10 --output-checkpoint .checkpoints/ --markdown` —— 仅当 `--discover` 开启
 
 ### Shared References
 
@@ -222,6 +241,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges
 
 - `/init` —— 通过 INIT MODE 并行调用 `/ingest` 子代理
 - `/check` —— 在 `/ingest` 完成后审计 wiki，负责所有 `/ingest` 故意不做的语义检查
+- `/discover` —— 可选后续，当 `--discover` 开启时运行；产出用户可能想接着 ingest 的相关论文 shortlist
 
 ### External APIs
 

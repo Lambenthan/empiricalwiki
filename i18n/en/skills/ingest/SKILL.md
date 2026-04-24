@@ -1,6 +1,6 @@
 ---
 description: Ingest a paper into the wiki — creates pages (papers + concepts + people + claims) and builds all cross-references and graph edges. Trigger whenever the user says "ingest", "add this paper", drops a `.pdf` / `.tex` / arXiv URL, or asks to fold a paper into the knowledge base.
-argument-hint: <local-path-or-arXiv-URL>
+argument-hint: <local-path-or-arXiv-URL> [--discover]
 ---
 
 # /ingest
@@ -20,6 +20,7 @@ Open `docs/runtime-page-templates.en.md` before drafting any wiki page frontmatt
 ## Inputs
 
 - `source`: one of — arXiv URL (e.g. `https://arxiv.org/abs/2106.09685`), local `.tex`, local `.pdf`, or a `canonical_ingest_path` handed off by `/init` via `.checkpoints/init-sources.json`
+- `--discover` (optional, default **off**): after the final report, invoke `/discover --anchor <this-paper's-arxiv-id>` and append the shortlist to the report as "Related papers you may want to ingest next". Never auto-ingests the suggestions. Skipped automatically in INIT MODE. Treat this as a user-owned flag: do not set it based on repo state.
 
 ## Outputs
 
@@ -179,6 +180,23 @@ Emit one compact summary covering: pages created, pages updated, graph edges add
 Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges
 ```
 
+### Step 9: Optional discovery (only if `--discover` is set)
+
+Skip this step unless the user explicitly passed `--discover`. Also skip it in INIT MODE — `/init`'s parent process decides whether to run discovery at fan-in, not individual subagents.
+
+When active, invoke `/discover` with the just-ingested paper as the single anchor:
+
+```bash
+"$PYTHON_BIN" tools/discover.py from-anchors \
+  --id <arxiv-id-of-this-paper> \
+  --wiki-root wiki \
+  --limit 10 \
+  --output-checkpoint .checkpoints/ \
+  --markdown
+```
+
+Append the markdown output to the report under a heading like "Related papers you may want to ingest next". Do not auto-ingest anything from the shortlist — the user picks. If discovery fails (S2 outage, all channels empty), note the failure in one line and continue — a failed `/discover` must not fail an otherwise successful `/ingest`.
+
 ## Constraints
 
 - `raw/papers/`, `raw/notes/`, `raw/web/` are user-owned and read-only. Direct local `/ingest` may add prepared sidecars under `raw/tmp/`; direct arXiv ingests may write fetched source artifacts under `raw/discovered/`. INIT MODE treats all of `raw/` as read-only.
@@ -213,6 +231,7 @@ See `references/error-handling.md`. Highlights: source parse failures cascade te
 - `"$PYTHON_BIN" tools/fetch_arxiv.py <arxiv-id-or-url>` — arXiv source download
 - `"$PYTHON_BIN" tools/fetch_s2.py paper|citations|references <arxiv-id>`
 - `"$PYTHON_BIN" tools/fetch_deepxiv.py brief|head|social <arxiv-id>`
+- `"$PYTHON_BIN" tools/discover.py from-anchors --id <arxiv-id> --wiki-root wiki --limit 10 --output-checkpoint .checkpoints/ --markdown` — only when `--discover` is set
 
 ### Shared References
 
@@ -222,6 +241,7 @@ See `references/error-handling.md`. Highlights: source parse failures cascade te
 
 - `/init` — calls `/ingest` in parallel subagents via INIT MODE
 - `/check` — audits wiki state after `/ingest` completes; owns every semantic check `/ingest` intentionally does not perform
+- `/discover` — optional follow-up when `--discover` is set; produces a shortlist of related papers the user may want to ingest next
 
 ### External APIs
 
