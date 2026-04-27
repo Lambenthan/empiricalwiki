@@ -325,11 +325,12 @@ Drop the following into `~/.claude/settings.json` (or your project's `.claude/se
   "env": {
     "ANTHROPIC_BASE_URL": "https://api.xiaomimimo.com/anthropic",
     "ANTHROPIC_AUTH_TOKEN": "<your-personal-mimo-key>",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "mimo-v2-pro",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "mimo-v2-pro",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "mimo-v2-pro"
-  }
-}
+    "ANTHROPIC_MODEL": "mimo-v2.5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "mimo-v2.5",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "mimo-v2.5-pro",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "mimo-v2.5"         
+  }                                                       
+}    
 ```
 
 **Step 2 — Skip the Claude Code onboarding** / **第 2 步：跳过 Claude Code 初始引导**
@@ -356,7 +357,8 @@ Then run `claude` as usual. That's it — zero extra setup.
 
 ## Community / 交流群
 
-<img src="assets/wechat-group.png" width="240" alt="WeChat Group QR Code">
+<img src="assets/wechat_group_2.jpg" width="240" alt="WeChat Group QR Code">
+<img src="assets/wechat_group_1.jpg" width="240" alt="WeChat Group QR Code">
 
 Scan to join the ΩmegaWiki WeChat group / 扫码加入微信交流群
 
