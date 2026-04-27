@@ -84,9 +84,12 @@ When writing a forward link, **always write the reverse link simultaneously**:
 ## Graph Rules
 
 - `graph/` is auto-generated; do not edit it manually
-- core derived files are `edges.jsonl`, `context_brief.md`, and `open_questions.md`
-- valid edge types are `extends`, `contradicts`, `supports`, `inspired_by`, `tested_by`, `invalidates`, `supersedes`, `addresses_gap`, and `derived_from`
-- use `tools/research_wiki.py add-edge`, `rebuild-context-brief`, and `rebuild-open-questions`
+- core derived files are `edges.jsonl`, `citations.jsonl`, `context_brief.md`, and `open_questions.md`
+- semantic edge types include paper-paper (`same_problem_as`, `similar_method_to`, `complementary_to`, `builds_on`, `compares_against`, `improves_on`, `challenges`, `surveys`), paper-concept (`introduces_concept`, `uses_concept`, `extends_concept`, `critiques_concept`), and existing claim/experiment/provenance types (`supports`, `contradicts`, `tested_by`, `invalidates`, `addresses_gap`, `derived_from`, `inspired_by`)
+- `/ingest` paper-paper and paper-concept semantic edges must include `confidence: high|medium|low`
+- symmetric paper-paper edges are stored once with sorted endpoints and `symmetric: true`
+- bibliographic citations live in `citations.jsonl` as `type: cites`
+- use `tools/research_wiki.py add-edge`, `add-citation`, `rebuild-context-brief`, and `rebuild-open-questions`
 
 ## log.md Format
 
@@ -136,6 +139,7 @@ Standard log line:
 | `/init` | `skills/init/SKILL.md` | manual |
 | `/prefill` | `skills/prefill/SKILL.md` | manual (`[domain] [--add concept]`) |
 | `/ingest` | `skills/ingest/SKILL.md` | manual |
+| `/discover` | `skills/discover/SKILL.md` | manual / internal (called by `/ingest --discover`) |
 | `/ask` | `skills/ask/SKILL.md` | manual |
 | `/edit` | `skills/edit/SKILL.md` | manual |
 | `/check` | `skills/check/SKILL.md` | biweekly/manual |

@@ -82,9 +82,12 @@
 ## Graph 规则
 
 - `graph/` 是自动生成目录，不要手动编辑
-- 核心派生文件是 `edges.jsonl`、`context_brief.md`、`open_questions.md`
-- 合法 edge type：`extends`、`contradicts`、`supports`、`inspired_by`、`tested_by`、`invalidates`、`supersedes`、`addresses_gap`、`derived_from`
-- 用 `tools/research_wiki.py add-edge`、`rebuild-context-brief`、`rebuild-open-questions` 维护
+- 核心派生文件是 `edges.jsonl`、`citations.jsonl`、`context_brief.md`、`open_questions.md`
+- semantic edge type 包括 paper-paper（`same_problem_as`、`similar_method_to`、`complementary_to`、`builds_on`、`compares_against`、`improves_on`、`challenges`、`surveys`）、paper-concept（`introduces_concept`、`uses_concept`、`extends_concept`、`critiques_concept`），以及既有 claim/experiment/provenance 类型（`supports`、`contradicts`、`tested_by`、`invalidates`、`addresses_gap`、`derived_from`、`inspired_by`）
+- `/ingest` 产生的 paper-paper 与 paper-concept semantic edge 必须带 `confidence: high|medium|low`
+- 对称 paper-paper edge 只存一行，endpoint 按顺序排序，并写 `symmetric: true`
+- bibliographic citation 存在 `citations.jsonl`，`type: cites`
+- 用 `tools/research_wiki.py add-edge`、`add-citation`、`rebuild-context-brief`、`rebuild-open-questions` 维护
 
 ## log.md 格式
 
@@ -132,6 +135,7 @@
 | `/init` | `skills/init/SKILL.md` | 手动 |
 | `/prefill` | `skills/prefill/SKILL.md` | 手动（`[domain] [--add concept]`） |
 | `/ingest` | `skills/ingest/SKILL.md` | 手动 |
+| `/discover` | `skills/discover/SKILL.md` | 手动 / 内部（`/ingest --discover` 时调用） |
 | `/ask` | `skills/ask/SKILL.md` | 手动 |
 | `/edit` | `skills/edit/SKILL.md` | 手动 |
 | `/check` | `skills/check/SKILL.md` | 每两周/手动 |

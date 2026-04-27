@@ -38,7 +38,7 @@ If an ingest fails after some writes have landed (paper page written, but concep
 - do not roll back the writes that succeeded
 - append a log entry via `tools/research_wiki.py log` describing which steps completed and which are incomplete
 - surface the incomplete steps in the user report so the user can run `/edit` or `/check --fix` to finish the job
-- in INIT MODE, let the parent `/init` fan-in merge catch the partial state; do not self-commit
+- in INIT MODE, if the ingest completed successfully, commit inside the worktree before exiting (see `references/init-mode.md`). If the ingest partially failed, do **not** commit the incomplete state; let the parent `/init` handle the failed worktree at fan-in
 
 ## When to stop vs. continue
 

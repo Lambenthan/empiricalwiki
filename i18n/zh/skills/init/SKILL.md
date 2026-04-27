@@ -15,22 +15,17 @@ argument-hint: "[topic] [--no-introduction]"
 
 ## Inputs
 
-- `topic`（可选）：研究方向关键词；如果 `raw/papers/` 已经给出了 seed set，或 notes/web 已经表达了意图，就可以省略
-- `--no-introduction`（可选）：禁用外部找论文；只使用用户自有的 `raw/papers/`、`raw/notes/`、`raw/web/`
-- 参数护栏：把 `topic` 与 `--no-introduction` 视为用户输入，而不是 agent 的策略开关。不得仅根据仓库状态推断 `--no-introduction`。只有当用户明确要求禁用外部发现时，才可使用它。
-- `raw/papers/`：用户自有论文来源（`.tex`、`.pdf`、压缩包）
-- `raw/notes/`：用户自有笔记，表达目标、假设、排除项与偏好方向
-- `raw/web/`：用户保存的网页存档
+- `topic`（可选）：研究方向关键词；当 `raw/` 已定义 seed set 时可省略
+- `--no-introduction`（可选）：禁用外部发现；仅在用户明确要求时使用
+- 用户自有素材：`raw/papers/`、`raw/notes/`、`raw/web/`
 
 ## Outputs
 
-- 通过 `tools/research_wiki.py init` 建立 `wiki/` scaffold
-- `raw/tmp/` — `/init` 与直接本地 `/ingest` 复用的生成型 prepared 来源
-- `raw/discovered/` — `/init` 选中的外部论文（启用外部发现时）
-- `wiki/Summary/{area}.md`、`wiki/topics/{topic}.md`、provisional `wiki/ideas/{slug}.md`、`wiki/concepts/{slug}.md`、`wiki/claims/{slug}.md`
-- 通过并行 `/ingest` 创建的 `wiki/papers/*.md` 与论文驱动的 concepts / claims / people
-- 更新后的 `wiki/index.md`、`wiki/log.md`、`wiki/graph/edges.jsonl`、`wiki/graph/context_brief.md`、`wiki/graph/open_questions.md`
-- `.checkpoints/init-prepare.json`、`.checkpoints/init-plan.json`、`.checkpoints/init-sources.json`
+- `wiki/` 骨架与 provisional 页面（Summary、topics、ideas、concepts、claims）
+- `raw/tmp/` 与 `raw/discovered/` 预处理来源
+- 并行 `/ingest` 产出的最终论文页面
+- `.checkpoints/init-*.json` 清单，用于恢复与重放
+- 更新后的 `wiki/index.md`、`wiki/log.md`、`wiki/graph/*`
 
 ## Wiki Interaction
 
@@ -57,12 +52,23 @@ argument-hint: "[topic] [--no-introduction]"
 **前置条件**：当前目录为项目根，且包含 `wiki/`、`raw/`、`tools/`。设 `WIKI_ROOT=wiki/`。先解析一次 `PYTHON_BIN`，并在整个 `/init` 流程里复用它，确保运行时使用与 `setup.sh` 安装依赖时相同的解释器：
 
 ```bash
-if [ -x .venv/bin/python ]; then
-  PYTHON_BIN=.venv/bin/python
-elif [ -x .venv/Scripts/python.exe ]; then
-  PYTHON_BIN=.venv/Scripts/python.exe
-else
-  PYTHON_BIN=python3
+# 通过 git 找到项目根，让 worktree 中的 subagent 也能定位 .venv。
+# .venv 被 gitignore，subagent 的 cwd 在 ../.worktrees/<branch>/ 时本地没有
+# .venv——若不解析项目根，PYTHON_BIN 会回退到系统 python3，既丢失 .env 里的
+# API key，也丢失安装的依赖（deepxiv-sdk 等）。
+# git rev-parse --git-common-dir 无论 cwd 位于哪个 worktree 都返回主仓库的
+# .git 目录；其父目录即项目根。
+GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null || true)
+PROJECT_ROOT=""
+if [ -n "$GIT_COMMON_DIR" ]; then
+  PROJECT_ROOT=$(cd "$(dirname "$GIT_COMMON_DIR")" 2>/dev/null && pwd)
+fi
+
+if   [ -x "$PROJECT_ROOT/.venv/bin/python" ];         then PYTHON_BIN="$PROJECT_ROOT/.venv/bin/python"
+elif [ -x "$PROJECT_ROOT/.venv/Scripts/python.exe" ]; then PYTHON_BIN="$PROJECT_ROOT/.venv/Scripts/python.exe"
+elif [ -x .venv/bin/python ];                         then PYTHON_BIN=.venv/bin/python
+elif [ -x .venv/Scripts/python.exe ];                 then PYTHON_BIN=.venv/Scripts/python.exe
+else                                                       PYTHON_BIN=python3
 fi
 export PYTHON_BIN
 ```
@@ -153,10 +159,10 @@ Provisional note: seeded from raw/notes or raw/web during /init; pending validat
 
 - fan-out 前先 stash 无关脏文件，再把 `stash_ref`、`base_branch`、`base_commit` 写入 checkpoint metadata
 - fan-out 前必须先提交刚创建的 scaffold 与 init manifests，确保 `BASE_COMMIT` 真的包含后续子代理要继承的页面、manifest 与 handoff metadata
-- 创建 worktree 前先验证 `.gitattributes` 对 `wiki/log.md`、`wiki/graph/edges.jsonl`、`wiki/index.md` 使用了 `merge=union`
+- 创建 worktree 前先验证 `.gitattributes` 对 `wiki/log.md`、`wiki/graph/edges.jsonl`、`wiki/graph/citations.jsonl`、`wiki/index.md` 使用了 `merge=union`
 - `/init` 的 worktree 模式必须运行在一个命名分支上，不能处于 detached HEAD
 - 每个 worktree 都必须从 `BASE_COMMIT` 拉出，而不是复用已经签出的 `BASE_BRANCH`
-- 子代理 prompt 只能使用**相对路径**
+- 子代理 prompt 只能使用**相对路径**，且子代理的 shell 工作目录必须是 worktree 路径（`$WT_PATH`），不能是主仓库根目录
 - 只对一个 handoff 进来的 source path 执行 `/ingest`，不得绕过 `/ingest`
 - 在 INIT MODE 下，必须原样消费 handoff 给它的 canonical path
 - 跳过 `fetch_s2.py citations`
@@ -178,6 +184,7 @@ Provisional note: seeded from raw/notes or raw/web during /init; pending validat
 
 ```bash
 "$PYTHON_BIN" tools/research_wiki.py dedup-edges wiki/
+"$PYTHON_BIN" tools/research_wiki.py dedup-citations wiki/
 "$PYTHON_BIN" tools/research_wiki.py rebuild-index wiki/
 "$PYTHON_BIN" tools/research_wiki.py rebuild-context-brief wiki/
 "$PYTHON_BIN" tools/research_wiki.py rebuild-open-questions wiki/
@@ -198,6 +205,7 @@ Provisional note: seeded from raw/notes or raw/web during /init; pending validat
 
 ## Constraints
 
+- 不得仅根据仓库状态推断 `--no-introduction`。只有当用户明确要求禁用外部发现时，才可使用它。
 - `raw/papers/`、`raw/notes/`、`raw/web/` 是用户自有输入
 - `raw/tmp/` 与 `raw/discovered/` 是生成型 handoff 区；直接本地 `/ingest` 也可以在 `raw/tmp/` 下准备可复用的 local sidecar
 - `/init` 只能把外部论文写到 `raw/discovered/`；`/init` 与直接本地 `/ingest` 可以把生成的 prepared local source 写到 `raw/tmp/`
@@ -231,6 +239,7 @@ Provisional note: seeded from raw/notes or raw/web during /init; pending validat
 - `"$PYTHON_BIN" tools/research_wiki.py checkpoint-set-meta wiki/ init-session <key> <value>`
 - `"$PYTHON_BIN" tools/research_wiki.py checkpoint-save/load/clear wiki/ init-session ...`
 - `"$PYTHON_BIN" tools/research_wiki.py dedup-edges wiki/`
+- `"$PYTHON_BIN" tools/research_wiki.py dedup-citations wiki/`
 - `"$PYTHON_BIN" tools/research_wiki.py rebuild-index wiki/`
 - `"$PYTHON_BIN" tools/research_wiki.py rebuild-context-brief wiki/`
 - `"$PYTHON_BIN" tools/research_wiki.py rebuild-open-questions wiki/`

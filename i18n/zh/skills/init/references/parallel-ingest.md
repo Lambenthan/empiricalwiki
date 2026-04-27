@@ -7,7 +7,7 @@
 - 运行 `git status --short`。
 - 将 `wiki/`、`raw/papers/`、`raw/tmp/`、`raw/discovered/` 与 `.checkpoints/init-*.json` 视作 scaffold 文件。
 - 先 stash 这些路径之外的无关脏文件。
-- 先验证 `.gitattributes` 对 `wiki/log.md`、`wiki/graph/edges.jsonl`、`wiki/index.md` 使用了 `merge=union`。
+- 先验证 `.gitattributes` 对 `wiki/log.md`、`wiki/graph/edges.jsonl`、`wiki/graph/citations.jsonl`、`wiki/index.md` 使用了 `merge=union`。
 - fan-out 前先提交 scaffold，确保 `BASE_COMMIT` 真的包含所有生成的页面与 manifests：
 
 ```bash
@@ -34,6 +34,7 @@ git worktree add -b "$WT_BRANCH" "$WT_PATH" "$BASE_COMMIT"
 
 ## 子代理 Prompt 合同
 
+- 子代理的 shell 工作目录必须是 worktree 路径（`$WT_PATH`），而不是主仓库根目录。所有相对路径均从该路径解析。
 - 只对一个相对路径执行 `/ingest`。
 - 不得绕过 `/ingest`。
 - 在 INIT MODE 下，必须原样消费 handoff 给它的 canonical path。
@@ -60,6 +61,7 @@ git merge --no-ff "$WT_BRANCH" --no-edit
 git worktree remove "$WT_PATH"
 git branch -d "$WT_BRANCH"
 "$PYTHON_BIN" tools/research_wiki.py dedup-edges wiki/
+"$PYTHON_BIN" tools/research_wiki.py dedup-citations wiki/
 "$PYTHON_BIN" tools/research_wiki.py rebuild-index wiki/
 "$PYTHON_BIN" tools/research_wiki.py rebuild-context-brief wiki/
 "$PYTHON_BIN" tools/research_wiki.py rebuild-open-questions wiki/

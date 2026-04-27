@@ -38,7 +38,7 @@
 - 不得回滚已成功的写入
 - 通过 `tools/research_wiki.py log` 追加一条日志，说明哪些步骤完成、哪些未完成
 - 在用户报告中暴露未完成的步骤，让用户通过 `/edit` 或 `/check --fix` 收尾
-- INIT MODE 下由上层 `/init` 在 fan-in 时接管部分状态 —— 子代理不得自行 commit
+- INIT MODE 下，若 ingest 成功完成，子代理必须在退出前于 worktree 内 commit（见 `references/init-mode.md`）。若 ingest 部分失败，**不要** commit 不完整状态；让上层 `/init` 在 fan-in 时处理该失败的 worktree
 
 ## 停机 vs 继续
 

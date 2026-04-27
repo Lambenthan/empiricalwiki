@@ -39,7 +39,7 @@ argument-hint: <research-question-or-claim-slugs> [--format latex|markdown] [--m
 - `wiki/ideas/*.md` — Motivation (understand this paper's positioning)
 - `wiki/index.md` — content catalog, filtered by importance
 - `wiki/graph/context_brief.md` — global context
-- `wiki/graph/edges.jsonl` — inter-paper relationships (extends, contradicts, supersedes)
+- `wiki/graph/edges.jsonl` — inter-paper semantic relationships (same_problem_as, similar_method_to, complementary_to, builds_on, compares_against, improves_on, challenges, surveys)
 - `.claude/skills/shared-references/academic-writing.md` — Related Work writing rules
 - `.claude/skills/shared-references/citation-verification.md` — citation discipline
 
@@ -62,7 +62,7 @@ argument-hint: <research-question-or-claim-slugs> [--format latex|markdown] [--m
    - If claim slugs: read each claim's source_papers; collect related papers
    - If PAPER_PLAN path: read the Related Work section's groupings and citations
 2. **Read wiki/graph/context_brief.md** for global context
-3. **Read wiki/graph/edges.jsonl**: extract inter-paper relationships (extends, contradicts, supersedes)
+3. **Read wiki/graph/edges.jsonl**: extract inter-paper semantic relationships (same_problem_as, similar_method_to, complementary_to, builds_on, compares_against, improves_on, challenges, surveys)
 4. **Build candidate paper list**:
    - Sort by importance descending from index.md
    - Rank by tags and domain match
@@ -80,7 +80,7 @@ For each paper in the candidate list:
 Record for each paper:
 - core contribution (one sentence)
 - method category (which research direction it belongs to)
-- relationship to this work (extends / contradicts / orthogonal / baseline)
+- relationship to this work (same problem / similar method / complementary / builds on / compares against / improves on / challenges / surveys)
 - limitations (extracted from Limitations or My take)
 
 ### Step 3: Thematic Grouping

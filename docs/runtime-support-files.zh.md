@@ -6,11 +6,14 @@
 
 | 文件 | 内容 | 生成命令 |
 |------|------|----------|
-| `edges.jsonl` | 类型化关系（extends, contradicts, supports, inspired_by, tested_by, invalidates, supersedes, addresses_gap, derived_from） | `python3 tools/research_wiki.py add-edge` |
+| `edges.jsonl` | 语义关系：paper-paper、paper-concept、claim/experiment/idea/provenance edge | `python3 tools/research_wiki.py add-edge` |
+| `citations.jsonl` | bibliographic paper citation（`type: cites`） | `python3 tools/research_wiki.py add-citation` |
 | `context_brief.md` | 压缩上下文：claims + gaps + failed ideas + papers + edges（≤8000字符） | `python3 tools/research_wiki.py rebuild-context-brief` |
 | `open_questions.md` | 开放问题：under-supported claims + open questions from papers/topics | `python3 tools/research_wiki.py rebuild-open-questions` |
 
-每条 edge 格式：`{"from": "node_id", "to": "node_id", "type": "edge_type", "evidence": "...", "date": "..."}`
+semantic edge 格式：`{"from": "node_id", "to": "node_id", "type": "edge_type", "evidence": "...", "confidence": "high|medium|low", "date": "..."}`
+
+citation 格式：`{"from": "papers/citing", "to": "papers/cited", "type": "cites", "source": "semantic_scholar|parsed_bib|manual", "date": "..."}`
 
 ## index.md 格式
 
