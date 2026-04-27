@@ -12,7 +12,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9+-yellow.svg)](https://www.python.org/)
-[![Skills](https://img.shields.io/badge/Skills-23-purple.svg)](#skills)
+[![Skills](https://img.shields.io/badge/Skills-24-purple.svg)](#skills)
 [![Claude Code](https://img.shields.io/badge/Powered_by-Claude_Code-d97706.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![Bilingual](https://img.shields.io/badge/i18n-EN_|_中文-orange.svg)](#bilingual-support)
 
@@ -119,7 +119,7 @@
 
 Andrej Karpathy proposed LLM-Wiki: an LLM that **builds and maintains a persistent, structured wiki** from your sources — not a throwaway RAG answer, but compounding knowledge that grows smarter with every paper you feed it.
 
-**ΩmegaWiki takes that idea and runs the full distance.** It's not just a wiki builder — it's a complete research lifecycle platform: from paper ingestion → knowledge graph → gap detection → idea generation → experiment design → paper writing → peer review response. All driven by 23 Claude Code skills, all centered on one wiki as the single source of truth.
+**ΩmegaWiki takes that idea and runs the full distance.** It's not just a wiki builder — it's a complete research lifecycle platform: from paper ingestion → knowledge graph → gap detection → idea generation → experiment design → paper writing → peer review response. All driven by 24 Claude Code skills, all centered on one wiki as the single source of truth.
 
 Drop your `.tex` / `.pdf` files in a folder. Run one command. Get a fully cross-referenced knowledge base — and then use it to **generate novel research ideas, design experiments, write papers, and respond to reviewers**.
 
@@ -214,7 +214,7 @@ and are best run from WSL2 or Linux/macOS.
 
 ## Skills
 
-23 slash commands spanning the full research lifecycle:
+24 slash commands spanning the full research lifecycle:
 
 ### Phase 0: Setup
 
@@ -230,6 +230,7 @@ and are best run from WSL2 or Linux/macOS.
 | `/prefill <domain>` | Optionally seed `foundations/` with background knowledge |
 | `/init [topic]` | Bootstrap a full wiki from user raw sources plus optional discovery |
 | `/ingest <source>` | Parse a paper → wiki pages + cross-references |
+| `/discover` | Recommend ranked next-read papers from anchors, a topic, or the current wiki |
 | `/edit <request>` | Add/remove sources or update wiki content |
 | `/ask <question>` | Query the wiki, crystallize answers back |
 | `/check` | Health scan: broken links, missing cross-refs, consistency |
@@ -318,6 +319,7 @@ OmegaWiki/
 ├── tools/                       # Deterministic Python helpers
 │   ├── research_wiki.py         #   Wiki engine (20 CLI commands)
 │   ├── init_discovery.py        #   /init prepare + plan + fetch helper
+│   ├── discover.py              #   /discover candidate gathering, dedup, ranking
 │   ├── lint.py                  #   Structural validation (10 checks)
 │   ├── reset_wiki.py            #   Scoped destructive cleanup helper
 │   ├── fetch_arxiv.py           #   arXiv RSS fetcher
@@ -325,7 +327,7 @@ OmegaWiki/
 │   ├── fetch_deepxiv.py         #   DeepXiv semantic search
 │   ├── fetch_wikipedia.py       #   Wikipedia fetcher (used by /prefill)
 │   └── remote.py                #   SSH ops for remote experiments
-├── .claude/skills/              # 23 Claude Code skill definitions
+├── .claude/skills/              # 24 Claude Code skill definitions
 ├── i18n/                        # Bilingual: en/ (canonical) + zh/
 ├── config/                      # Configuration templates
 ├── mcp-servers/                 # Cross-model review server
@@ -347,7 +349,7 @@ OmegaWiki/
 ## Roadmap
 
 - [x] Wiki knowledge engine (20+ CLI commands, 9 entity types, semantic graph + citation layer)
-- [x] 23 Claude Code skills (full research lifecycle)
+- [x] 24 Claude Code skills (full research lifecycle)
 - [x] Cross-model review (any OpenAI-compatible API)
 - [x] Daily arXiv automation (GitHub Actions)
 - [x] Remote GPU experiment support
@@ -465,7 +467,7 @@ Scan to join the ΩmegaWiki WeChat group / 扫码加入微信交流群
 
 Andrej Karpathy 提出了 LLM-Wiki 概念：让 LLM **构建并维护一个持久的、结构化的 wiki**，而不是一次性的 RAG 回答。知识持续积累，每一篇新论文都让整个知识图谱更强。
 
-**ΩmegaWiki 将这个理念完整实现。** 它不仅是 wiki 构建器，更是完整的研究全流程平台：从论文摄入 → 知识图谱 → 缺口检测 → 想法生成 → 实验设计 → 论文写作 → 同行评审回复。23 个 Claude Code Skills 驱动，一个 wiki 作为唯一的知识中枢。
+**ΩmegaWiki 将这个理念完整实现。** 它不仅是 wiki 构建器，更是完整的研究全流程平台：从论文摄入 → 知识图谱 → 缺口检测 → 想法生成 → 实验设计 → 论文写作 → 同行评审回复。24 个 Claude Code Skills 驱动，一个 wiki 作为唯一的知识中枢。
 
 ### 为什么选择 Wiki 而不是 RAG？
 
@@ -516,7 +518,7 @@ claude
 | `DEEPXIV_TOKEN` | 可选 | `setup.sh` 自动注册 | 语义搜索、热门趋势 |
 | `LLM_API_KEY` + `LLM_BASE_URL` + `LLM_MODEL` | 可选 | 任意 OpenAI 兼容 API | 跨模型评审 |
 
-### 23 个 Skill 命令
+### 24 个 Skill 命令
 
 | 命令 | 功能 |
 |------|------|
@@ -525,6 +527,7 @@ claude
 | `/prefill` | 可选地预填 `foundations/` 背景知识 |
 | `/init` | 基于用户 raw 素材并按需做外部发现来搭建 wiki |
 | `/ingest` | 消化论文，创建页面 + 交叉引用 |
+| `/discover` | 从 anchor、topic 或当前 wiki 推荐排序后的下一批待读论文 |
 | `/edit` | 增删 raw 或更新 wiki |
 | `/ask` | 对 wiki 提问 |
 | `/check` | wiki 健康检查 |
