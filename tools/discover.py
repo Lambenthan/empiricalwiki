@@ -519,6 +519,16 @@ def _slugify(text: str) -> str:
     return text[:48] or "discover"
 
 
+def _resolve_output_checkpoint_path(raw_path: str | Path, seed_slug: str) -> Path:
+    """Resolve --output-checkpoint as either a file path or directory target."""
+    raw_text = str(raw_path)
+    out_path = Path(raw_text)
+    if out_path.is_dir() or raw_text.endswith(("/", "\\")):
+        today = _dt.date.today().isoformat()
+        return out_path / f"discover-{seed_slug}-{today}.json"
+    return out_path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="OmegaWiki discovery shortlist builder")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -527,7 +537,7 @@ def main() -> None:
         ("--wiki-root", {"type": Path, "default": None, "help": "Wiki root for dedup against existing papers"}),
         ("--limit", {"type": int, "default": 10, "help": "Max shortlist size (default 10)"}),
         ("--per-anchor-limit", {"type": int, "default": 50, "help": "Recs requested per anchor (default 50)"}),
-        ("--output-checkpoint", {"type": Path, "default": None, "help": "Also write JSON to this path"}),
+        ("--output-checkpoint", {"default": None, "help": "Also write JSON to this file or directory path"}),
         ("--markdown", {"action": "store_true", "help": "Print human-readable markdown instead of JSON"}),
     ]
 
@@ -596,10 +606,7 @@ def main() -> None:
         return
 
     if args.output_checkpoint:
-        out_path = args.output_checkpoint
-        if out_path.is_dir() or str(out_path).endswith("/"):
-            today = _dt.date.today().isoformat()
-            out_path = out_path / f"discover-{seed_slug}-{today}.json"
+        out_path = _resolve_output_checkpoint_path(args.output_checkpoint, seed_slug)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"checkpoint written: {out_path}", file=sys.stderr)
