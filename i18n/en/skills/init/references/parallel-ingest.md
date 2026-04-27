@@ -64,7 +64,7 @@ git branch -d "$WT_BRANCH"
 "$PYTHON_BIN" tools/research_wiki.py rebuild-index wiki/
 "$PYTHON_BIN" tools/research_wiki.py rebuild-context-brief wiki/
 "$PYTHON_BIN" tools/research_wiki.py rebuild-open-questions wiki/
-"$PYTHON_BIN" tools/lint.py wiki/ --fix
+"$PYTHON_BIN" tools/lint.py --wiki-dir wiki/ --fix
 ```
 
 If `stash_ref` exists, pop it at the end. If stash pop fails, keep the checkpoint and report the failure.

@@ -149,7 +149,7 @@ INIT MODE 下整步跳过 —— 由上层 `/init` 在 fan-in 时统一处理。
 
 - 对于 references 中 arXiv ID 或标题能解析到 `wiki/papers/{slug}.md` 的条目，在 `graph/citations.jsonl` 写一条 bibliographic `cites` 记录。
 - 只有当原文给出清晰信号时，才在 `graph/edges.jsonl` 写 semantic paper-to-paper edge。选型规则见 `references/cross-references.md`。若没有能干净对应的语义关系，只保留 `cites` 记录。
-- 对于 citations 中已在 wiki 的引用者，在其 `cited_by` 追加本论文 slug。
+- 对于 citations 中已在 wiki 的引用者，在本论文的 `cited_by` 追加引用者 slug。
 - 在最终报告中列出未匹配的高引用 references，供用户决定是否后续 `/ingest`。
 
 ### Step 6: topic 与 index

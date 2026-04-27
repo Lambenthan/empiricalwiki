@@ -177,7 +177,7 @@ Provisional note: seeded from raw/notes or raw/web during /init; pending validat
 "$PYTHON_BIN" tools/research_wiki.py rebuild-index wiki/
 "$PYTHON_BIN" tools/research_wiki.py rebuild-context-brief wiki/
 "$PYTHON_BIN" tools/research_wiki.py rebuild-open-questions wiki/
-"$PYTHON_BIN" tools/lint.py wiki/ --fix
+"$PYTHON_BIN" tools/lint.py --wiki-dir wiki/ --fix
 ```
 
 报告中必须分开列出：
@@ -237,7 +237,7 @@ Provisional note: seeded from raw/notes or raw/web during /init; pending validat
 - `"$PYTHON_BIN" tools/init_discovery.py prepare --raw-root raw --pdf-titles-json .checkpoints/init-pdf-titles.json --output-manifest .checkpoints/init-prepare.json`
 - `"$PYTHON_BIN" tools/init_discovery.py plan [--topic "<topic>"] --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json`
 - `"$PYTHON_BIN" tools/init_discovery.py fetch --raw-root raw --plan-json .checkpoints/init-plan.json --prepared-manifest .checkpoints/init-prepare.json --output-sources .checkpoints/init-sources.json --id <candidate-id>`
-- `"$PYTHON_BIN" tools/lint.py wiki/ --fix`
+- `"$PYTHON_BIN" tools/lint.py --wiki-dir wiki/ --fix`
 
 ### Skills
 

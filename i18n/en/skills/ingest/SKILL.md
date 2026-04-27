@@ -149,7 +149,7 @@ Skip this whole step in INIT MODE — the parent `/init` handles it at fan-in.
 
 - For each reference whose arXiv ID or title resolves to an existing `wiki/papers/{slug}.md`, add a bibliographic `cites` row to `graph/citations.jsonl`.
 - Add a semantic paper-to-paper edge in `graph/edges.jsonl` only when the source text gives a clear cue. Edge-type selection is in `references/cross-references.md`. If no semantic relation cleanly fits, keep only the `cites` row.
-- For each citation already in the wiki, append this paper's slug to the citer's `cited_by`.
+- For each citation already in the wiki, append the citer's slug to this paper's `cited_by`.
 - Surface unmatched high-citation references in the final report so the user can decide whether to follow up with another `/ingest`.
 
 ### Step 6: Topics and index
