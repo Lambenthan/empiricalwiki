@@ -95,7 +95,7 @@ export PYTHON_BIN
 ### Step 1: 解析来源
 
 1. 如果 `/init` 交接了 `canonical_ingest_path`，进入 **INIT MODE** 并原样消费该路径，不要重新扫描 `raw/`。详见 `references/init-mode.md`。
-2. 如果来源是 arXiv URL，用 `"$PYTHON_BIN" tools/fetch_arxiv.py` 将 `.tex` 下载到 `raw/discovered/`；源归档不可用时 fallback 到 PDF。
+2. 如果来源是 arXiv URL，先提取 arXiv ID；可用时通过 `"$PYTHON_BIN" tools/fetch_s2.py paper <arxiv-id>` 恢复标题，然后运行 `"$PYTHON_BIN" tools/init_discovery.py download --raw-root raw --arxiv-id <arxiv-id> --title "<title-or-arxiv-id>"`。后续从返回的 `canonical_ingest_path` 继续。该 helper 会先尝试 arXiv source，再 fallback 到 PDF；不要用 `fetch_arxiv.py` 处理单篇论文，因为它只用于 RSS。
 3. 如果来源是本地 `.tex`，直接使用。
 4. 如果来源是本地 `.pdf`，先走 `references/pdf-preprocessing.md` 的预处理流程，在 `raw/tmp/` 下生成 prepared `.tex`，再继续。
 
@@ -217,6 +217,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges
 - `wiki/graph/` 由工具维护。仅通过 `tools/research_wiki.py` 修改。
 - slug 始终来自 `tools/research_wiki.py slug`，不得手写。
 - 每一条正向链接必须在同一 turn 内写入其反向链接 —— 这是 wiki 的双向链接不变量。唯一例外是指向 `wiki/foundations/` 的链接，foundations 是终端节点。
+- 在 INIT MODE 下，不要向已有页面（由 sibling worktree 或 scaffold 创建的）写入反向链接。只通过 `tools/research_wiki.py add-edge` 记录关系；上层 `/init` 在 fan-in 时统一回填反向链接。
 - 来源优先级：`.tex` > `.pdf` > vision API fallback。只要有可用 `.tex`，就不从 PDF ingest。
 - ingest 对新实体保守：
   - importance < 4：每篇论文最多 **1** 个新 concept、**1** 个新 claim
@@ -244,7 +245,7 @@ Wiki: +1 paper, +{N} claims, +{M} concepts, +{K} edges
 - `"$PYTHON_BIN" tools/research_wiki.py rebuild-context-brief wiki/`
 - `"$PYTHON_BIN" tools/research_wiki.py rebuild-open-questions wiki/`
 - `"$PYTHON_BIN" tools/prepare_paper_source.py --raw-root raw --source <local-path> [--title "<recovered-title>"] [--arxiv-id "<recovered-arxiv-id>"]`
-- `"$PYTHON_BIN" tools/fetch_arxiv.py <arxiv-id-or-url>` —— arXiv 源下载
+- `"$PYTHON_BIN" tools/init_discovery.py download --raw-root raw --arxiv-id <id> --title "<title-or-id>"` —— 单篇论文下载到 `raw/discovered/`，优先 arXiv source，fallback 到 PDF
 - `"$PYTHON_BIN" tools/fetch_s2.py paper|citations|references <arxiv-id>`
 - `"$PYTHON_BIN" tools/fetch_deepxiv.py brief|head|social <arxiv-id>`
 - `"$PYTHON_BIN" tools/discover.py from-anchors --id <arxiv-id> --wiki-root wiki --limit 10 --output-checkpoint .checkpoints/ --markdown` —— 仅当 `--discover` 开启

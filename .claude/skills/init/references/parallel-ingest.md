@@ -34,6 +34,7 @@ git worktree add -b "$WT_BRANCH" "$WT_PATH" "$BASE_COMMIT"
 
 ## Subagent Prompt Contract
 
+- The subagent's shell working directory must be the worktree path (`$WT_PATH`), not the main repository root. All relative paths resolve from there.
 - Execute `/ingest` for exactly one relative source path.
 - Do not bypass `/ingest`.
 - In INIT MODE, consume the handed-off canonical path exactly as provided.

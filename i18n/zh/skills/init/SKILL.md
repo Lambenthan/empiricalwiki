@@ -162,7 +162,7 @@ Provisional note: seeded from raw/notes or raw/web during /init; pending validat
 - 创建 worktree 前先验证 `.gitattributes` 对 `wiki/log.md`、`wiki/graph/edges.jsonl`、`wiki/graph/citations.jsonl`、`wiki/index.md` 使用了 `merge=union`
 - `/init` 的 worktree 模式必须运行在一个命名分支上，不能处于 detached HEAD
 - 每个 worktree 都必须从 `BASE_COMMIT` 拉出，而不是复用已经签出的 `BASE_BRANCH`
-- 子代理 prompt 只能使用**相对路径**
+- 子代理 prompt 只能使用**相对路径**，且子代理的 shell 工作目录必须是 worktree 路径（`$WT_PATH`），不能是主仓库根目录
 - 只对一个 handoff 进来的 source path 执行 `/ingest`，不得绕过 `/ingest`
 - 在 INIT MODE 下，必须原样消费 handoff 给它的 canonical path
 - 跳过 `fetch_s2.py citations`

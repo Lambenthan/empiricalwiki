@@ -180,7 +180,7 @@ EDGE_TYPE_SPECS: dict[str, dict[str, str]] = {
 # Accepted only for backwards compatibility; lint reports endpoint-specific
 # migration warnings when these appear on old /ingest-shaped endpoints.
 LEGACY_EDGE_TYPES = {"extends", "supersedes"}
-LEGACY_PAPER_PAPER_EDGE_TYPES = LEGACY_EDGE_TYPES | {"inspired_by", "contradicts"}
+LEGACY_PAPER_PAPER_EDGE_TYPES = LEGACY_EDGE_TYPES | {"inspired_by", "contradicts", "supports"}
 LEGACY_PAPER_CONCEPT_EDGE_TYPES = {"supports", "extends"}
 
 

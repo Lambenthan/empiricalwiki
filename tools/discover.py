@@ -140,7 +140,7 @@ def _dedupe(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
 # ---------- wiki dedup -----------------------------------------------------
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
-_ARXIV_LINE_RE = re.compile(r"^arxiv_id\s*:\s*[\"']?([^\"'\n]+)[\"']?\s*$", re.MULTILINE)
+_ARXIV_LINE_RE = re.compile(r"^arxiv(?:_id)?\s*:\s*[\"']?([^\"'\n]+)[\"']?\s*$", re.MULTILINE)
 
 
 def _extract_arxiv_id_from_paper(path: Path) -> str:
@@ -157,7 +157,7 @@ def _extract_arxiv_id_from_paper(path: Path) -> str:
 
 
 def _wiki_known_arxiv_ids(wiki_root: Path | None) -> set[str]:
-    """Scan wiki/papers/*.md for arxiv_id frontmatter values."""
+    """Scan wiki/papers/*.md for arxiv/arxiv_id frontmatter values."""
     if not wiki_root or not wiki_root.exists():
         return set()
     papers_dir = wiki_root / "papers"

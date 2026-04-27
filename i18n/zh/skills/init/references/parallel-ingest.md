@@ -34,6 +34,7 @@ git worktree add -b "$WT_BRANCH" "$WT_PATH" "$BASE_COMMIT"
 
 ## 子代理 Prompt 合同
 
+- 子代理的 shell 工作目录必须是 worktree 路径（`$WT_PATH`），而不是主仓库根目录。所有相对路径均从该路径解析。
 - 只对一个相对路径执行 `/ingest`。
 - 不得绕过 `/ingest`。
 - 在 INIT MODE 下，必须原样消费 handoff 给它的 canonical path。

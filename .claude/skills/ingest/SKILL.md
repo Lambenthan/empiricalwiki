@@ -95,7 +95,7 @@ export PYTHON_BIN
 ### Step 1: Resolve the source
 
 1. If `/init` passed a `canonical_ingest_path`, enter **INIT MODE** and consume that path verbatim. Do not rescan `raw/`. See `references/init-mode.md`.
-2. If the source is an arXiv URL, fetch the `.tex` under `raw/discovered/` via `"$PYTHON_BIN" tools/fetch_arxiv.py`. Fall back to PDF if the source archive is unavailable.
+2. If the source is an arXiv URL, extract the arXiv ID, use `"$PYTHON_BIN" tools/fetch_s2.py paper <arxiv-id>` to recover the title when possible, then run `"$PYTHON_BIN" tools/init_discovery.py download --raw-root raw --arxiv-id <arxiv-id> --title "<title-or-arxiv-id>"`. Continue from the returned `canonical_ingest_path`. The helper tries arXiv source first and falls back to PDF; do not call `fetch_arxiv.py` for a single paper because it is RSS-only.
 3. If the source is a local `.tex`, use it directly.
 4. If the source is a local `.pdf`, run the preprocessing pipeline in `references/pdf-preprocessing.md` to produce a prepared `.tex` under `raw/tmp/` before continuing.
 
@@ -217,6 +217,7 @@ Append the markdown output to the report under a heading like "Related papers yo
 - `wiki/graph/` is tool-owned. Edit only through `tools/research_wiki.py`.
 - Slugs always come from `tools/research_wiki.py slug`. Never hand-craft.
 - Every forward link writes its reverse link in the same turn — the wiki's bidirectional-link invariant. The only exception is links to `wiki/foundations/`, which are terminal.
+- In INIT MODE, do not write reverse links into pages that already exist (created by a sibling worktree or scaffold). Record the relationship via `tools/research_wiki.py add-edge` only; the parent `/init` backfills reverse links during fan-in.
 - Source priority: `.tex` > `.pdf` > vision API fallback. Never ingest from a PDF when a usable `.tex` is available.
 - Ingest is conservative about new entities:
   - importance < 4: at most **1** new concept and **1** new claim per paper
@@ -244,7 +245,7 @@ See `references/error-handling.md`. Highlights: source parse failures cascade te
 - `"$PYTHON_BIN" tools/research_wiki.py rebuild-context-brief wiki/`
 - `"$PYTHON_BIN" tools/research_wiki.py rebuild-open-questions wiki/`
 - `"$PYTHON_BIN" tools/prepare_paper_source.py --raw-root raw --source <local-path> [--title "<recovered-title>"] [--arxiv-id "<recovered-arxiv-id>"]`
-- `"$PYTHON_BIN" tools/fetch_arxiv.py <arxiv-id-or-url>` — arXiv source download
+- `"$PYTHON_BIN" tools/init_discovery.py download --raw-root raw --arxiv-id <id> --title "<title-or-id>"` — single-paper arXiv source/PDF download into `raw/discovered/`
 - `"$PYTHON_BIN" tools/fetch_s2.py paper|citations|references <arxiv-id>`
 - `"$PYTHON_BIN" tools/fetch_deepxiv.py brief|head|social <arxiv-id>`
 - `"$PYTHON_BIN" tools/discover.py from-anchors --id <arxiv-id> --wiki-root wiki --limit 10 --output-checkpoint .checkpoints/ --markdown` — only when `--discover` is set

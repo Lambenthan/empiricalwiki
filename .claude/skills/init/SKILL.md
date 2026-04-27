@@ -162,7 +162,7 @@ Parallel ingest contract:
 - verify `.gitattributes` contains `merge=union` for `wiki/log.md`, `wiki/graph/edges.jsonl`, `wiki/graph/citations.jsonl`, and `wiki/index.md` before creating worktrees
 - `/init` worktree mode must run from a named branch, not detached HEAD
 - create each worktree from `BASE_COMMIT`, not from the already checked-out `BASE_BRANCH`
-- subagent prompts must use **relative paths only**
+- subagent prompts must use **relative paths only**, and the subagent's shell working directory must be the worktree path (`$WT_PATH`), not the main repository root
 - execute `/ingest` for exactly one handed-off source path; do not bypass `/ingest`
 - in INIT MODE, consume the handed-off canonical path exactly as provided
 - skip `fetch_s2.py citations`

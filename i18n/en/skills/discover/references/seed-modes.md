@@ -41,7 +41,7 @@ Triggers:
 
 Wiki mode picks the wiki's most recently modified paper pages, extracts their arXiv IDs, and uses them as anchors. This implicitly biases discovery toward whatever the user has been working on lately — usually the desired behavior.
 
-If `wiki/papers/` is empty or no papers carry an `arxiv_id` frontmatter field, wiki mode cannot run. Tell the user the wiki is too sparse and suggest topic mode (or `/init`).
+If `wiki/papers/` is empty or no papers carry an `arxiv` or `arxiv_id` frontmatter field, wiki mode cannot run. Tell the user the wiki is too sparse and suggest topic mode (or `/init`).
 
 ## What if the user gave both an anchor and a topic?
 

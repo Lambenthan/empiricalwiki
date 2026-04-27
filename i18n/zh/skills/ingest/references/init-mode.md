@@ -13,6 +13,7 @@
 - **跳过** `fetch_s2.py citations <arxiv-id>` 与 `fetch_s2.py references <arxiv-id>` —— 由上层 `/init` 在 fan-in 时统一做 citation sweep
 - **跳过** `rebuild-context-brief` 与 `rebuild-open-questions` —— 上层在所有子代理 merge 后统一运行一次
 - **跳过** 易冲突的 topic 写入 —— 多个并行 ingest 同时 append 相同 topic 会引发 merge 冲突。让上层在 fan-in 后处理 topic 更新，或交给 `/edit`。
+- **跳过对已有页面的反向链接编辑** —— 不要向已有 concept 页面追加 `key_papers`，不要向已有 paper 页面的 `## Key papers` 或 `## Related` 追加内容，也不要向已有 people 页面追加内容。只通过 `tools/research_wiki.py add-edge` 记录关系。上层 `/init` 在 fan-in 后统一重建这些反向链接。
 
 其余一切（paper 页面创建、`find-similar-*` 去重、people 页面创建、paper 的 `## Related` 链接、concept / claim / foundation 的 graph edge）在每个子代理内正常执行。
 
@@ -45,6 +46,13 @@
 
 ## `/ingest` 不为 `/init` 做的事
 
-- 不 commit。worktree 的 commit 由上层负责（见 `skills/init/references/parallel-ingest.md`）。
 - 不 stash，也不切换 branch。
 - 不 merge worktree，也不跑 `dedup-edges`、`rebuild-index`、`lint.py --fix`。这些是 fan-in 操作，归 `/init`。
+
+在 INIT MODE 下，`/ingest` **必须**在成功完成后于 worktree 内提交结果：
+- 将 `wiki/` 下所有新建或修改的文件加入暂存区
+- commit 前先执行 `git branch --show-current`，确认当前 branch 是 worktree branch（包含 `init-` 前缀），而不是 base branch。若在 base branch 上，停止并报告，不要 commit
+- 执行 `git commit -m "ingest: <论文标题>"`（或含义类似的提交信息）
+- 不要 push；上层 `/init` 会在 fan-in 时合并该分支
+
+若 ingest 过程中部分失败（partial failure），**不要** commit 不完整状态。让上层 `/init` 在 fan-in 时处理该失败的 worktree。

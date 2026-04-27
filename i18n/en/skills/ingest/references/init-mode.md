@@ -13,6 +13,7 @@ In INIT MODE:
 - `fetch_s2.py citations <arxiv-id>` and `fetch_s2.py references <arxiv-id>` are **skipped** — the parent `/init` does a unified citation sweep at fan-in
 - `rebuild-context-brief` and `rebuild-open-questions` are **skipped** — the parent runs them once after all subagents merge
 - conflict-prone topic writes are **skipped** — if multiple parallel ingests all try to append to the same topic, they will merge-conflict. Let the parent handle topic updates after fan-in, or defer them to `/edit`.
+- **skip reverse-link edits to existing pages** — do not append `key_papers` to an existing concept page, do not append to `## Key papers` or `## Related` of an existing paper page, and do not append to an existing people page. Record the relationship via `tools/research_wiki.py add-edge` instead. The parent `/init` rebuilds these backlinks during fan-in.
 
 Everything else — paper page creation, concept/claim dedup via `find-similar-*`, people page creation, paper `## Related` links, graph edges for concept/claim/foundation — still runs per subagent.
 
@@ -45,6 +46,13 @@ If you do notice a slug collision during a direct (non-INIT) ingest — i.e. the
 
 ## What `/ingest` does not do for `/init`
 
-- It does not commit. Committing the worktree is the parent's responsibility (see `skills/init/references/parallel-ingest.md`).
 - It does not stash or switch branches.
 - It does not merge worktrees or run `dedup-edges`, `rebuild-index`, or `lint.py --fix`. Those are fan-in operations owned by `/init`.
+
+In INIT MODE, `/ingest` **must** commit its work inside the worktree before exiting, but only when the ingest completed successfully:
+- stage every file you created or modified under `wiki/`
+- before committing, run `git branch --show-current` and verify the branch name is the worktree branch (contains `init-`), not the base branch. If you are on the base branch, stop and report instead of committing
+- run `git commit -m "ingest: <paper-title>"` (or a similarly descriptive message)
+- do not push; the parent `/init` will merge the branch during fan-in
+
+If the ingest fails part-way through (partial failure), do **not** commit the incomplete state. Let the parent `/init` handle the failed worktree at fan-in.

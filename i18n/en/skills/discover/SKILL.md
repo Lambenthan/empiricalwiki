@@ -35,7 +35,7 @@ Exactly one of `--anchor`, `--topic`, `--from-wiki` must be given.
 
 ### Reads
 
-- `wiki/papers/*.md` — frontmatter `arxiv_id` for dedup against already-ingested papers
+- `wiki/papers/*.md` — frontmatter `arxiv` (or legacy `arxiv_id`) for dedup against already-ingested papers
 - `wiki/papers/*.md` modification times — for `--from-wiki` anchor selection
 
 ### Writes

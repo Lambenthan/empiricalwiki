@@ -35,7 +35,7 @@ argument-hint: "(--anchor <id> [--anchor <id>] [--negative <id>] | --topic <str>
 
 ### Reads
 
-- `wiki/papers/*.md` —— frontmatter 中的 `arxiv_id`，用于与已 ingest 的论文做 dedup
+- `wiki/papers/*.md` —— frontmatter 中的 `arxiv`（或旧版 `arxiv_id`），用于与已 ingest 的论文做 dedup
 - `wiki/papers/*.md` 修改时间 —— 用于 `--from-wiki` 模式下 anchor 选取
 
 ### Writes
