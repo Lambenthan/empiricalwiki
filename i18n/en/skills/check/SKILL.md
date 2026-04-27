@@ -1,11 +1,11 @@
 ---
-description: Scan the full wiki to detect health issues and produce a tiered fix-recommendation report (covers all 8 entity types + graph consistency)
+description: Scan the full wiki to detect health issues and produce a tiered fix-recommendation report (covers all 9 entity types + graph consistency)
 ---
 
 # /check
 
 > Scans the full wiki to detect structural, link, field, and graph health issues, and generates a tiered fix-recommendation report.
-> Covers all 8 entity types, including claims confidence plausibility, idea failure-reason completeness,
+> Covers all 9 entity types, including claims confidence plausibility, idea failure-reason completeness,
 > experiment-claim link validity, and graph edge consistency.
 
 ## Inputs
@@ -32,7 +32,8 @@ description: Scan the full wiki to detect health issues and produce a tiered fix
 - `wiki/experiments/*.md` — experiment status, target_claim, outcome
 - `wiki/claims/*.md` — claim confidence, status, evidence, source_papers
 - `wiki/Summary/*.md` — survey page fields
-- `wiki/graph/edges.jsonl` — graph edge consistency check
+- `wiki/graph/edges.jsonl` — semantic graph edge consistency check
+- `wiki/graph/citations.jsonl` — bibliographic citation consistency check
 - `wiki/index.md` — cross-check page completeness
 
 ### Writes
@@ -71,7 +72,7 @@ The automated tool checks:
 
 1. **Broken wikilinks**: `[[slug]]` target file does not exist
 2. **Orphan pages**: pages with no incoming links
-3. **Missing required fields** (all 8 entity types):
+3. **Missing required fields** (all 9 entity types):
    - papers: title, slug, tags, importance
    - concepts: title, tags, maturity, key_papers
    - topics: title, tags
@@ -111,8 +112,10 @@ Check all bidirectional link rules defined in CLAUDE.md:
 
 1. **JSON format validity**: every line is valid JSON
 2. **Required fields**: each edge has from, to, type
-3. **Edge type validity**: type ∈ {extends, contradicts, supports, inspired_by, tested_by, invalidates, supersedes, addresses_gap, derived_from}
-4. **Dangling nodes**: wiki pages referenced by from/to must exist
+3. **Edge type validity**: semantic edges use the current endpoint-aware type sets; legacy paper-paper / paper-concept types produce migration warnings
+4. **Edge confidence**: `/ingest` paper-paper and paper-concept semantic edges use `confidence: high|medium|low`
+5. **Citation layer**: `graph/citations.jsonl` rows use `type: cites`, valid source/date, paper endpoints, and no confidence field
+6. **Dangling nodes**: wiki pages referenced by from/to must exist
 
 ### Step 6: Content Quality (LLM-assisted)
 
@@ -170,7 +173,7 @@ python3 tools/research_wiki.py log wiki/ "check | report: N 🔴, M 🟡, K 🔵
 ## Error Handling
 
 - **wiki/ does not exist**: report error and suggest running `/init`
-- **graph/edges.jsonl does not exist**: skip graph checks, note in report
+- **graph files do not exist**: skip the missing graph-file checks, note in report
 - **Partial directory missing**: skip checks for missing directories, list missing directories in report
 
 ## Dependencies

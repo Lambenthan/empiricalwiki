@@ -27,19 +27,47 @@
 
 foundation 仅由 `/prefill` 创建。`/ingest` 永远不新建 foundation —— 即便某个 concept 候选看起来像是 foundational 却没有匹配。这种情况下，走普通 concept 路径（必要时新建 concept 页面），让用户日后需要时自行 seed foundation。
 
+## paper-to-concept 语义 edge
+
+paper 与 concept 的关系是使用、引入、扩展或批评。每条 paper-to-concept 语义 edge 都必须带 `--confidence high|medium|low`。
+
+edge 类型选择：
+
+- **`introduces_concept`** —— 严格的新颖性：论文明确把该 concept 作为贡献来提出、命名或定义。
+- **`uses_concept`** —— 默认选项：论文依赖已有 concept，但没有实质修改它。
+- **`extends_concept`** —— 论文修改、泛化、特化或形式化已有 concept。
+- **`critiques_concept`** —— 论文指出某个 concept 的限制、失败模式或错误假设。
+
+在 `introduces_concept` 与 `uses_concept` 之间不确定时，选 `uses_concept`。在 `uses_concept` 与 `extends_concept` 之间不确定时，也选 `uses_concept`。不要再写 `paper → concept` 的 `supports` 或普通 `extends`。
+该工具会拒绝缺少 confidence/evidence 的新写入，也会拒绝 legacy paper-to-concept edge 类型。
+
 ## paper-to-paper edge
 
-只有当被引用的论文已经在 `wiki/papers/` 下有页面时，才写出 paper-to-paper edge。不要臆测：若引用尚未 ingest，就跳过该 edge，并在最终报告中把它列为后续 `/ingest` 候选。
+bibliographic 层与 semantic 层分开：
 
-edge 类型选择（按信号）：
+- 当 reference 能解析到已有 `wiki/papers/{slug}.md` 时，总是写 `graph/citations.jsonl`，`type: cites`
+- 只有论文文本给出清晰语义信号时，才写 `graph/edges.jsonl`
+- 不要把每条 citation 都强行解释成 semantic edge
 
-- **`extends`** —— 论文明确在被引论文的方法之上构建。如 "we extend"、"building on"、"we follow X but"。
-- **`supersedes`** —— 论文在相同任务上以相同术语系统声称取代被引 baseline（更强结果或更干净的形式化），并把它定位为应被替换对象。仅用于显式主张；不得仅凭 benchmark 表格推断。
-- **`inspired_by`** —— 论文把先前工作作为动机或概念渊源引用，但并不直接在其方法之上构建。常见于综述式或跨领域借鉴。
-- **`contradicts`** —— 论文显式反驳被引发现，要么复现失败，要么给出直接反例。必须有论文中明确语句作为依据。
-- **无 / 跳过** —— 以上都不能干净对应时，跳过。graph 噪声比缺一条 edge 更糟。
+paper-to-paper semantic edge 应该保持稀疏。它要求两篇论文的贡献之间有具体关系，而不是仅仅共享主题、模态、架构族、benchmark 族或高层方法词。如果同一句描述可以同时套到 wiki 里几十篇论文上，就不要写 paper-to-paper edge；交给 topic/concept 链接和 citation 层表达。
 
-每一对有序的 paper 之间一条 edge 即可。两种类型之间犹豫时，选较弱的那个（`inspired_by` 优于 `extends`，`extends` 优于 `supersedes`）。
+semantic edge 类型选择：
+
+- **`same_problem_as`** —— 对称；两篇论文处理同一个具体任务、研究问题或问题形式化，因此它们的答案可以直接比较。不要因为都属于 “attention”、“video generation” 或 “LLM evaluation” 这类宽泛方向就使用它。
+- **`similar_method_to`** —— 对称；两篇论文共享有辨识度的机制、形式化、训练策略或算法设计。不要因为都“使用 transformer”、“使用 diffusion” 或 “使用 RL” 就使用它。
+- **`complementary_to`** —— 对称；两篇论文的方法或组件可以以技术上具体的方式组合，且论文文本或方法细节给出了兼容性依据。不要仅因为二者可能同属某个未来系统就使用它。
+- **`builds_on`** —— 有方向；当前论文直接依赖、改造或扩展另一篇论文的具体方法、形式化、数据集、结果或系统。不要用于模糊的 inspiration。
+- **`compares_against`** —— 有方向；当前论文把另一篇论文作为显式 baseline、比较对象或 ablation 参照。
+- **`improves_on`** —— 有方向；当前论文在可比较设置中明确声称相对另一篇论文有质量、效率、鲁棒性、简洁性或适用范围上的改进。
+- **`challenges`** —— 有方向；当前论文削弱、质疑或给出反证，挑战另一篇论文的结果、假设或 framing。
+- **`surveys`** —— 有方向；当前论文是 survey、benchmark、taxonomy 或 position work，概述另一篇论文或其研究线。
+
+所有 paper-to-paper semantic edges 都必须带 `--confidence high|medium|low`。对称类型由 `tools/research_wiki.py add-edge` 自动规范 endpoint 顺序并写入 `symmetric: true`。
+该工具会拒绝缺少 confidence/evidence 的新写入，也会拒绝 legacy paper-paper edge 类型。
+
+- **无 / 跳过** —— 以上都不能干净对应时，跳过 semantic edge。graph 噪声比缺一条 edge 更糟。
+
+不确定时，跳过。paper-to-paper semantic edge 用于高信号的局部关系，不用于按领域聚类。
 
 ## 正反两侧原子写入
 
@@ -48,7 +76,8 @@ edge 类型选择（按信号）：
 1. 决定建立此链接。
 2. 在源页面写正向条目。
 3. 在目标页面写反向条目。
-4. 若该链接对应一条 graph edge（paper↔concept、paper↔claim、paper↔paper、paper→foundation），通过 `tools/research_wiki.py add-edge` 写出。
+4. 若该链接对应一条 semantic graph edge（paper↔concept、paper↔claim、paper↔paper、paper→foundation），通过 `tools/research_wiki.py add-edge` 写出。
+5. 若一条 paper reference 能解析到已有 paper 页面，通过 `tools/research_wiki.py add-citation` 写出 bibliographic 记录。
 
 这种做法让 `/check` 下一轮不会报半吊子链接。也让回滚变简单：若某篇论文 ingest 被中止，直接撤销该论文的编辑就能把两侧同时撤销。
 

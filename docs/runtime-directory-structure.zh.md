@@ -19,6 +19,7 @@ wiki/
 ├── outputs/           ← 生成物（Related Work、论文草稿）
 └── graph/             ← 自动生成（勿手动编辑）
     ├── edges.jsonl
+    ├── citations.jsonl
     ├── context_brief.md
     └── open_questions.md
 

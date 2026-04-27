@@ -35,7 +35,7 @@ ALL_SCOPES = ["wiki", "raw", "log", "checkpoints"]
 
 INDEX_TEMPLATE = "# Wiki Index\n\n" + "\n".join(f"{e}:" for e in ENTITY_DIRS) + "\n"
 LOG_TEMPLATE = "# OmegaWiki Log\n\n"
-GRAPH_FILES = ["edges.jsonl", "context_brief.md", "open_questions.md"]
+GRAPH_FILES = ["edges.jsonl", "citations.jsonl", "context_brief.md", "open_questions.md"]
 
 
 def _list_md(directory: Path) -> list[Path]:

@@ -15,22 +15,17 @@ Use these local references on demand:
 
 ## Inputs
 
-- `topic` (optional): research direction keywords; omit it when `raw/papers/` already defines the seed set or when notes/web already capture the intent
-- `--no-introduction` (optional): disable external paper discovery; use only user-owned `raw/papers/`, `raw/notes/`, and `raw/web/`
-- parameter guardrail: treat `topic` and `--no-introduction` as user inputs, not agent strategy knobs. Do not infer `--no-introduction` from repository state alone. Use it only when the user explicitly asked to disable external discovery.
-- `raw/papers/`: user-owned paper sources (`.tex`, `.pdf`, archives)
-- `raw/notes/`: user-owned notes that express goals, hypotheses, exclusions, and preferred sub-directions
-- `raw/web/`: user-owned saved web pages that express goals, hypotheses, exclusions, and preferred sub-directions
+- `topic` (optional): research direction keywords; omit when `raw/` already defines the seed set
+- `--no-introduction` (optional): disable external discovery; use only when the user explicitly requests it
+- User-owned sources under `raw/papers/`, `raw/notes/`, `raw/web/`
 
 ## Outputs
 
-- `wiki/` scaffold via `tools/research_wiki.py init`
-- `raw/tmp/` — generated prepared local sources reused by `/init` and direct local `/ingest`
-- `raw/discovered/` — newly downloaded papers selected by `/init` when discovery is enabled
-- `wiki/Summary/{area}.md`, `wiki/topics/{topic}.md`, provisional `wiki/ideas/{slug}.md`, `wiki/concepts/{slug}.md`, `wiki/claims/{slug}.md`
-- `wiki/papers/*.md` plus paper-derived concepts / claims / people via parallel `/ingest`
-- updated `wiki/index.md`, `wiki/log.md`, `wiki/graph/edges.jsonl`, `wiki/graph/context_brief.md`, `wiki/graph/open_questions.md`
-- `.checkpoints/init-prepare.json`, `.checkpoints/init-plan.json`, `.checkpoints/init-sources.json`
+- `wiki/` scaffold and provisional pages (Summary, topics, ideas, concepts, claims)
+- `raw/tmp/` and `raw/discovered/` prepared sources
+- Final paper pages via parallel `/ingest` subagents
+- `.checkpoints/init-*.json` manifests for resume and replay
+- Updated `wiki/index.md`, `wiki/log.md`, `wiki/graph/*`
 
 ## Wiki Interaction
 
@@ -153,7 +148,7 @@ Parallel ingest contract:
 
 - stash unrelated dirty files before fan-out, then record `stash_ref`, `base_branch`, and `base_commit` in checkpoint metadata
 - commit the freshly created scaffold and init manifests before fan-out so `BASE_COMMIT` actually contains the pages, manifests, and handoff metadata that subagents must branch from
-- verify `.gitattributes` contains `merge=union` for `wiki/log.md`, `wiki/graph/edges.jsonl`, and `wiki/index.md` before creating worktrees
+- verify `.gitattributes` contains `merge=union` for `wiki/log.md`, `wiki/graph/edges.jsonl`, `wiki/graph/citations.jsonl`, and `wiki/index.md` before creating worktrees
 - `/init` worktree mode must run from a named branch, not detached HEAD
 - create each worktree from `BASE_COMMIT`, not from the already checked-out `BASE_BRANCH`
 - subagent prompts must use **relative paths only**
@@ -178,6 +173,7 @@ After all subagents complete:
 
 ```bash
 "$PYTHON_BIN" tools/research_wiki.py dedup-edges wiki/
+"$PYTHON_BIN" tools/research_wiki.py dedup-citations wiki/
 "$PYTHON_BIN" tools/research_wiki.py rebuild-index wiki/
 "$PYTHON_BIN" tools/research_wiki.py rebuild-context-brief wiki/
 "$PYTHON_BIN" tools/research_wiki.py rebuild-open-questions wiki/
@@ -198,6 +194,7 @@ If `stash_ref` exists, pop it at the end. If stash pop fails, keep the checkpoin
 
 ## Constraints
 
+- Do not infer `--no-introduction` from repository state alone. Use it only when the user explicitly asked to disable external discovery.
 - `raw/papers/`, `raw/notes/`, and `raw/web/` are user-owned inputs
 - `raw/tmp/` and `raw/discovered/` are generated handoff areas; direct local `/ingest` may also prepare reusable local sidecars under `raw/tmp/`
 - `/init` may write external papers only to `raw/discovered/`; `/init` and direct local `/ingest` may write generated prepared local sources to `raw/tmp/`
@@ -231,6 +228,7 @@ If `stash_ref` exists, pop it at the end. If stash pop fails, keep the checkpoin
 - `"$PYTHON_BIN" tools/research_wiki.py checkpoint-set-meta wiki/ init-session <key> <value>`
 - `"$PYTHON_BIN" tools/research_wiki.py checkpoint-save/load/clear wiki/ init-session ...`
 - `"$PYTHON_BIN" tools/research_wiki.py dedup-edges wiki/`
+- `"$PYTHON_BIN" tools/research_wiki.py dedup-citations wiki/`
 - `"$PYTHON_BIN" tools/research_wiki.py rebuild-index wiki/`
 - `"$PYTHON_BIN" tools/research_wiki.py rebuild-context-brief wiki/`
 - `"$PYTHON_BIN" tools/research_wiki.py rebuild-open-questions wiki/`

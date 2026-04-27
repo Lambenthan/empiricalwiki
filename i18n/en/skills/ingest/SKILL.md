@@ -19,18 +19,14 @@ Open `docs/runtime-page-templates.en.md` before drafting any wiki page frontmatt
 
 ## Inputs
 
-- `source`: one of — arXiv URL (e.g. `https://arxiv.org/abs/2106.09685`), local `.tex`, local `.pdf`, or a `canonical_ingest_path` handed off by `/init` via `.checkpoints/init-sources.json`
+- `source`: one of — arXiv URL (e.g. `https://arxiv.org/abs/2106.09685`), local `.tex`, local `.pdf`, or a `canonical_ingest_path` handed off by `/init` via `.checkpoints/init-sources.json`(see `references/init-mode.md`)
 - `--discover` (optional, default **off**): after the final report, invoke `/discover --anchor <this-paper's-arxiv-id>` and append the shortlist to the report as "Related papers you may want to ingest next". Never auto-ingests the suggestions. Skipped automatically in INIT MODE. Treat this as a user-owned flag: do not set it based on repo state.
 
 ## Outputs
 
-- `wiki/papers/{slug}.md` — new paper page
-- `wiki/concepts/{slug}.md`, `wiki/people/{slug}.md`, `wiki/claims/{slug}.md` — created sparingly per `references/dedup-policy.md`, or edited in place to append backlinks
-- `wiki/topics/{slug}.md` — edited to append seminal / recent works when the paper clearly belongs under an existing topic
-- `wiki/graph/edges.jsonl` — appended via `tools/research_wiki.py add-edge`
-- `wiki/index.md` — appended new entries
-- `wiki/log.md` — one append line
-- `wiki/graph/context_brief.md`, `wiki/graph/open_questions.md` — rebuilt (skipped in INIT MODE; the parent `/init` rebuilds once at fan-in)
+- One fully-wired paper page plus linked entities (concepts, claims, people)
+- Graph edges and citations appended via `tools/research_wiki.py`
+- Terminal summary with page counts and suggested follow-up ingests
 
 ## Wiki Interaction
 
@@ -52,6 +48,7 @@ Open `docs/runtime-page-templates.en.md` before drafting any wiki page frontmatt
 - `wiki/people/{slug}.md` — CREATE (importance ≥ 4 only) or EDIT (append `Key papers`)
 - `wiki/topics/{slug}.md` — EDIT only (no CREATE from `/ingest`)
 - `wiki/graph/edges.jsonl` — APPEND via tool
+- `wiki/graph/citations.jsonl` — APPEND via tool
 - `wiki/graph/context_brief.md` — REBUILD (skipped in INIT MODE)
 - `wiki/graph/open_questions.md` — REBUILD (skipped in INIT MODE)
 - `wiki/index.md` — APPEND
@@ -59,10 +56,15 @@ Open `docs/runtime-page-templates.en.md` before drafting any wiki page frontmatt
 
 ### Graph edges created
 
-- `paper → concept`: `supports` / `extends`
+- `paper → concept`: `introduces_concept` / `uses_concept` / `extends_concept` / `critiques_concept` with `confidence`
 - `paper → foundation`: `derived_from` (foundation is terminal; no reverse link)
 - `paper → claim`: `supports` / `contradicts`
-- `paper → paper`: `extends` / `supersedes` / `inspired_by` / `contradicts` (see `references/cross-references.md` for selection rules)
+- `paper → paper`: `same_problem_as` / `similar_method_to` / `complementary_to` / `builds_on` / `compares_against` / `improves_on` / `challenges` / `surveys` with `confidence`
+- bibliographic `paper → paper`: `cites` in `graph/citations.jsonl`
+
+`tools/research_wiki.py add-edge` rejects missing confidence/evidence for
+paper-paper and paper-concept semantic edges, and rejects legacy
+paper-to-concept or paper-to-paper types on new writes.
 
 ## Workflow
 
@@ -121,7 +123,7 @@ Open `docs/runtime-page-templates.en.md` for the paper template. Fill every requ
 Before writing, run a **shape check** on the frontmatter you are about to emit — no more than this:
 
 - every required key is present and non-empty
-- `importance` ∈ {1,2,3,4,5}; `status` on claims ∈ the documented set; `maturity` on concepts ∈ the documented set; `confidence` ∈ [0,1]
+- `importance` ∈ {1,2,3,4,5}; `status` on claims ∈ the documented set; `maturity` on concepts ∈ the documented set; claim `confidence` ∈ [0,1]
 - YAML parses
 
 The shape check is intentionally narrow. Backlink symmetry, dangling-node detection, and cross-entity consistency are `/check`'s job, not this skill's.
@@ -146,7 +148,8 @@ Skip this whole step in INIT MODE — the parent `/init` handles it at fan-in.
 "$PYTHON_BIN" tools/fetch_s2.py citations <arxiv-id>
 ```
 
-- For each reference whose arXiv ID or title resolves to an existing `wiki/papers/{slug}.md`, add a single paper-to-paper edge. Edge-type selection is in `references/cross-references.md`. If no existing wiki paper matches, **do not speculate** — skip.
+- For each reference whose arXiv ID or title resolves to an existing `wiki/papers/{slug}.md`, add a bibliographic `cites` row to `graph/citations.jsonl`.
+- Add a semantic paper-to-paper edge in `graph/edges.jsonl` only when the source text gives a clear cue. Edge-type selection is in `references/cross-references.md`. If no semantic relation cleanly fits, keep only the `cites` row.
 - For each citation already in the wiki, append the citer's slug to this paper's `cited_by`.
 - Surface unmatched high-citation references in the final report so the user can decide whether to follow up with another `/ingest`.
 
@@ -209,7 +212,7 @@ Append the markdown output to the report under a heading like "Related papers yo
   - importance ≥ 4: at most **3** new concepts and **2** new claims per paper
   - Any further candidates must be merged into their nearest `find-similar-*` result, or left out for `/check` to flag. Rationale and matching rules: `references/dedup-policy.md`.
 - `/ingest` runs a shape check on its own output (required keys, enum ranges, YAML parses) and stops there. Backlink symmetry, dangling nodes, and full semantic audits belong to `/check`. Do not re-implement them here.
-- Assume another `/ingest` may run concurrently in a sibling worktree. All shared-file writes (`graph/edges.jsonl`, `index.md`, `log.md`) must go through `tools/research_wiki.py` or use append-only semantics. See `references/init-mode.md`.
+- Assume another `/ingest` may run concurrently in a sibling worktree. All shared-file writes (`graph/edges.jsonl`, `graph/citations.jsonl`, `index.md`, `log.md`) must go through `tools/research_wiki.py` or use append-only semantics. See `references/init-mode.md`.
 - In INIT MODE, skip `fetch_s2.py citations`, `fetch_s2.py references`, and the `rebuild-*` commands — the parent `/init` runs them once after fan-in.
 
 ## Error Handling
@@ -223,7 +226,9 @@ See `references/error-handling.md`. Highlights: source parse failures cascade te
 - `"$PYTHON_BIN" tools/research_wiki.py slug "<title>"`
 - `"$PYTHON_BIN" tools/research_wiki.py find-similar-concept wiki/ "<title>" --aliases "<a,b,c>"`
 - `"$PYTHON_BIN" tools/research_wiki.py find-similar-claim wiki/ "<title>" --tags "<a,b,c>"`
-- `"$PYTHON_BIN" tools/research_wiki.py add-edge wiki/ --from <id> --to <id> --type <type> --evidence "<text>"`
+- `"$PYTHON_BIN" tools/research_wiki.py add-edge wiki/ --from <id> --to <id> --type <type> --evidence "<text>" [--confidence high|medium|low]`
+  - `--confidence high|medium|low` is required for paper-paper and paper-concept semantic edges.
+- `"$PYTHON_BIN" tools/research_wiki.py add-citation wiki/ --from papers/<citing> --to papers/<cited> --source semantic_scholar`
 - `"$PYTHON_BIN" tools/research_wiki.py log wiki/ "<message>"`
 - `"$PYTHON_BIN" tools/research_wiki.py rebuild-context-brief wiki/`
 - `"$PYTHON_BIN" tools/research_wiki.py rebuild-open-questions wiki/`

@@ -4,13 +4,13 @@
 Checks performed:
   1. Broken wikilinks: [[slug]] target file does not exist
   2. Orphan pages: pages with zero incoming links
-  3. Missing required YAML frontmatter fields per entity type (all 8 types)
+  3. Missing required YAML frontmatter fields per entity type (all 9 types)
   4. Cross-reference asymmetry: forward link without matching reverse link
   5. Field value validation: enum values, ranges (confidence, importance, status)
   6. Claim checks: confidence range, evidence structure, status consistency
   7. Idea checks: failure_reason required when status=failed
   8. Experiment checks: target_claim required, outcome values
-  9. Graph edge consistency: from/to nodes exist as wiki pages
+  9. Graph edge and citation consistency: from/to nodes exist as wiki pages
 
 Usage:
     python3 tools/lint.py                      # lint wiki/ in current dir
@@ -33,11 +33,20 @@ from pathlib import Path
 # Schema constants — single source of truth shared with research_wiki.py.
 # See tools/_schemas.py for the spec; do not duplicate the definitions here.
 from _schemas import (
+    CITATION_EDGE_TYPES,
+    CITATION_SOURCES,
+    EDGE_CONFIDENCE_VALUES,
     ENTITY_DIRS,
     FIELD_DEFAULTS,
     REQUIRED_FIELDS,
     VALID_EDGE_TYPES,
     VALID_VALUES,
+    edge_endpoint_matches,
+    edge_expected_endpoint,
+    edge_is_symmetric,
+    edge_is_legacy_for_endpoint,
+    edge_legacy_replacement_message,
+    edge_requires_confidence,
 )
 
 WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")
@@ -362,6 +371,23 @@ def check_xref_asymmetry(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIss
     return issues
 
 
+def _node_kind(node_id: str) -> str:
+    return node_id.split("/", 1)[0] if "/" in node_id else ""
+
+
+def _check_graph_node_exists(wiki_dir: Path, node_id: str,
+                             file_label: str, line_num: int,
+                             endpoint: str) -> LintIssue | None:
+    if "/" not in node_id:
+        return None
+    entity_dir, node_slug = node_id.split("/", 1)
+    node_path = wiki_dir / entity_dir / f"{node_slug}.md"
+    if not node_path.exists():
+        return LintIssue("🟡", "dangling-edge", f"{file_label}:{line_num}",
+                         f"{endpoint}={node_id!r} but file not found")
+    return None
+
+
 def check_graph_edges(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIssue]:
     """Check graph/edges.jsonl for consistency."""
     issues = []
@@ -370,9 +396,12 @@ def check_graph_edges(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIssue]
         return issues
 
     valid_types = VALID_EDGE_TYPES
+    text = edges_path.read_text(encoding="utf-8")
+    if not text.strip():
+        return issues
 
     line_num = 0
-    for line in edges_path.read_text(encoding="utf-8").strip().split("\n"):
+    for line in text.split("\n"):
         line_num += 1
         line = line.strip()
         if not line:
@@ -389,22 +418,148 @@ def check_graph_edges(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIssue]
                 issues.append(LintIssue("🔴", "invalid-edge", f"graph/edges.jsonl:{line_num}",
                                         f"Missing required field: {field}"))
 
-        if "type" in edge and edge["type"] not in valid_types:
+        edge_type = edge.get("type", "")
+        from_id = edge.get("from", "")
+        to_id = edge.get("to", "")
+        from_kind = _node_kind(str(from_id))
+        to_kind = _node_kind(str(to_id))
+
+        if "type" in edge and edge_type not in valid_types:
             issues.append(LintIssue("🟡", "unknown-edge-type", f"graph/edges.jsonl:{line_num}",
-                                    f"Unknown edge type: {edge['type']}"))
+                                    f"Unknown edge type: {edge_type}"))
+        elif edge_type:
+            # Endpoint-aware semantic edge checks. Legacy edge types stay readable
+            # but get migration warnings on old /ingest-shaped endpoints.
+            if not edge_endpoint_matches(edge_type, from_kind, to_kind):
+                expected_from = edge_expected_endpoint(edge_type, "from")
+                expected_to = edge_expected_endpoint(edge_type, "to")
+                issues.append(LintIssue("🟡", "invalid-edge-endpoint",
+                                        f"graph/edges.jsonl:{line_num}",
+                                        f"{edge_type} should connect {expected_from}/* -> {expected_to}/*"))
+            if (edge_expected_endpoint(edge_type, "from") == "papers"
+                    and edge_expected_endpoint(edge_type, "to") == "papers"
+                    and str(from_id) == str(to_id)):
+                issues.append(LintIssue("🟡", "self-edge",
+                                        f"graph/edges.jsonl:{line_num}",
+                                        f"{edge_type} should not connect a paper to itself"))
+            if edge_is_symmetric(edge_type):
+                if edge.get("symmetric") is not True:
+                    issues.append(LintIssue("🟡", "missing-symmetric-marker",
+                                            f"graph/edges.jsonl:{line_num}",
+                                            f"{edge_type} should include symmetric: true"))
+                if str(from_id) > str(to_id):
+                    issues.append(LintIssue("🟡", "noncanonical-symmetric-edge",
+                                            f"graph/edges.jsonl:{line_num}",
+                                            "symmetric paper edge endpoints should be sorted"))
+            confidence = edge.get("confidence", "")
+            if edge_requires_confidence(edge_type):
+                if not confidence:
+                    issues.append(LintIssue("🟡", "missing-edge-confidence",
+                                            f"graph/edges.jsonl:{line_num}",
+                                            f"{edge_type} should include confidence high|medium|low"))
+                elif confidence not in EDGE_CONFIDENCE_VALUES:
+                    issues.append(LintIssue("🟡", "invalid-edge-confidence",
+                                            f"graph/edges.jsonl:{line_num}",
+                                            f"confidence={confidence!r} not in {EDGE_CONFIDENCE_VALUES}"))
+                if not str(edge.get("evidence", "")).strip():
+                    issues.append(LintIssue("🟡", "missing-edge-evidence",
+                                            f"graph/edges.jsonl:{line_num}",
+                                            f"{edge_type} should include evidence text"))
+
+            if edge_is_legacy_for_endpoint(edge_type, from_kind, to_kind):
+                issues.append(LintIssue("🟡", "legacy-edge-type",
+                                        f"graph/edges.jsonl:{line_num}",
+                                        edge_legacy_replacement_message(
+                                            edge_type, from_kind, to_kind
+                                        )))
 
         # Check from/to nodes exist (strip directory prefix for slug lookup)
         for endpoint in ("from", "to"):
             if endpoint not in edge:
                 continue
             node_id = edge[endpoint]
-            # node_id format: "entity_type/slug" e.g. "papers/lora-low-rank-adaptation"
-            if "/" in node_id:
-                entity_dir, node_slug = node_id.split("/", 1)
-                node_path = wiki_dir / entity_dir / f"{node_slug}.md"
-                if not node_path.exists():
-                    issues.append(LintIssue("🟡", "dangling-edge", f"graph/edges.jsonl:{line_num}",
-                                            f"{endpoint}={node_id!r} but file not found"))
+            issue = _check_graph_node_exists(
+                wiki_dir, str(node_id), "graph/edges.jsonl", line_num, endpoint
+            )
+            if issue:
+                issues.append(issue)
+
+    return issues
+
+
+def check_graph_citations(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIssue]:
+    """Check graph/citations.jsonl for bibliographic citation consistency."""
+    issues = []
+    citations_path = wiki_dir / "graph" / "citations.jsonl"
+    if not citations_path.exists():
+        return issues
+
+    text = citations_path.read_text(encoding="utf-8")
+    if not text.strip():
+        return issues
+
+    line_num = 0
+    seen: set[tuple[str, str]] = set()
+    for line in text.split("\n"):
+        line_num += 1
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            citation = json_module.loads(line)
+        except json_module.JSONDecodeError:
+            issues.append(LintIssue("🔴", "invalid-citation",
+                                    f"graph/citations.jsonl:{line_num}",
+                                    "Invalid JSON"))
+            continue
+
+        for field in ("from", "to", "type", "source", "date"):
+            if field not in citation:
+                issues.append(LintIssue("🔴", "invalid-citation",
+                                        f"graph/citations.jsonl:{line_num}",
+                                        f"Missing required field: {field}"))
+
+        from_id = str(citation.get("from", ""))
+        to_id = str(citation.get("to", ""))
+        if _node_kind(from_id) != "papers" or _node_kind(to_id) != "papers":
+            issues.append(LintIssue("🟡", "invalid-citation-endpoint",
+                                    f"graph/citations.jsonl:{line_num}",
+                                    "cites should connect papers/* -> papers/*"))
+
+        if citation.get("type") not in CITATION_EDGE_TYPES:
+            issues.append(LintIssue("🟡", "unknown-citation-type",
+                                    f"graph/citations.jsonl:{line_num}",
+                                    f"Unknown citation type: {citation.get('type')}"))
+        if citation.get("source") not in CITATION_SOURCES:
+            issues.append(LintIssue("🟡", "unknown-citation-source",
+                                    f"graph/citations.jsonl:{line_num}",
+                                    f"Unknown citation source: {citation.get('source')}"))
+        if "confidence" in citation:
+            issues.append(LintIssue("🟡", "invalid-citation-field",
+                                    f"graph/citations.jsonl:{line_num}",
+                                    "Citation rows should not include confidence"))
+        if "date" in citation and not re.match(r"^\d{4}-\d{2}-\d{2}$",
+                                                str(citation.get("date", ""))):
+            issues.append(LintIssue("🟡", "invalid-citation-date",
+                                    f"graph/citations.jsonl:{line_num}",
+                                    "Citation date should be YYYY-MM-DD"))
+
+        key = (from_id, to_id)
+        if key in seen:
+            issues.append(LintIssue("🟡", "duplicate-citation",
+                                    f"graph/citations.jsonl:{line_num}",
+                                    f"Duplicate citation {from_id} -> {to_id}"))
+        seen.add(key)
+
+        for endpoint in ("from", "to"):
+            if endpoint not in citation:
+                continue
+            issue = _check_graph_node_exists(
+                wiki_dir, str(citation[endpoint]), "graph/citations.jsonl",
+                line_num, endpoint
+            )
+            if issue:
+                issues.append(issue)
 
     return issues
 
@@ -472,6 +627,7 @@ def lint(wiki_dir: Path) -> list[LintIssue]:
     issues.extend(check_experiment_claim_link(wiki_dir, pages))
     issues.extend(check_xref_asymmetry(wiki_dir, pages))
     issues.extend(check_graph_edges(wiki_dir, pages))
+    issues.extend(check_graph_citations(wiki_dir, pages))
     issues.extend(check_content_quality(wiki_dir, pages))
 
     return issues

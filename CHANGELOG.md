@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - 20 Claude Code skills for full research lifecycle: `/init`, `/ingest`, `/ask`, `/edit`, `/check`, `/daily-arxiv`, `/ideate`, `/novelty`, `/review`, `/exp-design`, `/exp-run`, `/exp-status`, `/exp-eval`, `/refine`, `/survey`, `/paper-plan`, `/paper-draft`, `/paper-compile`, `/research`, `/rebuttal`
 - Wiki knowledge engine (`tools/research_wiki.py`) with 20 CLI commands
 - 8 entity types: papers, concepts, topics, people, ideas, experiments, claims, summaries
-- Typed relationship graph with 9 edge types (`graph/edges.jsonl`)
+- Typed semantic relationship graph (`graph/edges.jsonl`) plus bibliographic citation layer (`graph/citations.jsonl`)
 - Daily arXiv automation via GitHub Actions
 - Cross-model review via any OpenAI-compatible API (DeepSeek, OpenAI, Qwen, OpenRouter, SiliconFlow, etc.)
 - Multi-source data integration: arXiv RSS, Semantic Scholar, DeepXiv
