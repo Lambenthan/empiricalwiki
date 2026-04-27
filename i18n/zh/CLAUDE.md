@@ -135,6 +135,7 @@
 | `/init` | `skills/init/SKILL.md` | 手动 |
 | `/prefill` | `skills/prefill/SKILL.md` | 手动（`[domain] [--add concept]`） |
 | `/ingest` | `skills/ingest/SKILL.md` | 手动 |
+| `/discover` | `skills/discover/SKILL.md` | 手动 / 内部（`/ingest --discover` 时调用） |
 | `/ask` | `skills/ask/SKILL.md` | 手动 |
 | `/edit` | `skills/edit/SKILL.md` | 手动 |
 | `/check` | `skills/check/SKILL.md` | 每两周/手动 |
