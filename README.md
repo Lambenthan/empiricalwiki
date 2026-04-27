@@ -6,19 +6,111 @@
 
 ### Karpathy's LLM-Wiki Vision, Fully Realized
 
-**A wiki-centric full-lifecycle AI research platform powered by [Claude Code](https://docs.anthropic.com/en/docs/claude-code)**
+**Your AI Research Platform — From Papers to Publications, Powered by [Claude Code](https://docs.anthropic.com/en/docs/claude-code)**
 
 *From paper ingestion to publication — your research knowledge compounds, never decays.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9+-yellow.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/Tests-2263_passing-brightgreen.svg)](#testing)
 [![Skills](https://img.shields.io/badge/Skills-23-purple.svg)](#skills)
 [![Claude Code](https://img.shields.io/badge/Powered_by-Claude_Code-d97706.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![Bilingual](https://img.shields.io/badge/i18n-EN_|_中文-orange.svg)](#bilingual-support)
 
 [English](#what-is-ωmegawiki) | [中文](#中文)
 
+</div>
+
+---
+
+## Team
+
+ΩmegaWiki is built by [DAIR Lab](https://cuibinpku.github.io/) at Peking University — a fully agentic platform that automates the complete research pipeline, from knowledge ingestion to paper submission.
+
+<div align="center">
+<table>
+  <tr>
+    <td align="center" width="140">
+      <a href="https://skyllwt.github.io/">
+        <img src="assets/WeitongQian_circle.png" width="90" alt="Weitong Qian"/>
+      </a>
+      <br/><br/>
+      <a href="https://skyllwt.github.io/"><b>Weitong Qian</b></a>
+      <br/>
+      <sub>Peking University</sub>
+      <br/>
+      <sub>Undergraduate · 2023</sub>
+    </td>
+    <td align="center" width="140">
+      <img src="assets/BeichengXu_circle.png" width="90" alt="Beicheng Xu"/>
+      <br/><br/>
+      <b>Beicheng Xu</b>
+      <br/>
+      <sub>Peking University</sub>
+      <br/>
+      <sub>Ph.D. · 2023</sub>
+    </td>
+    <td align="center" width="140">
+      <img src="assets/ZhongaoXie_circle.png" width="90" alt="Zhongao Xie"/>
+      <br/><br/>
+      <b>Zhongao Xie</b>
+      <br/>
+      <sub>Peking University</sub>
+      <br/>
+      <sub>Undergraduate · 2025</sub>
+    </td>
+    <td align="center" width="140">
+      <img src="assets/BowenFan_circle.png" width="90" alt="Bowen Fan"/>
+      <br/><br/>
+      <b>Bowen Fan</b>
+      <br/>
+      <sub>Peking University</sub>
+      <br/>
+      <sub>Undergraduate · 2024</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="140">
+      <img src="assets/GuozhengTang_circle.png" width="90" alt="Guozheng Tang"/>
+      <br/><br/>
+      <b>Guozheng Tang</b>
+      <br/>
+      <sub>Peking University</sub>
+      <br/>
+      <sub>Undergraduate · 2024</sub>
+    </td>
+    <td align="center" width="140">
+      <a href="https://brzgw555.github.io">
+        <img src="assets/XinzheWu_circle.png" width="90" alt="Xinzhe Wu"/>
+      </a>
+      <br/><br/>
+      <a href="https://brzgw555.github.io"><b>Xinzhe Wu</b></a>
+      <br/>
+      <sub>Peking University</sub>
+      <br/>
+      <sub>Undergraduate · 2024</sub>
+    </td>
+    <td align="center" width="140">
+      <img src="assets/JialeChen_circle.png" width="90" alt="Jiale Chen"/>
+      <br/><br/>
+      <b>Jiale Chen</b>
+      <br/>
+      <sub>Peking University</sub>
+      <br/>
+      <sub>Undergraduate · 2024</sub>
+    </td>
+    <td align="center" width="140">
+      <a href="https://morrowmind.live">
+        <img src="assets/MingtianYang_circle.png" width="90" alt="Mingtian Yang"/>
+      </a>
+      <br/><br/>
+      <a href="https://morrowmind.live"><b>Mingtian Yang</b></a>
+      <br/>
+      <sub>Peking University</sub>
+      <br/>
+      <sub>Undergraduate · 2024</sub>
+    </td>
+  </tr>
+</table>
 </div>
 
 ---
@@ -236,19 +328,10 @@ OmegaWiki/
 ├── .claude/skills/              # 23 Claude Code skill definitions
 ├── i18n/                        # Bilingual: en/ (canonical) + zh/
 ├── config/                      # Configuration templates
-├── tests/                       # 2263 tests
 ├── mcp-servers/                 # Cross-model review server
 └── .github/workflows/           # Daily arXiv cron
 ```
 
-## Testing
-
-```bash
-source .venv/bin/activate
-python -m pytest tests/ -v
-```
-
-2263 tests covering all tools, skills, and shared references.
 
 ## Bilingual Support
 
@@ -357,8 +440,7 @@ Then run `claude` as usual. That's it — zero extra setup.
 
 ## Community / 交流群
 
-<img src="assets/wechat_group_2.jpg" width="240" alt="WeChat Group QR Code">
-<img src="assets/wechat_group_1.jpg" width="240" alt="WeChat Group QR Code">
+<img src="assets/wechat_group_1.png" width="240" alt="WeChat Group QR Code">
 
 Scan to join the ΩmegaWiki WeChat group / 扫码加入微信交流群
 
