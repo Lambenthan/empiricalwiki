@@ -29,83 +29,83 @@
 <div align="center">
 <table>
   <tr>
-    <td align="center" width="140">
+    <td align="center" width="165">
       <a href="https://skyllwt.github.io/">
         <img src="assets/WeitongQian_circle.png" width="90" alt="Weitong Qian"/>
       </a>
       <br/><br/>
       <a href="https://skyllwt.github.io/"><b>Weitong Qian</b></a>
       <br/>
-      <sub>Peking University</sub>
+      <sub>PKU</sub>
       <br/>
       <sub>Undergraduate · 2023</sub>
     </td>
-    <td align="center" width="140">
+    <td align="center" width="165">
       <img src="assets/BeichengXu_circle.png" width="90" alt="Beicheng Xu"/>
       <br/><br/>
       <b>Beicheng Xu</b>
       <br/>
-      <sub>Peking University</sub>
+      <sub>PKU</sub>
       <br/>
       <sub>Ph.D. · 2023</sub>
     </td>
-    <td align="center" width="140">
+    <td align="center" width="165">
       <img src="assets/ZhongaoXie_circle.png" width="90" alt="Zhongao Xie"/>
       <br/><br/>
       <b>Zhongao Xie</b>
       <br/>
-      <sub>Peking University</sub>
+      <sub>PKU</sub>
       <br/>
       <sub>Undergraduate · 2025</sub>
     </td>
-    <td align="center" width="140">
+    <td align="center" width="165">
       <img src="assets/BowenFan_circle.png" width="90" alt="Bowen Fan"/>
       <br/><br/>
       <b>Bowen Fan</b>
       <br/>
-      <sub>Peking University</sub>
+      <sub>PKU</sub>
       <br/>
       <sub>Undergraduate · 2024</sub>
     </td>
   </tr>
   <tr>
-    <td align="center" width="140">
+    <td align="center" width="165">
       <img src="assets/GuozhengTang_circle.png" width="90" alt="Guozheng Tang"/>
       <br/><br/>
       <b>Guozheng Tang</b>
       <br/>
-      <sub>Peking University</sub>
+      <sub>PKU</sub>
       <br/>
       <sub>Undergraduate · 2024</sub>
     </td>
-    <td align="center" width="140">
+    <td align="center" width="165">
       <a href="https://brzgw555.github.io">
         <img src="assets/XinzheWu_circle.png" width="90" alt="Xinzhe Wu"/>
       </a>
       <br/><br/>
       <a href="https://brzgw555.github.io"><b>Xinzhe Wu</b></a>
       <br/>
-      <sub>Peking University</sub>
+      <sub>PKU</sub>
       <br/>
       <sub>Undergraduate · 2024</sub>
     </td>
-    <td align="center" width="140">
+    <td align="center" width="165">
       <img src="assets/JialeChen_circle.png" width="90" alt="Jiale Chen"/>
       <br/><br/>
       <b>Jiale Chen</b>
       <br/>
-      <sub>Peking University</sub>
+      <sub>PKU</sub>
       <br/>
       <sub>Undergraduate · 2024</sub>
     </td>
-    <td align="center" width="140">
+    <td align="center" width="165">
       <a href="https://morrowmind.live">
         <img src="assets/MingtianYang_circle.png" width="90" alt="Mingtian Yang"/>
       </a>
       <br/><br/>
       <a href="https://morrowmind.live"><b>Mingtian Yang</b></a>
       <br/>
-      <sub>Peking University</sub>
+      <sub>PKU</sub>
       <br/>
       <sub>Undergraduate · 2024</sub>
     </td>
