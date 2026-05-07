@@ -1,131 +1,131 @@
 ---
-description: Multi-phase research idea generation pipeline: landscape scan → dual-model brainstorm → first-pass filter → deep validation → write to wiki
+description: 多阶段研究 idea 生成管道：景观扫描 → 双模型脑暴 → 初筛 → 深度验证 → 写入 wiki
 argument-hint: "[research-direction-or-topic] [--max-ideas N] [--skip-validation] [--auto]"
 ---
 
 # /ideate
 
-> Generates high-quality research ideas through a 5-phase pipeline, grounded in the wiki knowledge base and external search.
-> Phase 1 scans the research landscape (wiki + WebSearch + S2), Phase 2 runs a dual-model brainstorm (Claude + Review LLM independently),
-> Phase 3 applies a first-pass filter (feasibility + quick novelty check), Phase 4 performs deep validation (calls /novelty + /review),
-> Phase 5 writes to the wiki (ideas/ + graph edges), including eliminated ideas (failure reasons recorded as anti-repetition memory).
+> 基于 wiki 知识库和外部搜索，通过 5 阶段管道生成高质量研究 idea。
+> Phase 1 扫描研究景观（wiki + WebSearch + S2），Phase 2 双模型脑暴（Claude + Review LLM 独立生成），
+> Phase 3 初步筛选（可行性 + 快速 novelty），Phase 4 深度验证（调用 /novelty + /review），
+> Phase 5 写入 wiki（ideas/ + graph edges），包括被淘汰的 ideas（记录原因作为 anti-repetition 记忆）。
 
 ## Inputs
 
-- `direction` (optional): research direction, keywords, or specific problem description. If omitted, automatically selects the most valuable direction from open_questions.md.
-- `--max-ideas N` (optional, default 3): maximum number of ideas to write to the wiki
-- `--skip-validation`: skip Phase 4 deep validation (fast mode: Phase 1–3 + Phase 5 only)
-- `--auto`: fully automatic mode, no pause for user confirmation (used when called by /research)
+- `direction`（可选）：研究方向、关键词或具体问题描述。若不指定，则从 open_questions.md 自动选择最有价值的方向。
+- `--max-ideas N`（可选，默认 3）：最终写入 wiki 的 idea 数量上限
+- `--skip-validation`：跳过 Phase 4 深度验证（快速模式，仅做 Phase 1-3 + Phase 5）
+- `--auto`：全自动模式，不暂停等待用户确认（用于 /research 调用）
 
 ## Outputs
 
-- `wiki/ideas/{slug}.md` — one page per idea (status: proposed), covering both top ideas and eliminated ideas
-- `wiki/graph/edges.jsonl` — new idea → claim/gap relationship edges
-- `wiki/graph/context_brief.md` — rebuilt compressed context
-- `wiki/graph/open_questions.md` — rebuilt knowledge gap map
-- **IDEA_REPORT** (printed to terminal) — pipeline execution summary, ranked results, novelty scores
+- `wiki/ideas/{slug}.md` — 每个 idea 一个页面（status: proposed），包含 top ideas 和被淘汰的 ideas
+- `wiki/graph/edges.jsonl` — 新增 idea → claim/gap 的关系边
+- `wiki/graph/context_brief.md` — 重建后的压缩上下文
+- `wiki/graph/open_questions.md` — 重建后的知识缺口图
+- **IDEA_REPORT**（输出到终端）— 管道执行摘要、排名结果、novelty 评分
 
 ## Wiki Interaction
 
 ### Reads
-- `wiki/graph/context_brief.md` — global context
-- `wiki/graph/open_questions.md` — knowledge gaps, drives idea direction
-- `wiki/ideas/*.md` — existing ideas, especially status=failed ideas and their failure_reason (banlist)
-- `wiki/claims/*.md` — current claims status, identifies weakly_supported and challenged claims
-- `wiki/papers/*.md` — existing paper methods and results
-- `wiki/concepts/*.md` — technical concepts, find cross-domain combination opportunities
-- `wiki/topics/*.md` — research direction maps, SOTA and open problems
-- `wiki/experiments/*.md` — existing experiment results, avoid duplication
+- `wiki/graph/context_brief.md` — 全局上下文
+- `wiki/graph/open_questions.md` — 知识缺口，驱动 idea 方向
+- `wiki/ideas/*.md` — 已有 ideas，特别是 status=failed 的 ideas 及 failure_reason（banlist）
+- `wiki/claims/*.md` — 当前 claims 状态，识别 weakly_supported 和 challenged claims
+- `wiki/papers/*.md` — 已有论文方法和结果
+- `wiki/concepts/*.md` — 技术概念，寻找跨领域组合机会
+- `wiki/topics/*.md` — 研究方向地图，SOTA 和 open problems
+- `wiki/experiments/*.md` — 已有实验结果，避免重复
 
 ### Writes
-- `wiki/ideas/{slug}.md` — create new idea pages
-- `wiki/graph/edges.jsonl` — add idea → claim/gap relationship edges (addresses_gap, inspired_by)
-- `wiki/graph/context_brief.md` — rebuild
-- `wiki/graph/open_questions.md` — rebuild
-- `wiki/log.md` — append operation log
+- `wiki/ideas/{slug}.md` — 创建新 idea 页面
+- `wiki/graph/edges.jsonl` — 添加 idea → claim/gap 的关系边（addresses_gap, inspired_by）
+- `wiki/graph/context_brief.md` — 重建
+- `wiki/graph/open_questions.md` — 重建
+- `wiki/log.md` — 追加操作日志
 
 ### Graph edges created
-- `addresses_gap`: idea → claim/topic (knowledge gap the idea targets)
-- `inspired_by`: idea → paper/concept (source of inspiration for the idea)
+- `addresses_gap`：idea → claim/topic（idea 针对的知识缺口）
+- `inspired_by`：idea → paper/concept（idea 的灵感来源）
 
 ## Workflow
 
-**Pre-conditions**:
-1. Confirm working directory is the wiki project root (directory containing `wiki/`, `raw/`, `tools/`).
-2. **Check wiki maturity**:
+**前置**：
+1. 确认工作目录为 wiki 项目根（包含 `wiki/`、`raw/`、`tools/` 的目录）
+2. **检查 wiki 成熟度**：
    ```bash
    python3 tools/research_wiki.py maturity wiki/ --json
    ```
-   Adjust subsequent behavior based on maturity level:
-   - **cold**: expand Phase 1 external search (WebSearch queries from 5 to 8, S2/DeepXiv limit from 20 to 30),
-     skip wiki internal context loading (empty, no value), annotate "cold-start mode: heavier external search"
-   - **warm**: standard behavior (current default)
-   - **hot**: reduce Phase 1 external search (WebSearch queries from 5 to 2, S2/DeepXiv limit from 20 to 10),
-     raise Phase 3 gap_alignment_bonus from +2 to +3, prioritize resolving weak claims already in the wiki
-3. **Snapshot wiki state** (for the Growth Report at the end):
-   Save the JSON returned by maturity to memory variable `maturity_before`
+   根据 maturity level 调整后续行为：
+   - **cold**：Phase 1 外部搜索扩展（WebSearch 查询从 5 增至 8，S2/DeepXiv limit 从 20 增至 30），
+     跳过 wiki 内部上下文加载（为空无意义），标注 "cold-start mode: heavier external search"
+   - **warm**：标准行为（当前默认）
+   - **hot**：Phase 1 外部搜索缩减（WebSearch 查询从 5 降至 2，S2/DeepXiv limit 从 20 降至 10），
+     Phase 3 gap_alignment_bonus 从 +2 提升到 +3，优先解决 wiki 中已有的 weak claims
+3. **Snapshot wiki 状态**（用于结束时的 Growth Report）：
+   保存 maturity 返回的 JSON 到内存变量 `maturity_before`
 
-### Phase 1: Landscape Scan
+### Phase 1: 景观扫描（Landscape Scan）
 
-Goal: build a comprehensive view of the target domain, including existing work, knowledge gaps, and recent advances.
+目标：构建目标领域的全面视角，包括已有工作、知识缺口和最新进展。
 
-1. **Load wiki internal context**:
-   - Read `wiki/graph/context_brief.md` (global compressed context)
-   - Read `wiki/graph/open_questions.md` (knowledge gap list)
-   - Read all `wiki/ideas/*.md`, extract:
-     - status=failed ideas → **banlist** (with failure_reason)
-     - status=proposed/in_progress ideas → **active list** (avoid duplication)
-   - Read `wiki/claims/*.md`, find claims with status=weakly_supported or challenged → **weak claims list**
-   - If `direction` is specified, filter to the relevant subset
+1. **加载 wiki 内部上下文**：
+   - 读取 `wiki/graph/context_brief.md`（全局压缩上下文）
+   - 读取 `wiki/graph/open_questions.md`（知识缺口列表）
+   - 读取所有 `wiki/ideas/*.md`，提取：
+     - status=failed 的 ideas → **banlist**（含 failure_reason）
+     - status=proposed/in_progress 的 ideas → **active list**（避免重复）
+   - 读取 `wiki/claims/*.md`，找出 status=weakly_supported 或 challenged 的 claims → **weak claims list**
+   - 若 `direction` 指定，过滤与方向相关的子集
 
-2. **External search** (run in parallel using Agent tool):
-   - **WebSearch**: search for recent 6-month papers and advances in the target direction (3–5 queries)
-   - **Semantic Scholar**:
+2. **外部搜索**（使用 Agent tool 并行）：
+   - **WebSearch**：搜索目标方向最近 6 个月的论文和进展（3-5 个查询）
+   - **Semantic Scholar**：
      ```bash
      python3 tools/fetch_s2.py search "<direction-keywords>" --limit 20
      ```
-     Fetch details for the top 5 highly-cited papers
-   - **DeepXiv semantic search**:
+     对 top 5 高引论文获取详情
+   - **DeepXiv 语义搜索**：
      ```bash
      python3 tools/fetch_deepxiv.py search "<direction-keywords>" --mode hybrid --limit 20
      ```
-     Fetch TLDR and keywords for top 5 most relevant results:
+     对 top 5 高相关结果获取 TLDR 和关键词：
      ```bash
      python3 tools/fetch_deepxiv.py brief <arxiv_id>
      ```
-     Semantic search supplements S2 keyword search for conceptually related papers that keyword search may miss.
-   - **DeepXiv trending papers**:
+     语义搜索补充 S2 关键词搜索可能遗漏的概念相关论文。
+   - **DeepXiv 热门论文**：
      ```bash
      python3 tools/fetch_deepxiv.py trending --days 14
      ```
-     Trending papers indicate community focus areas, useful for discovering trend-driven gaps.
-   - **arXiv latest**: `site:arxiv.org <direction> 2025 2026`
-   - **If DeepXiv is unavailable**: skip DeepXiv search and trending, rely on S2 + WebSearch only (fallback to original behavior).
+     热门论文指示社区关注热点，有助于发现趋势性 gap。
+   - **arXiv 最新**：`site:arxiv.org <direction> 2025 2026`
+   - **若 DeepXiv 不可用**：跳过 DeepXiv 搜索和 trending，仅依赖 S2 + WebSearch（回退到原有行为）。
 
-3. **Compile landscape report** (internal use, not written to wiki):
-   - Current SOTA methods and performance
-   - Known open problems / unresolved challenges
-   - Recent trends and hot topics
-   - Knowledge gaps in the wiki (from gap_map)
-   - Prohibited directions (from banlist)
+3. **汇总景观报告**（内部使用，不写入 wiki）：
+   - 当前 SOTA 方法及性能
+   - 已知的 open problems / 未解决的 challenges
+   - 最近的趋势和热点
+   - wiki 中的知识缺口（from gap_map）
+   - 被禁止的方向（from banlist）
 
-### Phase 2: Dual-Model Brainstorm
+### Phase 2: 双模型脑暴（Dual-Model Brainstorm）
 
-Goal: generate ideas independently with Claude and Review LLM, exploiting the diversity that comes from different model perspectives.
+目标：通过 Claude 和 Review LLM 独立生成 ideas，利用不同模型的视角差异获得多样性。
 
-**Follow `shared-references/cross-model-review.md`**: Claude and Review LLM generate independently without seeing each other's output.
+**遵循 `shared-references/cross-model-review.md`**：Claude 和 Review LLM 独立生成，不互相看到对方的结果。
 
-1. **Claude generates 6–10 ideas**:
-   - Input: landscape report + wiki gaps + weak claims + banlist
-   - Strategies:
-     - Cross-domain combination (method from Topic A + problem from Topic B)
-     - Fill gaps in the gap_map
-     - Strengthen weakly_supported claims
-     - Alternative hypotheses that challenge challenged claims
-     - Known limitations of SOTA → improvement directions
-   - Each idea includes: title, hypothesis (1–2 sentences), approach sketch (3–5 sentences), target claims, estimated feasibility (high/medium/low)
+1. **Claude 生成 6-10 个 ideas**：
+   - 输入：景观报告 + wiki gaps + weak claims + banlist
+   - 策略：
+     - 跨方向组合（Topic A 的方法 + Topic B 的问题）
+     - 填补 gap_map 中的空白
+     - 强化 weakly_supported claims
+     - 挑战 challenged claims 的替代假设
+     - SOTA 的已知 limitation → 改进方向
+   - 每个 idea 包含：title、hypothesis（1-2 句）、approach sketch（3-5 句）、target claims、estimated feasibility（高/中/低）
 
-2. **Review LLM independently generates 4–6 ideas** (run in parallel):
+2. **Review LLM 独立生成 4-6 个 ideas**（并行执行）：
    ```
    mcp__llm-review__chat:
      system: "You are a creative ML researcher brainstorming research ideas.
@@ -150,144 +150,144 @@ Goal: generate ideas independently with Claude and Review LLM, exploiting the di
        (3) directly address a knowledge gap.
    ```
 
-3. **Merge and deduplicate**:
-   - Combine Claude's and Review LLM's ideas (10–16 candidates)
-   - Remove highly similar ideas (merge ideas with the same core method, keep the more specific version)
-   - Remove ideas that overlap with the banlist
-   - Remove ideas that heavily duplicate the active list
-   - Output: 8–12 candidate ideas
+3. **合并与去重**：
+   - 将 Claude 和 Review LLM 的 ideas 合并（10-16 个候选）
+   - 去除高度相似的 ideas（方法核心相同的合并，保留更具体的版本）
+   - 去除与 banlist 重叠的 ideas
+   - 去除与 active list 高度重复的 ideas
+   - 输出：8-12 个候选 ideas
 
-### Phase 3: First-Pass Filter
+### Phase 3: 初步筛选（First-Pass Filter）
 
-Goal: quickly eliminate ideas that are clearly infeasible or insufficiently novel.
+目标：快速淘汰明显不可行或不够新颖的 ideas。
 
-Apply the following checks to each candidate idea:
+对每个候选 idea 进行以下检查：
 
-1. **Feasibility check**:
-   - Are GPU/compute requirements within reasonable range? (reference experiment setups already in the wiki)
-   - Data availability (public datasets vs. private data)
-   - Implementation complexity (achievable within 3–6 months?)
-   - Label as feasibility: high/medium/low
+1. **可行性检查**：
+   - GPU/计算需求是否在合理范围内（参考 wiki 中已有 experiments 的 setup）
+   - 数据可获取性（公开数据集 vs 私有数据）
+   - 实现复杂度（能否在 3-6 个月内完成）
+   - 标记为 feasibility: 高/中/低
 
-2. **Quick novelty screening** (2–3 WebSearch queries per idea):
-   - `"<idea-core-method>" + "<task>"` exact-match search
-   - `<component-1> + <component-2>` component-combination search
-   - If a highly similar published work is found → eliminate or flag
+2. **快速 novelty 筛查**（每个 idea 2-3 个 WebSearch）：
+   - `"<idea-core-method>" + "<task>"` 精确搜索
+   - `<component-1> + <component-2>` 组件组合搜索
+   - 若找到高度相似的已发表工作 → 淘汰或标记
 
-3. **Wiki alignment check**:
-   - Does the idea address a known gap in the gap_map? (+score)
-   - Does the idea target a weakly_supported claim? (+score)
-   - Does the idea build on existing wiki knowledge? (+score)
+3. **wiki 对齐检查**：
+   - idea 是否解决 gap_map 中的已知缺口？（+分）
+   - idea 是否针对 weakly_supported claim？（+分）
+   - idea 是否与 wiki 已有知识构建连接？（+分）
 
-4. **Filter decision**:
-   - Eliminate if: feasibility=low AND quick novelty screening found similar published work
-   - Eliminate if: highly correlated with a failure_reason in the banlist
-   - Retain if: feasibility >= medium AND not eliminated
-   - Output: 4–6 surviving ideas (ranked)
+4. **筛选决策**：
+   - 淘汰条件：feasibility=低 AND novelty 筛查发现相似已发表工作
+   - 淘汰条件：与 banlist 的 failure_reason 高度相关
+   - 保留：feasibility >= 中 AND 未被淘汰
+   - 输出：4-6 个幸存 ideas（排名）
 
-### Phase 4: Deep Validation
+### Phase 4: 深度验证（Deep Validation）
 
-(Skip if `--skip-validation` is set; proceed directly to Phase 5.)
+（若 `--skip-validation` 则跳过此步，直接到 Phase 5）
 
-Apply deep validation to the top 3 ideas from Phase 3:
+对 Phase 3 排名前 3 的 ideas 进行深度验证：
 
-1. **Call /novelty** (one at a time):
+1. **调用 /novelty**（逐个执行）：
    ```
-   For each top idea:
+   对每个 top idea：
    Skill: novelty
    Args: "<idea-title-and-hypothesis>"
    ```
-   Record novelty score (1–5) and recommendations
+   记录 novelty score（1-5）和建议
 
-2. **Call /review** (for top 2 ideas):
+2. **调用 /review**（对 top 2 ideas）：
    ```
    Skill: review
    Args: "<idea-full-description>" --difficulty hard --focus method
    ```
-   Record review score (1–10) and weaknesses
+   记录 review score（1-10）和 weaknesses
 
-3. **Composite ranking**:
-   - Final score = novelty_score × 2 + review_score + gap_alignment_bonus
-   - gap_alignment_bonus: +2 if the idea directly targets a gap_map entry
-   - If novelty_score <= 2 → downgrade to "modify needed"
-   - If review_score <= 4 → downgrade to "major issues"
+3. **综合排名**：
+   - 最终得分 = novelty_score × 2 + review_score + gap_alignment_bonus
+   - gap_alignment_bonus：+2 若 idea 直接针对 gap_map 条目
+   - 若 novelty_score <= 2 → 降级为「modify needed」
+   - 若 review_score <= 4 → 降级为「major issues」
 
-4. **If `--auto` is not set**: display ranked results in terminal, wait for user confirmation or adjustment
+4. **若 `--auto` 未设置**：在终端展示排名结果，等待用户确认或调整
 
-### Phase 5: Write to Wiki
+### Phase 5: 写入 Wiki
 
-Write the validated ideas to the wiki (including eliminated ideas, with their elimination reasons recorded).
+将验证后的 ideas 写入 wiki（包括被淘汰的 ideas，记录淘汰原因）。
 
-1. **Write top ideas** (status: proposed):
-   For the top `--max-ideas` ideas:
+1. **写入 top ideas**（status: proposed）：
+   对排名前 `--max-ideas` 个 ideas：
    ```bash
-   # generate slug
+   # 生成 slug
    python3 tools/research_wiki.py slug "<idea-title>"
    ```
-   Create `wiki/ideas/{slug}.md` **following the CLAUDE.md ideas template exactly** (all fields required; `lint.py` enforces `status` and `priority`):
+   创建 `wiki/ideas/{slug}.md`，**严格遵循 CLAUDE.md 的 ideas template**（所有字段必填；`lint.py` 强制要求 `status` 和 `priority`）：
    ```yaml
    ---
-   title: "<idea title>"
+   title: "<idea 标题>"
    slug: "<idea-slug>"
    status: proposed
-   origin: "ideate: <short description of the driving gap / weak claim / paper>"
-   origin_gaps: []           # [[claim-slug]] list — claims or topics this idea targets
-   tags: []                  # 2-5 topic tags (inherit from target claims / direction)
-   domain: ""                # NLP / CV / ML Systems / Robotics (inherit from direction)
-   priority: 3               # 1-5 — see Priority computation below
-   pilot_result: ""          # empty until /exp-eval fills it
-   failure_reason: ""        # empty for proposed ideas
-   linked_experiments: []    # empty until /exp-design creates experiments
+   origin: "ideate: <驱动该 idea 的 gap / 弱 claim / 论文的简短描述>"
+   origin_gaps: []           # [[claim-slug]] 列表 — 该 idea 针对的 claim 或 topic
+   tags: []                  # 2-5 个主题标签（从目标 claim / direction 继承）
+   domain: ""                # NLP / CV / ML Systems / Robotics（从 direction 继承）
+   priority: 3               # 1-5 — 见下方 Priority 计算
+   pilot_result: ""          # 留空，由 /exp-eval 填写
+   failure_reason: ""        # proposed ideas 留空
+   linked_experiments: []    # 留空，由 /exp-design 创建 experiment 后填写
    date_proposed: YYYY-MM-DD
-   date_resolved: ""         # empty until validated/failed
+   date_resolved: ""         # 留空，validated/failed 时填写
    ---
    ```
 
-   **Priority computation** (maps Phase 4 signals into the 1-5 scale):
-   - If `--skip-validation`: default `priority = 3`
-   - Otherwise start from `novelty_score` (1-5 from /novelty)
-   - `+1` if `gap_alignment_bonus > 0` (directly targets a gap_map entry)
-   - `-1` if `review_score <= 4` (major issues downgrade)
-   - Clamp to `[1, 5]`
+   **Priority 计算**（把 Phase 4 信号映射到 1-5 分）：
+   - 若 `--skip-validation`：默认 `priority = 3`
+   - 否则从 `novelty_score`（/novelty 给出的 1-5）开始
+   - `+1` 若 `gap_alignment_bonus > 0`（直接命中 gap_map 条目）
+   - `-1` 若 `review_score <= 4`（major issues 降权）
+   - Clamp 到 `[1, 5]`
 
-   **Body sections** (exactly match the CLAUDE.md template — do not rename):
+   **正文结构**（必须与 CLAUDE.md 模板严格一致 — 不要改名）：
    ```markdown
    ## Motivation
-   Which gap / weakly_supported claim / paper limitation drives this idea. Reference wiki pages via `[[slug]]`.
+   哪个 gap / weakly_supported claim / 论文限制驱动了这个 idea。用 `[[slug]]` 引用 wiki 页面。
 
    ## Hypothesis
-   1-2 sentences stating the testable proposition.
+   1-2 句话陈述可验证的命题。
 
    ## Approach sketch
-   3-5 sentences on the proposed method. Reference `[[paper-slug]]` or `[[concept-slug]]` for any component borrowed from existing work.
+   3-5 句描述提出的方法。任何借用现有工作的组件用 `[[paper-slug]]` 或 `[[concept-slug]]` 标注。
 
    ## Expected outcome
-   What success looks like (metric / claim status change), plus the Phase 4 novelty & review summary:
-   - Novelty score: N/5 — <one-line reason from /novelty>
-   - Review score: M/10 — <one-line summary from /review>
+   成功的表现（指标 / claim 状态变化），加上 Phase 4 的 novelty 与 review 总结：
+   - Novelty score: N/5 — <来自 /novelty 的一行理由>
+   - Review score: M/10 — <来自 /review 的一行总结>
 
    ## Risks
-   Feasibility rating (high/medium/low) + top 2-3 risks. Include the main weaknesses surfaced by /review.
+   可行性评级（high/medium/low）+ top 2-3 风险。包含 /review 揭示的主要弱点。
 
    ## Pilot results
-   (empty — filled by /exp-eval after running the experiment)
+   （留空 — 由 /exp-eval 跑完实验后填写）
 
    ## Lessons learned
-   (empty — filled by /exp-eval after the idea reaches a terminal status)
+   （留空 — 由 /exp-eval 在 idea 达到终态后填写）
    ```
 
-2. **Write eliminated ideas** (status: failed):
-   For ideas eliminated in Phase 3/4, also create `wiki/ideas/{slug}.md` using the **same template above**, with these overrides:
+2. **写入被淘汰的 ideas**（status: failed）：
+   对 Phase 3/4 中被淘汰的 ideas，也用**上方同一模板**创建 `wiki/ideas/{slug}.md`，应用以下覆盖：
    - `status: failed`
-   - `priority: 1` (eliminated ideas never block higher-priority work)
-   - `date_resolved: YYYY-MM-DD` (today)
-   - `failure_reason: "[filter] <specific elimination reason>"` — the `[filter]` prefix distinguishes ideate-stage eliminations from post-experiment failures (which /exp-eval tags differently). Examples: `"[filter] highly similar published work exists: <paper-title>"`, `"[filter] insufficient feasibility: GPU requirements too high"`
-   - Body `## Motivation` and `## Hypothesis` should still be filled (so future banlist matching has content); `## Approach sketch` may be brief; `## Expected outcome` and `## Risks` can note why the idea was eliminated
-   - These failed ideas become the banlist for future ideate runs
+   - `priority: 1`（被淘汰的 ideas 永远不会阻塞更高优先级的工作）
+   - `date_resolved: YYYY-MM-DD`（今天）
+   - `failure_reason: "[filter] <具体淘汰原因>"` — `[filter]` 前缀用于区分 ideate 阶段淘汰和实验后失败（/exp-eval 用不同标签）。例如：`"[filter] 已有高度相似的发表工作: <paper-title>"`、`"[filter] 可行性不足：GPU 需求过高"`
+   - `## Motivation` 和 `## Hypothesis` 仍需填写（供未来 banlist 匹配）；`## Approach sketch` 可简略；`## Expected outcome` 和 `## Risks` 可说明淘汰原因
+   - 这些 failed ideas 成为未来 ideate 的 banlist
 
-3. **Add graph edges**:
+3. **添加 graph edges**：
    ```bash
-   # for each idea
+   # 对每个 idea
    python3 tools/research_wiki.py add-edge wiki/ \
      --from "ideas/{slug}" --to "claims/{target-claim}" \
      --type addresses_gap --evidence "Generated by ideate"
@@ -297,19 +297,19 @@ Write the validated ideas to the wiki (including eliminated ideas, with their el
      --type inspired_by --evidence "Inspired by method in {paper-title}"
    ```
 
-4. **Rebuild derived data**:
+4. **重建派生数据**：
    ```bash
    python3 tools/research_wiki.py rebuild-context-brief wiki/
    python3 tools/research_wiki.py rebuild-open-questions wiki/
    ```
 
-5. **Append log**:
+5. **追加日志**：
    ```bash
    python3 tools/research_wiki.py log wiki/ \
      "ideate | {N} ideas proposed, {M} ideas filtered out | direction: {direction}"
    ```
 
-6. **Print IDEA_REPORT to terminal**:
+6. **输出 IDEA_REPORT 到终端**：
    ```markdown
    # Idea Generation Report
 
@@ -331,8 +331,8 @@ Write the validated ideas to the wiki (including eliminated ideas, with their el
    ## Filtered Out
    | Idea | Reason | Status |
    |------|--------|--------|
-   | [[slug]] | Similar published work exists | failed |
-   | [[slug]] | GPU requirements too high | failed |
+   | [[slug]] | 已有相似发表工作 | failed |
+   | [[slug]] | GPU 需求过高 | failed |
 
    ## Suggested Next Steps
    - Run `/exp-design {top-idea-slug}` to design experiments
@@ -346,56 +346,56 @@ Write the validated ideas to the wiki (including eliminated ideas, with their el
    | Ideas | {before} | {after} | +{delta} |
    | Edges | {before} | {after} | +{delta} |
    | Maturity | {before_level} | {after_level} | {unchanged/upgraded} |
-   (Only rows with delta != 0 are shown. Data is computed by comparing `maturity_before` from the pre-condition step against a fresh `maturity --json` call here.)
+   （仅展示 delta != 0 的行。数据来自前置 step 3 的 `maturity_before` 与此处重新调用 `maturity --json` 的对比。）
    ```
 
 ## Constraints
 
-- **Auto-switch to cold-start mode when wiki is cold**: expand external search (WebSearch 8 queries, S2/DeepXiv limit 30), do not block execution
-- **Every idea must have wiki grounding**: each idea must reference at least 2 wiki pages (paper/concept/claim)
-- **Banlist must be loaded**: Phase 1 must read failed ideas' failure_reason; Phase 2/3 must check for overlap
-- **Review LLM independence**: in Phase 2, Review LLM does not see Claude's idea list (cross-model-review.md)
-- **Eliminated ideas are also written to wiki**: status=failed + failure_reason, as anti-repetition memory
-- **No fabrication**: all ideas must be derived from existing wiki knowledge or external search results; do not invent non-existent papers or methods
-- **Slug uniqueness**: check whether the same slug already exists in wiki/ideas/ before creating
-- **Graph edges via tools/research_wiki.py**: do not manually edit edges.jsonl
+- **wiki cold 时自动切换 cold-start mode**：外部搜索扩展（WebSearch 8 查询，S2/DeepXiv limit 30），不阻塞执行
+- **所有 idea 必须有 wiki 依据**：每个 idea 至少引用 2 个 wiki 页面（paper/concept/claim）
+- **必须加载 banlist**：Phase 1 必须读取 failed ideas 的 failure_reason，Phase 2/3 必须检查重叠
+- **Review LLM 独立性**：Phase 2 中 Review LLM 不看 Claude 的 idea 列表（cross-model-review.md）
+- **被淘汰的 ideas 也写入 wiki**：status=failed + failure_reason，作为 anti-repetition 记忆
+- **不凭空编造**：所有 ideas 必须基于 wiki 已有知识或外部搜索结果推导，不编造不存在的论文或方法
+- **slug 唯一性**：创建前检查 wiki/ideas/ 中是否已存在相同 slug
+- **graph edges 使用 tools/research_wiki.py**：不手动编辑 edges.jsonl
 
 ## Error Handling
 
-- **Wiki is empty**: proceed with external search (Phase 1 sources B/C/D), but skip wiki internal context; prompt user to build the knowledge base first
-- **WebSearch unavailable**: skip external search, generate ideas from wiki internal knowledge only (degraded mode, noted in report)
-- **Semantic Scholar API unavailable**: skip S2 search, rely on DeepXiv + WebSearch for compensation
-- **DeepXiv API unavailable**: skip DeepXiv search and trending, fall back to S2 + WebSearch (original behavior)
-- **Review LLM unavailable**: Phase 2 uses Claude only (no dual-model diversity, noted in report)
-- **/novelty fails**: if novelty fails for a single idea in Phase 4, mark "novelty unverified" and continue
-- **/review fails**: if review fails in Phase 4, mark "unreviewed" and continue; recommend user manually runs /review
-- **Slug conflict**: if the same slug already exists in wiki/ideas/, append a numeric suffix (e.g. `sparse-lora-v2`)
-- **All ideas eliminated**: still write to wiki (status: failed); report recommends user broaden the search direction or /ingest more papers
+- **wiki 为空**：正常执行外部搜索（Phase 1 Source B/C/D），但跳过 wiki 内部上下文，提示用户先建立知识库
+- **WebSearch 不可用**：跳过外部搜索，仅基于 wiki 内部知识生成（降级模式，在报告中标注）
+- **Semantic Scholar API 不可用**：跳过 S2 搜索，依赖 DeepXiv + WebSearch 补偿
+- **DeepXiv API 不可用**：跳过 DeepXiv 搜索和 trending，依赖 S2 + WebSearch（回退到原有行为）
+- **Review LLM 不可用**：Phase 2 仅用 Claude 生成（无双模型多样性，在报告中标注）
+- **/novelty 失败**：Phase 4 中单个 idea 的 novelty 失败时，标注「novelty unverified」继续
+- **/review 失败**：Phase 4 中 review 失败时，标注「unreviewed」继续，建议用户手动 /review
+- **slug 冲突**：若 wiki/ideas/ 中已存在相同 slug，追加数字后缀（如 `sparse-lora-v2`）
+- **所有 ideas 都被淘汰**：仍写入 wiki（status: failed），报告中建议用户扩大搜索方向或 /ingest 更多论文
 
 ## Dependencies
 
 ### Tools（via Bash）
-- `python3 tools/research_wiki.py maturity wiki/ --json` — check wiki maturity + Growth Report
-- `python3 tools/research_wiki.py slug "<title>"` — generate slug
-- `python3 tools/research_wiki.py add-edge wiki/ ...` — add graph edge
-- `python3 tools/research_wiki.py rebuild-context-brief wiki/` — rebuild query_pack
-- `python3 tools/research_wiki.py rebuild-open-questions wiki/` — rebuild gap_map
-- `python3 tools/research_wiki.py log wiki/ "<message>"` — append log
-- `python3 tools/fetch_s2.py search "<query>" --limit 20` — Semantic Scholar search
-- `python3 tools/fetch_deepxiv.py search "<query>" --mode hybrid --limit 20` — DeepXiv semantic search
-- `python3 tools/fetch_deepxiv.py brief <arxiv_id>` — fetch paper TLDR
-- `python3 tools/fetch_deepxiv.py trending --days 14` — trending paper trends
+- `python3 tools/research_wiki.py maturity wiki/ --json` — 检查 wiki 成熟度 + Growth Report
+- `python3 tools/research_wiki.py slug "<title>"` — 生成 slug
+- `python3 tools/research_wiki.py add-edge wiki/ ...` — 添加 graph edge
+- `python3 tools/research_wiki.py rebuild-context-brief wiki/` — 重建 query_pack
+- `python3 tools/research_wiki.py rebuild-open-questions wiki/` — 重建 gap_map
+- `python3 tools/research_wiki.py log wiki/ "<message>"` — 追加日志
+- `python3 tools/fetch_s2.py search "<query>" --limit 20` — Semantic Scholar 搜索
+- `python3 tools/fetch_deepxiv.py search "<query>" --mode hybrid --limit 20` — DeepXiv 语义搜索
+- `python3 tools/fetch_deepxiv.py brief <arxiv_id>` — 获取论文 TLDR
+- `python3 tools/fetch_deepxiv.py trending --days 14` — 热门论文趋势
 
 ### Skills（via Skill tool）
-- `/novelty` — Phase 4 deep novelty validation
-- `/review` — Phase 4 cross-model review
+- `/novelty` — Phase 4 深度 novelty 验证
+- `/review` — Phase 4 跨模型审查
 
 ### MCP Servers
-- `mcp__llm-review__chat` — Phase 2 Review LLM independent brainstorm
+- `mcp__llm-review__chat` — Phase 2 Review LLM 独立脑暴
 
 ### Claude Code Native
-- `WebSearch` — Phase 1 external search, Phase 3 quick novelty screening
-- `Agent` tool — Phase 1 parallel search, Phase 2 parallel brainstorm
+- `WebSearch` — Phase 1 外部搜索、Phase 3 快速 novelty 筛查
+- `Agent` tool — Phase 1 并行搜索、Phase 2 并行脑暴
 
 ### Shared References
-- `.claude/skills/shared-references/cross-model-review.md` — Phase 2 Review LLM independence principle
+- `.claude/skills/shared-references/cross-model-review.md` — Phase 2 Review LLM 独立性原则

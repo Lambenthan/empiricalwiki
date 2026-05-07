@@ -1,6 +1,6 @@
-# Reviewer Independence Principle
+# 评审独立性原则
 
-> Referenced by: `/review`, `/novelty`, `/ideate`, `/exp-eval`, `/exp-design`, `/paper-plan`, `/paper-draft`, `/rebuttal`, `/refine`
+> 引用方: `/review`, `/novelty`, `/ideate`, `/exp-eval`, `/exp-design`, `/paper-plan`, `/paper-draft`, `/rebuttal`, `/refine`
 
 ---
 
@@ -53,40 +53,40 @@ After both models have independently assessed:
 1. **If scores agree** (within 1 point): Use the average. High confidence.
 2. **If scores disagree** (2+ points apart): Flag the disagreement explicitly. Investigate which model missed what. Report both scores with reasoning.
 3. **Conservative default**: When combining novelty or quality scores, take the **lower** score. Better to underestimate than to overcommit to a flawed idea.
-4. **Never average away a critical finding**: If one model finds a fatal flaw (e.g., the method is already published), that finding stands regardless of the other model's score.
+4. **不得用平均值掩盖关键发现**：若其中一个模型发现致命缺陷（如该方法已被发表），该发现无论另一模型评分如何均成立。
 
 ---
 
-## Review LLM Availability Check
+## Review LLM 可用性检查
 
-Before calling `mcp__llm-review__chat`, every skill must check availability and handle gracefully.
+调用 `mcp__llm-review__chat` 之前，每个 skill 必须检查可用性并优雅处理。
 
-### Detection
+### 检测
 
-A call to `mcp__llm-review__chat` will fail if:
-- The MCP server is not configured (missing `.mcp.json` or `enableAllProjectMcpServers` not set)
-- `LLM_API_KEY` or `LLM_BASE_URL` is not set in `.env`
-- The API endpoint is unreachable
+`mcp__llm-review__chat` 调用会失败的情况：
+- MCP server 未配置（缺少 `.mcp.json` 或 `enableAllProjectMcpServers` 未启用）
+- `.env` 中未设置 `LLM_API_KEY` 或 `LLM_BASE_URL`
+- API 端点不可达
 
-### Fallback Protocol
+### 降级协议
 
-When the review MCP server is **unavailable**:
+当 review MCP server **不可用**时：
 
-1. **Do NOT silently skip the review step.** Inform the user:
-   > "Cross-model review is not configured. This skill works best with an independent review LLM. Would you like to set it up now, or proceed with Claude-only analysis?"
+1. **不要静默跳过**。告知用户：
+   > "跨模型 review 尚未配置。此 skill 在独立 review LLM 辅助下效果更好。你想现在配置，还是仅用 Claude 继续？"
 
-2. **If the user wants to configure**, guide them interactively:
-   - Ask which OpenAI-compatible API provider they have (DeepSeek, OpenAI, Qwen, OpenRouter, etc.)
-   - Help them edit `.env` to set `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`
-   - Tell them to restart Claude Code so the MCP server picks up the new config
-   - Reference `.env.example` for the full provider table
+2. **若用户选择配置**，交互引导：
+   - 询问用户使用哪个 OpenAI 兼容 API（DeepSeek、OpenAI、Qwen、OpenRouter 等）
+   - 帮助用户编辑 `.env`，设置 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`
+   - 提示用户重启 Claude Code 以使 MCP server 加载新配置
+   - 引导参考 `.env.example` 中的 provider 列表
 
-3. **If the user wants to proceed without review**, continue with Claude-only mode:
-   - Skip the `mcp__llm-review__chat` call
-   - Perform the review/critique step using Claude itself (self-review)
-   - Clearly mark the output as `[Claude self-review — no independent second opinion]`
-   - The rest of the skill workflow proceeds normally
+3. **若用户选择继续（不配置 review）**，进入 Claude-only 模式：
+   - 跳过 `mcp__llm-review__chat` 调用
+   - 由 Claude 自身执行 review/critique 步骤（自评模式）
+   - 明确标注输出为 `[Claude 自评 — 无独立第二意见]`
+   - 其余 skill 流程正常执行
 
-### When Review LLM IS Available
+### 当 Review LLM 可用时
 
-Proceed with the standard cross-model review protocol as defined above. The `mcp__llm-review__chat` tool is provided by the `llm-review` MCP server (configured in `.mcp.json`), which works with any OpenAI-compatible API.
+按上述标准跨模型 review 协议执行。`mcp__llm-review__chat` 工具由 `llm-review` MCP server 提供（在 `.mcp.json` 中配置），兼容任何 OpenAI-compatible API。

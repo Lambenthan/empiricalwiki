@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OmegaWiki — Wiki Knowledge Engine.
+"""EmpiricalWiki — Wiki Knowledge Engine.
 
 Core operations for a wiki-centric research knowledge base: entity metadata
 read/write, typed graph management, knowledge-state queries, purpose-driven
@@ -102,6 +102,7 @@ def slugify(title: str) -> str:
     Rules (from product CLAUDE.md):
       - All lowercase, hyphen-separated, no spaces
       - Extract meaningful keywords from title, drop stop words
+      - Preserve CJK title tokens for Chinese empirical papers
       - Keep first 5-6 keywords for reasonable length
 
     Examples:
@@ -110,8 +111,8 @@ def slugify(title: str) -> str:
         >>> slugify("Attention Is All You Need")
         'attention-all-you-need'
     """
-    # Normalize: lowercase, replace non-alphanum with spaces
-    text = re.sub(r"[^a-z0-9\s]", " ", title.lower())
+    # Normalize: lowercase, replace non-alphanum/CJK with spaces.
+    text = re.sub(r"[^a-z0-9\u4e00-\u9fff\s]", " ", title.lower())
     words = text.split()
     # Filter stop words but keep short meaningful words (3+ chars or known terms)
     keywords = [w for w in words if w not in STOP_WORDS and len(w) > 1]
@@ -119,6 +120,7 @@ def slugify(title: str) -> str:
         keywords = [w for w in words if w]  # fallback: keep all
     if not keywords:
         return "untitled"
+    keywords = [w[:30] for w in keywords]
     # Cap at 6 keywords to keep slugs manageable
     return "-".join(keywords[:6])
 
@@ -176,7 +178,7 @@ def _initial_index() -> str:
 
 
 def _initial_log() -> str:
-    return "# OmegaWiki Log\n\n"
+    return "# EmpiricalWiki Log\n\n"
 
 
 # ---------------------------------------------------------------------------
@@ -1311,7 +1313,35 @@ def compile_context(wiki_root: str, purpose: str,
                 text = "\n".join(line for _, line in items2[:15])[:b_papers]
                 sections.append(f"## Papers ({len(items2)} total)\n{text}\n")
 
-    # 5. Experiment summaries
+    # 5. Empirical design summaries
+    empirical_blocks = [
+        ("variables", "Variables", "role"),
+        ("datasets", "Datasets", "provider"),
+        ("models", "Models", "model_type"),
+        ("mechanisms", "Mechanisms", "mechanism_type"),
+        ("identification", "Identification", "strategy_type"),
+        ("robustness", "Robustness", "check_type"),
+        ("heterogeneity", "Heterogeneity", "grouping_variable"),
+    ]
+    if b_experiments > 0:
+        for dirname, label, qualifier_field in empirical_blocks:
+            entity_dir = root / dirname
+            if not entity_dir.exists():
+                continue
+            lines: list[str] = []
+            for f in sorted(entity_dir.glob("*.md"))[:20]:
+                fm = _parse_frontmatter(f)
+                title = fm.get("title", f.stem)
+                qualifier = fm.get(qualifier_field, "")
+                line = f"- {title}"
+                if qualifier:
+                    line += f" ({qualifier})"
+                lines.append(line)
+            if lines:
+                text = "\n".join(lines)[:max(200, b_experiments // 3)]
+                sections.append(f"## {label} ({len(lines)} shown)\n{text}\n")
+
+    # 6. Experiment summaries
     if b_experiments > 0:
         exp_dir = root / "experiments"
         if exp_dir.exists():
@@ -1332,7 +1362,7 @@ def compile_context(wiki_root: str, purpose: str,
                 text = "\n".join(exp_lines)[:b_experiments]
                 sections.append(f"## Experiments ({len(exp_lines)} total)\n{text}\n")
 
-    # 6. Recent edges
+    # 7. Recent edges
     if b_edges > 0:
         edges = load_edges(wiki_root)
         if edges:
@@ -1341,7 +1371,7 @@ def compile_context(wiki_root: str, purpose: str,
             text = "\n".join(chain_lines)[:b_edges]
             sections.append(f"## Recent Relationships ({len(edges)} total)\n{text}\n")
 
-    # 7. Stale entities
+    # 8. Stale entities
     if b_stale > 0:
         from datetime import timedelta
         cutoff = datetime.now(timezone.utc) - timedelta(days=30)
@@ -1409,37 +1439,38 @@ def get_stats(wiki_root: str, as_json: bool = False) -> dict:
                 count += 1
         return count
 
-    stats = {
-        "papers": count_md("papers"),
-        "concepts": count_md("concepts"),
-        "topics": count_md("topics"),
-        "people": count_md("people"),
-        "ideas": count_md("ideas"),
+    stats = {entity: count_md(entity) for entity in ENTITY_DIRS}
+    stats.update({
         "ideas_validated": count_by_field("ideas", "status", "validated"),
         "ideas_failed": count_by_field("ideas", "status", "failed"),
-        "experiments": count_md("experiments"),
-        "claims": count_md("claims"),
         "claims_supported": count_by_field("claims", "status", "supported"),
         "claims_challenged": count_by_field("claims", "status", "challenged"),
-        "summaries": count_md("Summary"),
         "edges": len(load_edges(wiki_root)),
         "citations": len(load_citations(wiki_root)),
-    }
+    })
 
     if as_json:
         print(json.dumps(stats, indent=2))
     else:
-        print("OmegaWiki Stats")
-        print(f"  Papers:      {stats['papers']}")
-        print(f"  Concepts:    {stats['concepts']}")
-        print(f"  Topics:      {stats['topics']}")
-        print(f"  People:      {stats['people']}")
+        print("EmpiricalWiki Stats")
+        print(f"  Papers:        {stats['papers']}")
+        print(f"  Variables:     {stats.get('variables', 0)}")
+        print(f"  Datasets:      {stats.get('datasets', 0)}")
+        print(f"  Models:        {stats.get('models', 0)}")
+        print(f"  Mechanisms:    {stats.get('mechanisms', 0)}")
+        print(f"  Identification: {stats.get('identification', 0)}")
+        print(f"  Robustness:    {stats.get('robustness', 0)}")
+        print(f"  Heterogeneity: {stats.get('heterogeneity', 0)}")
+        print(f"  Tables:        {stats.get('tables', 0)}")
+        print(f"  Concepts:      {stats['concepts']}")
+        print(f"  Topics:        {stats['topics']}")
+        print(f"  People:        {stats['people']}")
         print(f"  Ideas:       {stats['ideas']} "
               f"({stats['ideas_validated']} validated, {stats['ideas_failed']} failed)")
         print(f"  Experiments: {stats['experiments']}")
         print(f"  Claims:      {stats['claims']} "
               f"({stats['claims_supported']} supported, {stats['claims_challenged']} challenged)")
-        print(f"  Summaries:   {stats['summaries']}")
+        print(f"  Summaries:   {stats['Summary']}")
         print(f"  Edges:       {stats['edges']}")
         print(f"  Citations:   {stats['citations']}")
 
@@ -1488,7 +1519,10 @@ def get_maturity(wiki_root: str, as_json: bool = False) -> dict:
     total_entities = sum(
         stats.get(k, 0) for k in
         ("papers", "concepts", "topics", "people",
-         "ideas", "experiments", "claims", "summaries")
+         "ideas", "experiments", "claims", "Summary",
+         "variables", "datasets", "models", "mechanisms",
+         "hypotheses", "identification", "robustness",
+         "heterogeneity", "tables")
     )
 
     # Graph density: edges / max(1, N*(N-1))

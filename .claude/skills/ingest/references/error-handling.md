@@ -1,57 +1,57 @@
-# /ingest Error Handling
+# /ingest 错误处理
 
-Open this reference when a step fails. `/ingest` prefers to degrade gracefully: record what happened, continue with what remains, and surface the gap in the final report.
+某个步骤失败时打开此参考。`/ingest` 倾向于优雅降级：记录发生了什么、继续能继续的部分、在最终报告里把缺口暴露给用户。
 
-## Source parsing
+## 来源解析
 
-- **`.tex` parse fails**: fall back to the PDF if one is available in the same source directory.
-- **PDF text extraction fails**: fall back to a vision-API pass on the first few pages to recover the title and abstract, then run the preprocessing pipeline in `references/pdf-preprocessing.md` with the recovered title.
-- **No readable source at all**: stop and report. Do not create a paper page from a title alone — a paper page without grounded content is noise.
-- **INIT MODE input unreadable**: do not attempt to re-prepare the source (INIT MODE is read-only on `raw/`). Stop, record the failure, and let the parent `/init` retry or skip the paper at fan-in.
+- **`.tex` 解析失败**：若同目录下有 PDF，fallback 到 PDF。
+- **PDF 文本提取失败**：对前几页走 vision API 恢复 title 与 abstract，再带上恢复的 title 走 `references/pdf-preprocessing.md` 的预处理流程。
+- **完全没有可读来源**：停机并报告。不得仅凭 title 就创建论文页面 —— 无内容支撑的论文页面是噪声。
+- **INIT MODE 输入不可读**：不得尝试重新 prepare（INIT MODE 下 `raw/` 只读）。停机、记录失败，让上层 `/init` 在 fan-in 时决定重试或跳过。
 
-## External APIs
+## 外部 API
 
-- **Semantic Scholar unavailable** (`fetch_s2.py paper` errors): skip S2 enrichment, default `importance` to 3, and note in the report that the paper's importance is provisional. Skip the citation backfill step entirely for this ingest.
-- **DeepXiv unavailable** (`fetch_deepxiv.py` errors): skip enrichment silently. DeepXiv is optional; its absence is not degraded ingest, just plainer ingest. Do not surface this in the user report unless the user asked about DeepXiv specifically.
-- **arXiv source fetch fails**: if the paper is on arXiv but the source archive does not exist or times out, fall through to the PDF path. Record a warning in the final report.
+- **Semantic Scholar 不可用**（`fetch_s2.py paper` 报错）：跳过 S2 enrichment，`importance` 默认取 3，并在报告中说明该值为临时值。本轮 ingest 的 citation 回填步骤整体跳过。
+- **DeepXiv 不可用**（`fetch_deepxiv.py` 报错）：静默跳过 enrichment。DeepXiv 是可选项，缺它只是 plainer ingest，不是降级 ingest。除非用户专门问起 DeepXiv，不要在用户报告中提及。
+- **arXiv 源抓取失败**：论文在 arXiv 上但源归档不存在或超时，走 PDF 路径。在最终报告中记录一条 warning。
 
-## Slug collisions
+## slug 冲突
 
-- **Generated slug matches an existing page with a different arXiv ID or title**: stop and report. Do not append a numeric suffix silently — a collision between two different papers at the same slug is a signal the wiki has a naming problem that the user should resolve.
-- **Generated slug matches an existing page with the same paper**: the paper is already ingested. Report and exit.
-- **Within a single ingest, a generated concept or claim slug collides with a different existing page**: append a numeric suffix (`-2`, `-3`, ...) via the tool's built-in collision handling. This is the one case where suffixing is correct — it happens when two genuinely different ideas produce the same slug under the deterministic rule.
+- **生成的 slug 与一个具有不同 arXiv ID 或 title 的已有页面撞名**：停机并报告。不得静默追加数字后缀 —— 两个不同论文落到同一 slug，是 wiki 命名问题的信号，应由用户解决。
+- **生成的 slug 与同一篇论文的已有页面撞名**：该论文已 ingest，报告并退出。
+- **单次 ingest 内，某个 concept / claim 生成的 slug 与另一不同页面撞名**：通过工具内置冲突处理追加数字后缀（`-2`、`-3`……）。这是唯一允许追加后缀的场景 —— 两种真正不同的想法在确定性规则下生成同一 slug。
 
-## Wiki not initialized
+## wiki 未初始化
 
-If `wiki/` is missing or empty, run:
+若 `wiki/` 不存在或为空，执行：
 
 ```bash
 "$PYTHON_BIN" tools/research_wiki.py init wiki/
 ```
 
-Then retry `/ingest`. Do not attempt to create pages in a non-initialized wiki; `index.md` and `graph/` scaffolding must exist first.
+然后重跑 `/ingest`。不得在未初始化的 wiki 里创建页面；`index.md` 与 `graph/` 脚手架必须先就位。
 
-## Partial failure mid-ingest
+## ingest 过程中的部分失败
 
-If an ingest fails after some writes have landed (paper page written, but concept dedup or graph edge fails):
+若某次 ingest 在部分写入后失败（论文页面已写入，但 concept 去重或 graph edge 失败）：
 
-- do not roll back the writes that succeeded
-- append a log entry via `tools/research_wiki.py log` describing which steps completed and which are incomplete
-- surface the incomplete steps in the user report so the user can run `/edit` or `/check --fix` to finish the job
-- in INIT MODE, if the ingest completed successfully, commit inside the worktree before exiting (see `references/init-mode.md`). If the ingest partially failed, do **not** commit the incomplete state; let the parent `/init` handle the failed worktree at fan-in
+- 不得回滚已成功的写入
+- 通过 `tools/research_wiki.py log` 追加一条日志，说明哪些步骤完成、哪些未完成
+- 在用户报告中暴露未完成的步骤，让用户通过 `/edit` 或 `/check --fix` 收尾
+- INIT MODE 下，若 ingest 成功完成，子代理必须在退出前于 worktree 内 commit（见 `references/init-mode.md`）。若 ingest 部分失败，**不要** commit 不完整状态；让上层 `/init` 在 fan-in 时处理该失败的 worktree
 
-## When to stop vs. continue
+## 停机 vs 继续
 
-Stop outright when:
+以下情况直接停机：
 
-- no source can be read at all
-- the paper is already ingested (slug + arXiv ID match an existing page)
-- a slug collision would silently overwrite a different existing paper
+- 完全无法读取来源
+- 论文已 ingest（slug + arXiv ID 与已有页面一致）
+- slug 冲突会静默覆盖另一个不同的已有论文
 
-Continue with a warning when:
+以下情况带 warning 继续：
 
-- one enrichment source (S2 or DeepXiv) is down
-- the reference list cannot be parsed (skip step 5; paper ingest still works)
-- a single concept or claim dedup call fails transiently (retry once; if it still fails, skip that candidate and note it)
+- 某一项 enrichment 源（S2 或 DeepXiv）宕机
+- reference list 无法解析（跳过 Step 5；论文 ingest 主体仍可完成）
+- 单个 concept / claim 去重调用偶发失败（重试一次；仍失败就跳过该候选并记录）
 
-The guiding principle: a partial ingest that preserves a well-shaped paper page is more useful than a clean abort that leaves the wiki unchanged. Partial state is recoverable via `/check` and `/edit`. Lost partial state is not.
+核心原则：保留了一个 well-shaped 论文页面的部分 ingest，比什么都没写的干净 abort 更有用。部分状态可以通过 `/check` 与 `/edit` 恢复；丢失的部分状态则不可恢复。

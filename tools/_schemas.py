@@ -1,4 +1,4 @@
-"""Single source of truth for ΩmegaWiki entity schemas.
+"""Single source of truth for EmpiricalWiki entity schemas.
 
 Centralizes the constants that lint.py and research_wiki.py both need:
 entity directories, valid edge types, required frontmatter fields per
@@ -12,10 +12,13 @@ file is the machine-facing copy that the tools actually consume.
 
 from __future__ import annotations
 
-# All 9 entity directories (Summary lives at the wiki root, not under entities,
-# but lint treats it as an entity directory because it has frontmatter pages).
+# Entity directories. Summary lives at the wiki root, not under entities, but
+# lint treats it as an entity directory because it has frontmatter pages.
 ENTITY_DIRS = [
-    "papers", "concepts", "topics", "people",
+    "papers",
+    "variables", "datasets", "models", "mechanisms", "hypotheses",
+    "identification", "robustness", "heterogeneity", "tables",
+    "concepts", "topics", "people",
     "ideas", "experiments", "claims", "Summary",
     "foundations",
 ]
@@ -121,6 +124,71 @@ EDGE_TYPE_SPECS: dict[str, dict[str, str]] = {
         "direction": DIRECTION_DIRECTED,
         "confidence": CONFIDENCE_REQUIRED,
         "workflow": "ingest",
+    },
+
+    # Empirical-research extraction edges.
+    "operationalizes": {
+        "from_kind": "papers",
+        "to_kind": "variables",
+        "direction": DIRECTION_DIRECTED,
+        "confidence": CONFIDENCE_REQUIRED,
+        "workflow": "empirical_ingest",
+    },
+    "uses_dataset": {
+        "from_kind": "papers",
+        "to_kind": "datasets",
+        "direction": DIRECTION_DIRECTED,
+        "confidence": CONFIDENCE_REQUIRED,
+        "workflow": "empirical_ingest",
+    },
+    "estimates_model": {
+        "from_kind": "papers",
+        "to_kind": "models",
+        "direction": DIRECTION_DIRECTED,
+        "confidence": CONFIDENCE_REQUIRED,
+        "workflow": "empirical_ingest",
+    },
+    "tests_mechanism": {
+        "from_kind": "papers",
+        "to_kind": "mechanisms",
+        "direction": DIRECTION_DIRECTED,
+        "confidence": CONFIDENCE_REQUIRED,
+        "workflow": "empirical_ingest",
+    },
+    "tests_hypothesis": {
+        "from_kind": "papers",
+        "to_kind": "hypotheses",
+        "direction": DIRECTION_DIRECTED,
+        "confidence": CONFIDENCE_REQUIRED,
+        "workflow": "empirical_ingest",
+    },
+    "addresses_endogeneity_with": {
+        "from_kind": "papers",
+        "to_kind": "identification",
+        "direction": DIRECTION_DIRECTED,
+        "confidence": CONFIDENCE_REQUIRED,
+        "workflow": "empirical_ingest",
+    },
+    "uses_robustness_check": {
+        "from_kind": "papers",
+        "to_kind": "robustness",
+        "direction": DIRECTION_DIRECTED,
+        "confidence": CONFIDENCE_REQUIRED,
+        "workflow": "empirical_ingest",
+    },
+    "uses_heterogeneity_split": {
+        "from_kind": "papers",
+        "to_kind": "heterogeneity",
+        "direction": DIRECTION_DIRECTED,
+        "confidence": CONFIDENCE_REQUIRED,
+        "workflow": "empirical_ingest",
+    },
+    "reports_table": {
+        "from_kind": "papers",
+        "to_kind": "tables",
+        "direction": DIRECTION_DIRECTED,
+        "confidence": CONFIDENCE_NONE,
+        "workflow": "empirical_ingest",
     },
 
     # Other semantic/provenance workflows. Endpoint constraints stay broad here
@@ -281,6 +349,15 @@ VALID_EDGE_TYPES = set(EDGE_TYPE_SPECS) | LEGACY_EDGE_TYPES
 # Required frontmatter fields per entity type (lint.py reports a 🔴 if missing).
 REQUIRED_FIELDS = {
     "papers": ["title", "slug", "tags", "importance"],
+    "variables": ["title", "slug", "construct", "role", "measurement", "source_papers"],
+    "datasets": ["title", "slug", "provider", "coverage", "unit", "fields"],
+    "models": ["title", "slug", "model_type", "dependent_variable", "core_variables", "fixed_effects"],
+    "mechanisms": ["title", "slug", "mechanism_type", "source_papers", "evidence"],
+    "hypotheses": ["title", "slug", "status", "source_papers", "mechanism"],
+    "identification": ["title", "slug", "strategy_type", "source_papers", "assumptions"],
+    "robustness": ["title", "slug", "check_type", "source_papers", "purpose"],
+    "heterogeneity": ["title", "slug", "grouping_variable", "source_papers", "rationale"],
+    "tables": ["title", "slug", "table_type", "source_paper", "variables", "interpretation"],
     "concepts": ["title", "tags", "maturity", "key_papers"],
     "topics": ["title", "tags"],
     "people": ["name", "tags"],
@@ -294,6 +371,20 @@ REQUIRED_FIELDS = {
 # Valid enum values per entity-qualified field. Format: "{entity}.{field}".
 VALID_VALUES = {
     "papers.importance": {"1", "2", "3", "4", "5"},
+    "variables.role": {
+        "dependent", "core_explanatory", "mediator", "moderator",
+        "control", "instrument", "fixed_effect", "sample_filter", "other",
+    },
+    "hypotheses.status": {"proposed", "literature_supported", "tested", "rejected"},
+    "identification.strategy_type": {
+        "ols", "fixed_effects", "did", "iv", "psm", "rd", "heckman",
+        "event_study", "system_gmm", "text_analysis", "machine_learning", "other",
+    },
+    "robustness.check_type": {
+        "alternative_variable", "alternative_sample", "alternative_model",
+        "winsorization", "lagged_variable", "placebo", "psm", "iv",
+        "fixed_effects", "cluster_se", "other",
+    },
     "concepts.maturity": {"stable", "active", "emerging", "deprecated"},
     "ideas.status": {"proposed", "in_progress", "tested", "validated", "failed"},
     "ideas.priority": {"1", "2", "3", "4", "5"},
@@ -310,6 +401,15 @@ VALID_VALUES = {
 # devlog for the discussion. Preserved as-is here.
 FIELD_DEFAULTS = {
     "papers": {"tags": "[]", "importance": "3"},
+    "variables": {"role": "other", "source_papers": "[]"},
+    "datasets": {"fields": "[]"},
+    "models": {"core_variables": "[]", "fixed_effects": "[]"},
+    "mechanisms": {"source_papers": "[]", "evidence": "[]"},
+    "hypotheses": {"status": "proposed", "source_papers": "[]"},
+    "identification": {"strategy_type": "other", "source_papers": "[]"},
+    "robustness": {"check_type": "other", "source_papers": "[]"},
+    "heterogeneity": {"source_papers": "[]"},
+    "tables": {"variables": "[]"},
     "concepts": {"tags": "[]", "maturity": "active", "key_papers": "[]"},
     "topics": {"tags": "[]"},
     "people": {"tags": "[]"},

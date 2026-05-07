@@ -1,58 +1,58 @@
-# /ingest INIT MODE and Parallel Safety
+# /ingest INIT MODE 与并行安全
 
-Open this reference when `/ingest` is invoked by `/init` as a parallel subagent, or any time you need to understand what concurrent ingests may be doing to shared files.
+当 `/ingest` 被 `/init` 作为并行子代理调用，或你需要理解并发 ingest 会对共享文件做什么时，打开此参考。
 
-## When INIT MODE is active
+## 何时处于 INIT MODE
 
-INIT MODE is active for any `/ingest` invocation whose source path originates from `.checkpoints/init-sources.json`. The parent `/init` runs one `/ingest` per paper in an isolated `git worktree`, following the contract in `skills/init/references/parallel-ingest.md`.
+只要 `/ingest` 的来源路径来自 `.checkpoints/init-sources.json`，就处于 INIT MODE。上层 `/init` 会为每篇论文在隔离的 `git worktree` 内跑一个 `/ingest`，流程见 `skills/init/references/parallel-ingest.md`。
 
-In INIT MODE:
+在 INIT MODE 下：
 
-- the source is always a `canonical_ingest_path` already prepared by `/init` (a `raw/tmp/...` path for user-owned papers, or a `raw/discovered/...` path for introduced papers)
-- `raw/` is strictly read-only — do not write to `raw/tmp/`, `raw/discovered/`, or anywhere else under `raw/`
-- `fetch_s2.py citations <arxiv-id>` and `fetch_s2.py references <arxiv-id>` are **skipped** — the parent `/init` does a unified citation sweep at fan-in
-- `rebuild-context-brief` and `rebuild-open-questions` are **skipped** — the parent runs them once after all subagents merge
-- conflict-prone topic writes are **skipped** — if multiple parallel ingests all try to append to the same topic, they will merge-conflict. Let the parent handle topic updates after fan-in, or defer them to `/edit`.
-- **skip reverse-link edits to existing pages** — do not append `key_papers` to an existing concept page, do not append to `## Key papers` or `## Related` of an existing paper page, and do not append to an existing people page. Record the relationship via `tools/research_wiki.py add-edge` instead. The parent `/init` rebuilds these backlinks during fan-in.
+- 来源始终是 `/init` 已经 prepare 过的 `canonical_ingest_path`（用户自有论文是 `raw/tmp/...`，外部引入论文是 `raw/discovered/...`）
+- `raw/` 严格只读 —— 不得写 `raw/tmp/`、`raw/discovered/`，也不得写 `raw/` 下任何路径
+- **跳过** `fetch_s2.py citations <arxiv-id>` 与 `fetch_s2.py references <arxiv-id>` —— 由上层 `/init` 在 fan-in 时统一做 citation sweep
+- **跳过** `rebuild-context-brief` 与 `rebuild-open-questions` —— 上层在所有子代理 merge 后统一运行一次
+- **跳过** 易冲突的 topic 写入 —— 多个并行 ingest 同时 append 相同 topic 会引发 merge 冲突。让上层在 fan-in 后处理 topic 更新，或交给 `/edit`。
+- **跳过对已有页面的反向链接编辑** —— 不要向已有 concept 页面追加 `key_papers`，不要向已有 paper 页面的 `## Key papers` 或 `## Related` 追加内容，也不要向已有 people 页面追加内容。只通过 `tools/research_wiki.py add-edge` 记录关系。上层 `/init` 在 fan-in 后统一重建这些反向链接。
 
-Everything else — paper page creation, concept/claim dedup via `find-similar-*`, people page creation, paper `## Related` links, graph edges for concept/claim/foundation — still runs per subagent.
+其余一切（paper 页面创建、`find-similar-*` 去重、people 页面创建、paper 的 `## Related` 链接、concept / claim / foundation 的 graph edge）在每个子代理内正常执行。
 
-## Detecting INIT MODE
+## 如何识别 INIT MODE
 
-`/init` passes the canonical path in the subagent prompt. A `/ingest` invocation can recognize INIT MODE by either of:
+`/init` 会在子代理 prompt 中传入 canonical path。任一下列信号出现即判定为 INIT MODE：
 
-- the source path starts with `raw/tmp/` or `raw/discovered/` **and** the `.checkpoints/init-sources.json` manifest references it
-- the subagent prompt explicitly states "INIT MODE"
+- 来源路径以 `raw/tmp/` 或 `raw/discovered/` 开头，**且** `.checkpoints/init-sources.json` 引用到该路径
+- 子代理 prompt 显式写出 "INIT MODE"
 
-When both signals are absent, treat the invocation as a direct user call and run the full workflow (including citations, rebuilds, and any `raw/tmp/` preparation needed).
+两个信号都缺失时，按用户直接调用处理，跑完整 workflow（包含 citation、rebuild，以及 `raw/tmp/` prepare 的必要步骤）。
 
-## Parallel-safe writes
+## 并行安全写入
 
-Even outside INIT MODE, assume another `/ingest` may be running concurrently — batch ingest is already on the roadmap. Three rules make concurrent writes safe:
+即便不在 INIT MODE 下，也应假设有另一个 `/ingest` 在并发运行 —— 批量 ingest 已在路线图上。三条规则能让并发写入安全：
 
-1. **Every shared-file write goes through a tool.** `graph/edges.jsonl`, `graph/citations.jsonl`, `index.md`, and `log.md` are written via `tools/research_wiki.py add-edge`, `add-citation`, index updates, and `log`. The tool layer uses append semantics and the repository's `.gitattributes` declares `merge=union` for these paths, so parallel worktrees can merge without conflict.
-2. **Slugs are allocated deterministically.** `tools/research_wiki.py slug "<title>"` produces the same slug from the same title regardless of which worktree runs it. Collisions are resolved by numeric suffix via the tool, not by ad-hoc renaming.
-3. **Never lock or in-place-rewrite a shared file.** Rewriting `wiki/index.md`, `wiki/graph/edges.jsonl`, or `wiki/graph/citations.jsonl` as a block replaces parallel peers' work when the worktrees merge. Use the tool commands, which append.
+1. **共享文件的每次写入都经过工具。** `graph/edges.jsonl`、`graph/citations.jsonl`、`index.md`、`log.md` 分别通过 `tools/research_wiki.py add-edge`、`add-citation`、index 更新命令、`log` 写入。工具层使用 append 语义，仓库 `.gitattributes` 对这几条路径声明了 `merge=union`，并行 worktree 可以无冲突地 merge。
+2. **slug 的分配是确定性的。** `tools/research_wiki.py slug "<title>"` 对同一 title 始终给出同一 slug，和 worktree 无关。冲突由工具内部以数字后缀解决，不允许临时自行重命名。
+3. **绝不对共享文件加锁或整体改写。** 把 `wiki/index.md`、`wiki/graph/edges.jsonl` 或 `wiki/graph/citations.jsonl` 作为整体块替换写回，会在 worktree merge 时覆盖并行 peer 的工作。用工具命令即可，它们做 append。
 
-## Creating a new page in parallel
+## 并行创建新页面
 
-When two sibling `/ingest` subagents both need a new concept page with the same slug, both will try to create it and the fan-in merge will fail. Mitigations:
+当两个并行 `/ingest` 子代理都需要同一个 concept slug 时，两边都会尝试创建，fan-in merge 会失败。缓解措施：
 
-- the per-paper creation limit (`references/dedup-policy.md`) keeps the collision surface small
-- the `/init` parent merges worktree branches sequentially; when the second worktree's ingest writes the same slug, the sequential merge resolves it as a conflict that the parent handles by picking the earlier write and re-running `find-similar-concept` on the later one at fan-in
-- do not try to coordinate across worktrees during ingest — worktrees are isolated by design
+- 每篇论文的新建上限（见 `references/dedup-policy.md`）让冲突面本就很小
+- `/init` 在上层按顺序 merge worktree branch；第二个 worktree 写同一 slug 时，顺序 merge 会作为冲突暴露出来，由上层在 fan-in 时采用先到先得并对后者重跑 `find-similar-concept`
+- 不要在 ingest 过程中跨 worktree 自行协调 —— worktree 的隔离是设计目的
 
-If you do notice a slug collision during a direct (non-INIT) ingest — i.e. the paper page already exists with a different arXiv ID — stop and report, per `references/error-handling.md`. Do not write through.
+如果在非 INIT 直连 ingest 下发现 slug 冲突（即已有论文页面使用同一 slug 但 arXiv ID 不同），按 `references/error-handling.md` 停机并报告，不得强行写入。
 
-## What `/ingest` does not do for `/init`
+## `/ingest` 不为 `/init` 做的事
 
-- It does not stash or switch branches.
-- It does not merge worktrees or run `dedup-edges`, `rebuild-index`, or `lint.py --fix`. Those are fan-in operations owned by `/init`.
+- 不 stash，也不切换 branch。
+- 不 merge worktree，也不跑 `dedup-edges`、`rebuild-index`、`lint.py --fix`。这些是 fan-in 操作，归 `/init`。
 
-In INIT MODE, `/ingest` **must** commit its work inside the worktree before exiting, but only when the ingest completed successfully:
-- stage every file you created or modified under `wiki/`
-- before committing, run `git branch --show-current` and verify the branch name is the worktree branch (contains `init-`), not the base branch. If you are on the base branch, stop and report instead of committing
-- run `git commit -m "ingest: <paper-title>"` (or a similarly descriptive message)
-- do not push; the parent `/init` will merge the branch during fan-in
+在 INIT MODE 下，`/ingest` **必须**在成功完成后于 worktree 内提交结果：
+- 将 `wiki/` 下所有新建或修改的文件加入暂存区
+- commit 前先执行 `git branch --show-current`，确认当前 branch 是 worktree branch（包含 `init-` 前缀），而不是 base branch。若在 base branch 上，停止并报告，不要 commit
+- 执行 `git commit -m "ingest: <论文标题>"`（或含义类似的提交信息）
+- 不要 push；上层 `/init` 会在 fan-in 时合并该分支
 
-If the ingest fails part-way through (partial failure), do **not** commit the incomplete state. Let the parent `/init` handle the failed worktree at fan-in.
+若 ingest 过程中部分失败（partial failure），**不要** commit 不完整状态。让上层 `/init` 在 fan-in 时处理该失败的 worktree。

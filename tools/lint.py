@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Wiki lint helper — structural checks for ΩmegaWiki.
+"""Wiki lint helper — structural checks for EmpiricalWiki.
 
 Checks performed:
   1. Broken wikilinks: [[slug]] target file does not exist
   2. Orphan pages: pages with zero incoming links
-  3. Missing required YAML frontmatter fields per entity type (all 9 types)
+  3. Missing required YAML frontmatter fields per entity type
   4. Cross-reference asymmetry: forward link without matching reverse link
   5. Field value validation: enum values, ranges (confidence, importance, status)
   6. Claim checks: confidence range, evidence structure, status consistency
@@ -217,15 +217,12 @@ def check_field_values(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIssue
         rel = str(fpath.relative_to(wiki_dir))
         page_type = fpath.parent.name
 
-        # Check enum fields
-        enum_checks = {
-            "papers": [("importance", "papers.importance")],
-            "concepts": [("maturity", "concepts.maturity")],
-            "ideas": [("status", "ideas.status"), ("priority", "ideas.priority")],
-            "experiments": [("status", "experiments.status"), ("outcome", "experiments.outcome")],
-            "claims": [("status", "claims.status")],
-            "foundations": [("status", "foundations.status")],
-        }
+        # Check enum fields from the shared schema registry.
+        enum_checks = []
+        prefix = f"{page_type}."
+        for valid_key in sorted(VALID_VALUES):
+            if valid_key.startswith(prefix):
+                enum_checks.append((valid_key.removeprefix(prefix), valid_key))
 
         for field, valid_key in enum_checks.get(page_type, []):
             val = extract_frontmatter_value(content, field)

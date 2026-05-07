@@ -1,164 +1,164 @@
 ---
-description: Claim-driven experiment design — scope target claims → design experiment blocks (baseline/validation/ablation/robustness) → build run order → optional Review LLM review → write to wiki
+description: Claim-driven 实验设计：界定目标 claims → 设计实验块（baseline/validation/ablation/robustness）→ 构建执行顺序 → 可选 Review LLM review → 写入 wiki
 argument-hint: <idea-slug-or-hypothesis> [--review] [--budget <gpu-hours>]
 ---
 
 # /exp-design
 
-> Given an idea (or a free-text hypothesis), design a complete experiment plan.
-> Claims are the core: scope the claims to validate across three dimensions — Target, Decomposition, and Threats.
-> Design four types of experiment blocks: baseline (reproduce baseline), validation (core verification), ablation (factor isolation), and robustness (stress testing).
-> Experiments are ordered by dependency with decision gates between stages (sanity fail → early stop).
-> Optional Review LLM review checks experiment plan completeness. All experiments are written to wiki/experiments/ with graph edges.
+> 根据一个 idea（或自由文本假设），设计完整的实验计划。
+> 以 claims 为核心：从 Target / Decomposition / Threats 三个维度界定要验证的 claims，
+> 设计 baseline（基线复现）、validation（核心验证）、ablation（因素隔离）、robustness（鲁棒性）四种实验块。
+> 实验按依赖关系排序，阶段间设决策门（sanity fail → 提前停止）。
+> 可选 Review LLM review 检查实验完整性。所有实验写入 wiki/experiments/ 并添加 graph edges。
 
 ## Inputs
 
-- `idea`: one of:
-  - A slug from wiki/ideas/ (e.g. `sparse-lora-for-edge-devices`)
-  - A free-text hypothesis description (provide the experiment goal directly)
-- `--review` (optional): enable Review LLM review to check experiment plan completeness
-- `--budget <gpu-hours>` (optional): total compute budget cap (GPU hours), affects robustness experiment scope
+- `idea`：以下之一：
+  - wiki/ideas/ 中的 slug（如 `sparse-lora-for-edge-devices`）
+  - 自由文本假设描述（直接提供实验目标）
+- `--review`（可选）：启用 Review LLM review 审查实验计划完整性
+- `--budget <gpu-hours>`（可选）：总计算预算上限（GPU 小时），影响 robustness 实验规模
 
 ## Outputs
 
-- `wiki/experiments/{slug}.md` — one page per experiment block (status: planned)
-- `wiki/graph/edges.jsonl` — new tested_by edges: experiment → claim
-- `wiki/ideas/{slug}.md` — updated linked_experiments field
-- `wiki/graph/context_brief.md` — rebuilt
-- `wiki/graph/open_questions.md` — rebuilt
-- `wiki/log.md` — appended log entry
-- **EXPERIMENT_PLAN_REPORT** (printed to terminal) — experiment block summary, run order, compute budget
+- `wiki/experiments/{slug}.md` — 每个实验块一个页面（status: planned）
+- `wiki/graph/edges.jsonl` — 新增 experiment → claim 的 tested_by 边
+- `wiki/ideas/{slug}.md` — 更新 linked_experiments 字段
+- `wiki/graph/context_brief.md` — 重建
+- `wiki/graph/open_questions.md` — 重建
+- `wiki/log.md` — 追加日志
+- **EXPERIMENT_PLAN_REPORT**（输出到终端）— 实验块总览、执行顺序、计算预算
 
 ## Wiki Interaction
 
 ### Reads
-- `wiki/ideas/{slug}.md` — idea's hypothesis, approach, risks, origin_gaps
-- `wiki/claims/*.md` — target claims' current status, existing evidence, confidence
-- `wiki/experiments/*.md` — existing experiments (avoid duplicate designs, reference setup configs)
-- `wiki/papers/*.md` — related papers' baselines and experiment setups
-- `wiki/concepts/*.md` — relevant technical concepts (guide experiment design)
-- `wiki/graph/context_brief.md` — global context
-- `wiki/graph/open_questions.md` — knowledge gaps (guide experiment priority)
+- `wiki/ideas/{slug}.md` — 获取 idea 的 hypothesis、approach、risks、origin_gaps
+- `wiki/claims/*.md` — 目标 claims 的当前状态、已有 evidence、confidence
+- `wiki/experiments/*.md` — 已有实验（避免重复设计、参考 setup 配置）
+- `wiki/papers/*.md` — 相关论文的 baselines 和实验设置
+- `wiki/concepts/*.md` — 涉及的技术概念（指导实验设计）
+- `wiki/graph/context_brief.md` — 全局上下文
+- `wiki/graph/open_questions.md` — 知识缺口（指导实验优先级）
 
 ### Writes
-- `wiki/experiments/{slug}.md` — create experiment pages (one per experiment block)
-- `wiki/ideas/{slug}.md` — update linked_experiments field
-- `wiki/graph/edges.jsonl` — add tested_by edges
-- `wiki/graph/context_brief.md` — rebuild
-- `wiki/graph/open_questions.md` — rebuild
-- `wiki/log.md` — append operation log
+- `wiki/experiments/{slug}.md` — 创建实验页面（每个实验块一个）
+- `wiki/ideas/{slug}.md` — 更新 linked_experiments 字段
+- `wiki/graph/edges.jsonl` — 添加 tested_by 边
+- `wiki/graph/context_brief.md` — 重建
+- `wiki/graph/open_questions.md` — 重建
+- `wiki/log.md` — 追加操作日志
 
 ### Graph edges created
-- `tested_by`: claim → experiment (the claim is validated by this experiment)
+- `tested_by`：claim → experiment（claim 被该实验验证）
 
 ## Workflow
 
-**Precondition**: confirm working directory is the wiki project root (directory containing `wiki/`, `raw/`, `tools/`).
+**前置**：确认工作目录为 wiki 项目根（包含 `wiki/`、`raw/`、`tools/` 的目录）。
 
-### Step 1: Load Context
+### Step 1: 加载上下文
 
-1. **Parse idea input**:
-   - If slug: read `wiki/ideas/{slug}.md`, extract `## Motivation`, `## Hypothesis`, `## Approach sketch`, `## Risks`, and the frontmatter fields `origin_gaps`, `tags`, `domain`, `priority` (per CLAUDE.md ideas template)
-   - If free text: use directly as the hypothesis description
-2. **Load relevant wiki context**:
-   - Read `wiki/graph/context_brief.md` (global context)
-   - Read `wiki/graph/open_questions.md` (knowledge gaps)
-   - From the idea's `origin_gaps`, read the corresponding `wiki/claims/*.md` (target claims)
-   - From each target claim's `source_papers` field, read the corresponding `wiki/papers/*.md` for baseline setups and prior experiment protocols — this is the canonical path from idea → claim → paper (ideas do **not** carry a `linked_papers` field; use `origin_gaps` → `source_papers` instead)
-   - Read existing `wiki/experiments/*.md` to check for similar experiments
-3. **If idea has no origin_gaps**: extract implied claims from the hypothesis description; search wiki/claims/ or flag as needing new claim creation
+1. **解析 idea 输入**：
+   - 若为 slug：读取 `wiki/ideas/{slug}.md`，提取 `## Motivation`、`## Hypothesis`、`## Approach sketch`、`## Risks`,以及 frontmatter 字段 `origin_gaps`、`tags`、`domain`、`priority`（遵循 CLAUDE.md 的 ideas template）
+   - 若为自由文本：直接作为假设描述使用
+2. **加载相关 wiki 上下文**：
+   - 读取 `wiki/graph/context_brief.md`（全局上下文）
+   - 读取 `wiki/graph/open_questions.md`（知识缺口）
+   - 从 idea 的 `origin_gaps` 读取对应的 `wiki/claims/*.md`（目标 claims）
+   - 从每个目标 claim 的 `source_papers` 字段读取对应的 `wiki/papers/*.md`,获取 baseline setup 和已有实验协议 —— 这是 idea → claim → paper 的规范路径(ideas **不带** `linked_papers` 字段,改用 `origin_gaps` → `source_papers`)
+   - 读取已有 `wiki/experiments/*.md`,检查是否已有类似实验
+3. **若 idea 无 origin_gaps**：从假设描述中提取隐含的 claims，在 wiki/claims/ 中查找或标注需要新建
 
-### Step 2: Scope Claims
+### Step 2: 界定 Claims（Scope Claims）
 
-Scope the claims for this experiment plan across three dimensions. For each dimension, search wiki/claims/ for existing claims first; if none exist, create a new claim (status: proposed, confidence: 0.3).
+从三个维度界定本次实验计划涉及的 claims。对于每个维度，先在 wiki/claims/ 中查找已有 claim；若不存在，创建新 claim（status: proposed, confidence: 0.3）。
 
-1. **Target** (what to validate):
-   - The claim corresponding to the idea's core hypothesis — the primary target this experiment plan directly validates
-   - Typically 1, at most 2
-2. **Decomposition** (what to decompose):
-   - Individual contribution claims for each independent factor in the method
-   - One claim per factor, used to design isolation experiments
-3. **Threats** (what could falsify us):
-   - Known risks, alternative explanations, boundary conditions
-   - Sources: counter-evidence in wiki, paper limitations, open questions in claims
-   - Guides robustness experiment design
+1. **Target**（验证什么）：
+   - idea 的核心假设对应的 claim——本次实验计划要直接验证的目标
+   - 通常 1 个，最多 2 个
+2. **Decomposition**（拆解什么）：
+   - 方法中各独立因素各自的贡献 claim
+   - 每个因素对应一个 claim，用于设计隔离验证实验
+3. **Threats**（什么会推翻我们）：
+   - 已知的风险、替代解释、边界条件
+   - 来源：wiki 中的 counter-evidence、papers 的 limitations、claim 的 open questions
+   - 指导鲁棒性实验的设计
 
-Output: scoped claims list (slug list + dimension annotation + current status/confidence for each claim)
+输出：界定的 claims 清单（slug 列表 + 维度标注 + 每个 claim 的当前 status/confidence）
 
-### Step 3: Design Experiment Blocks
+### Step 3: 设计实验块（Design Experiment Blocks）
 
-Design experiment blocks for each scoped claim. Four types:
+为每个界定的 claim 设计实验块，4 种类型：
 
-**A. Baseline experiments (reproduce baseline)**:
-- Purpose: confirm the problem exists and the baseline is reproducible
-- Reproduce the core experiment from the most relevant paper
-- Success criterion: baseline results deviate < 5% from reported paper values (this threshold is the same one used by the Stage 1 decision gate below — do not introduce a different number elsewhere)
-- Compute: typically minimal
+**A. Baseline 实验（基线复现）**：
+- 目的：确认问题存在、基线可复现
+- 复现最相关论文的核心实验
+- 成功标准：基线结果与论文报告的差异 < 5%（此阈值与下方 Stage 1 decision gate 一致 —— 不要在别处使用不同的数字）
+- 计算量：通常最小
 
-**B. Validation experiments (validate Target claim)**:
-- Purpose: validate the core contribution on top of the baseline
-- Metrics: statistically significant improvement over baseline
-- Requires sufficient seed/run count for reliability (recommend >= 3 seeds)
-- Compute: moderate
+**B. Validation 实验（验证 Target claim）**：
+- 目的：在基线之上验证核心贡献
+- 指标：比 baseline 有统计显著提升
+- 需要足够的 seed/run 数量确保可靠性（建议 >= 3 seeds）
+- 计算量：中等
 
-**C. Ablation experiments (validate Decomposition claims)**:
-- Purpose: isolate the contribution of each independent factor
-- Each ablation removes one factor and validates the resulting performance drop
-- N factors → N ablation experiments
-- Compute: similar to validation × N
+**C. Ablation 实验（验证 Decomposition claims）**：
+- 目的：隔离各独立因素的贡献
+- 每个 ablation 移除一个因素，验证性能下降
+- N 个因素 → N 个 ablation 实验
+- 计算量：与 validation 类似 × N
 
-**D. Robustness experiments (rule out Threats)**:
-- Purpose: rule out known risks and alternative explanations; verify the method holds under varied conditions
-- Variation dimensions: model size, dataset, hyperparameters, domain
-- Test at least 2 variation dimensions
-- Compute: depends on --budget
+**D. Robustness 实验（排除 Threats）**：
+- 目的：排除已知风险和替代解释，验证方法在不同条件下仍然有效
+- 变化维度：模型大小、数据集、超参数、domain
+- 至少测试 2 个变化维度
+- 计算量：取决于 --budget
 
-Each experiment block includes:
-- `title`: descriptive title
-- `target_claim`: corresponding claim slug
-- `hypothesis`: specific hypothesis the experiment tests
-- `type`: baseline / validation / ablation / robustness
-- `setup`: model, dataset, hardware, framework
-- `metrics`: list of evaluation metrics
-- `baseline`: comparison baseline
-- `success_criterion`: explicit pass/fail criterion
-- `estimated_gpu_hours`: estimated compute time
-- `seeds`: number of random seeds (recommend >= 3)
+每个实验块包含：
+- `title`：描述性标题
+- `target_claim`：对应的 claim slug
+- `hypothesis`：实验验证的具体假设
+- `type`：baseline / validation / ablation / robustness
+- `setup`：model、dataset、hardware、framework
+- `metrics`：评估指标列表
+- `baseline`：对比基线
+- `success_criterion`：明确的成功/失败标准
+- `estimated_gpu_hours`：预估计算时间
+- `seeds`：随机种子数量（建议 >= 3）
 
-### Step 4: Build Run Order
+### Step 4: 构建执行顺序（Build Run Order）
 
-Sort experiments by dependency and set decision gates:
+按依赖关系排序实验，设置决策门：
 
 ```
 Stage 0: Sanity check
-  └── Small-scale run (1 epoch / 100 steps) to verify no code bugs, data loads, GPU available, loss decreasing
-  └── Gate: sanity fails → stop, fix code
+  └── 小规模运行（1 epoch / 100 steps）验证代码无 bug、数据可加载、GPU 可用
+  └── 门：若 sanity 失败 → 停止，修复代码
 
-Stage 1: Baseline (reproduce baseline)
-  └── Reproduce baseline results
-  └── Gate: baseline deviation > 5% → stop, check implementation (same threshold as Step 3 success criterion)
+Stage 1: Baseline（基线复现）
+  └── 复现基线结果
+  └── 门：若基线偏差 > 5% → 停止，检查实现（与 Step 3 成功标准同阈值）
 
-Stage 2: Validation (core verification)
-  └── Validate core method on top of baseline
-  └── Gate: no improvement → stop, analyze reason (idea may not hold)
+Stage 2: Validation（核心验证）
+  └── 在基线之上验证核心方法
+  └── 门：若无提升 → 停止，分析原因（可能是 idea 不成立）
 
-Stage 3: Ablation (factor isolation)
-  └── Multiple ablations can run in parallel
-  └── Gate: if a factor ablation shows no effect → record it, but continue other ablations
+Stage 3: Ablation（因素隔离）
+  └── 可并行执行多个 ablation
+  └── 门：若某因素 ablation 无影响 → 记录，但继续其他 ablation
 
-Stage 4: Robustness (robustness verification)
-  └── Only execute after Stage 2 succeeds
-  └── Scope determined by remaining --budget
+Stage 4: Robustness（鲁棒性验证）
+  └── 仅在 Stage 2 成功后执行
+  └── 范围由 --budget 剩余额度决定
 ```
 
-Output:
-- Ordered experiment list (with dependencies)
-- Decision gate conditions for each stage
-- Total compute budget estimate (if exceeding --budget, adjust Stage 4 scope)
+输出：
+- 有序实验列表（含依赖关系）
+- 每阶段的决策门条件
+- 总计算预算估算（若超过 --budget 则调整 Stage 4 范围）
 
-### Step 5: Optional Review LLM Review (--review)
+### Step 5: 可选 Review LLM Review（--review）
 
-If `--review` is specified:
+若指定 `--review`：
 
 ```
 mcp__llm-review__chat:
@@ -181,17 +181,18 @@ mcp__llm-review__chat:
     5. Any statistical concerns (sample size, variance, seeds)?
 ```
 
-Revise the experiment plan based on Review LLM feedback (add missing experiments, correct unreasonable criteria).
+根据 Review LLM 反馈调整实验计划（添加遗漏的实验、修正不合理的标准）。
 
-### Step 6: Write to Wiki
+### Step 6: 写入 Wiki
 
-1. **Create experiment pages**:
-   For each experiment block:
+1. **创建实验页面**：
+   对每个实验块：
    ```bash
    python3 tools/research_wiki.py slug "<experiment-title>"
    ```
-   Create `wiki/experiments/{slug}.md`:
-   Create `wiki/experiments/{slug}.md` following the **CLAUDE.md experiments template exactly** — every field below must be present even if empty, because `/exp-run` later uses `tools/research_wiki.py set-meta` to update them, and `set-meta` refuses to create fields that don't already exist in the frontmatter (it only updates existing keys):
+   创建 `wiki/experiments/{slug}.md`：
+   ```yaml
+   创建 `wiki/experiments/{slug}.md`，**严格遵循 CLAUDE.md experiments template** —— 下方所有字段都必须存在（即使为空），因为 `/exp-run` 稍后会用 `tools/research_wiki.py set-meta` 来更新它们，而 `set-meta` 拒绝创建 frontmatter 中不存在的字段（它只更新已存在的 key）：
    ```yaml
    ---
    title: ""
@@ -208,15 +209,15 @@ Revise the experiment plan based on Review LLM feedback (add missing experiments
      framework: ""
    metrics: []
    baseline: ""
-   outcome: ""                # empty until /exp-run Phase 4 — succeeded | failed | inconclusive
-   key_result: ""             # empty until /exp-run Phase 4
-   linked_idea: "{idea-slug}" # MANDATORY: the source idea slug (reverse link to wiki/ideas/{idea-slug}.md linked_experiments)
+   outcome: ""                # 留空，由 /exp-run Phase 4 填写 — succeeded | failed | inconclusive
+   key_result: ""             # 留空，由 /exp-run Phase 4 填写
+   linked_idea: "{idea-slug}" # 必填：源 idea slug（与 wiki/ideas/{idea-slug}.md 的 linked_experiments 互为双向链接）
    date_planned: YYYY-MM-DD
-   date_completed: ""         # empty until /exp-run Phase 4
-   run_log: ""                # empty until /exp-run Phase 2
-   started: ""                # empty until /exp-run Phase 2 (ISO timestamp, set via set-meta)
-   estimated_hours: 0         # 0 until /exp-run Phase 2 (set via set-meta)
-   remote:                    # full block must exist so /exp-run --env remote can populate sub-fields via Edit
+   date_completed: ""         # 留空，由 /exp-run Phase 4 填写
+   run_log: ""                # 留空，由 /exp-run Phase 2 填写
+   started: ""                # 留空，由 /exp-run Phase 2 填写（ISO 时间戳，通过 set-meta）
+   estimated_hours: 0         # 0，由 /exp-run Phase 2 更新（通过 set-meta）
+   remote:                    # 完整 block 必须存在，以便 /exp-run --env remote 通过 Edit 填充子字段
      server: ""
      gpu: ""
      session: ""
@@ -246,39 +247,39 @@ Revise the experiment plan based on Review LLM feedback (add missing experiments
    {contingency plans: what to do if success / failure}
    ```
 
-2. **Create new claims (if missing claims were identified in Step 2)**:
+2. **创建新 claims（若 Step 2 中发现缺失的 claims）**：
    ```bash
    python3 tools/research_wiki.py slug "<claim-title>"
    ```
-   Create `wiki/claims/{slug}.md` (status: proposed, confidence: 0.3)
+   创建 `wiki/claims/{slug}.md`（status: proposed, confidence: 0.3）
 
-3. **Add graph edges**:
+3. **添加 graph edges**：
    ```bash
-   # For each experiment → target claim
+   # 对每个实验 → 目标 claim
    python3 tools/research_wiki.py add-edge wiki/ \
      --from "claims/{target-claim}" --to "experiments/{slug}" \
      --type tested_by --evidence "Designed by /exp-design"
    ```
 
-4. **Update idea page** (if idea came from wiki):
-   - Append all new experiment slugs to `linked_experiments` in `wiki/ideas/{idea-slug}.md`
-   - If idea status is `proposed`, update to `in_progress`
+4. **更新 idea 页面**（若 idea 来自 wiki）：
+   - 在 `wiki/ideas/{idea-slug}.md` 的 `linked_experiments` 追加所有新建实验的 slugs
+   - 若 idea status 为 `proposed`，更新为 `in_progress`
 
-5. **Update index.md**: append entries under the experiments and claims (if new) categories
+5. **更新 index.md**：在 experiments 和 claims（若新建）类别下追加条目
 
-6. **Rebuild derived data**:
+6. **重建派生数据**：
    ```bash
    python3 tools/research_wiki.py rebuild-context-brief wiki/
    python3 tools/research_wiki.py rebuild-open-questions wiki/
    ```
 
-7. **Append log**:
+7. **追加日志**：
    ```bash
    python3 tools/research_wiki.py log wiki/ \
      "exp-design | {N} experiments designed for idea {slug} | claims: {claim-list}"
    ```
 
-8. **Print EXPERIMENT_PLAN_REPORT to terminal**:
+8. **输出 EXPERIMENT_PLAN_REPORT 到终端**：
    ```markdown
    # Experiment Plan Report
 
@@ -315,44 +316,44 @@ Revise the experiment plan based on Review LLM feedback (add missing experiments
 
 ## Constraints
 
-- **Every experiment must be linked to a claim**: `target_claim` cannot be empty (baseline experiments may link to the Target claim)
-- **No duplicate experiments**: before creating, check wiki/experiments/ for existing experiments with the same target_claim + hypothesis
-- **Scoped claims are not modified**: claims scoped in Step 2 are not updated for status/confidence during this plan — only /exp-eval may update them
-- **Success criteria must be quantified**: each experiment block's success criterion must include a specific number (e.g. "> 2% accuracy improvement")
-- **At least 3 seeds**: experiments requiring statistical reliability (validation, ablation) must specify >= 3 random seeds
-- **Graph edges via tools/research_wiki.py**: do not manually edit edges.jsonl
-- **Idea status advances only forward**: proposed → in_progress, irreversible
-- **Slug uniqueness**: check for existing slug before creating
+- **每个实验必须关联 claim**：`target_claim` 不能为空（baseline 实验可关联 Target claim）
+- **实验不可重复**：创建前检查 wiki/experiments/ 中是否已存在相同 target_claim + hypothesis 的实验
+- **claims 界定后不修改**：Step 2 界定的 claims 在本次计划中不修改 status/confidence，只有 /exp-eval 可以修改
+- **success criterion 必须量化**：每个实验块的成功标准必须包含具体数值（如 "> 2% accuracy improvement"）
+- **至少 3 个 seeds**：需要统计可靠性的实验（validation, ablation）必须指定 >= 3 个 random seeds
+- **graph edges 使用 tools/research_wiki.py**：不手动编辑 edges.jsonl
+- **idea status 只能前进**：proposed → in_progress，不可逆
+- **slug 唯一性**：创建前检查是否存在相同 slug
 
 ## Error Handling
 
-- **Idea not found**: prompt user to check slug, list candidates in wiki/ideas/
-- **Target claim does not exist**: auto-create new claim page (status: proposed, confidence: 0.3), flag in report
-- **Similar experiment already exists**: list existing experiments, ask user whether to add or skip
-- **Review LLM unavailable** (--review mode): skip Step 5, note "unreviewed — Review LLM unavailable" in report
-- **Budget insufficient**: reduce Stage 4 robustness experiment scope, note actual budget allocation in report
-- **Slug conflict**: append numeric suffix (e.g. `sparse-lora-ablation-v2`)
-- **Wiki is empty**: proceed normally but baseline experiments have no prior results to reference; recommend running /ingest for relevant papers first
+- **idea 找不到**：提示用户检查 slug，列出 wiki/ideas/ 中的候选
+- **目标 claim 不存在**：自动创建新 claim 页面（status: proposed, confidence: 0.3），在报告中标注
+- **已有相似实验**：列出已有实验，询问用户是继续追加还是跳过
+- **Review LLM 不可用**（--review 模式）：跳过 Step 5，在报告中标注「unreviewed — Review LLM unavailable」
+- **budget 不足**：削减 Stage 4 robustness 实验范围，在报告中标注实际预算分配
+- **slug 冲突**：追加数字后缀（如 `sparse-lora-ablation-v2`）
+- **wiki 为空**：正常执行但 baseline 实验无法参考已有结果，在报告中建议先 /ingest 相关论文
 
 ## Dependencies
 
 ### Tools（via Bash）
-- `python3 tools/research_wiki.py slug "<title>"` — generate slug
-- `python3 tools/research_wiki.py add-edge wiki/ ...` — add graph edge
-- `python3 tools/research_wiki.py rebuild-context-brief wiki/` — rebuild query_pack
-- `python3 tools/research_wiki.py rebuild-open-questions wiki/` — rebuild gap_map
-- `python3 tools/research_wiki.py log wiki/ "<message>"` — append log
+- `python3 tools/research_wiki.py slug "<title>"` — 生成 slug
+- `python3 tools/research_wiki.py add-edge wiki/ ...` — 添加 graph edge
+- `python3 tools/research_wiki.py rebuild-context-brief wiki/` — 重建 query_pack
+- `python3 tools/research_wiki.py rebuild-open-questions wiki/` — 重建 gap_map
+- `python3 tools/research_wiki.py log wiki/ "<message>"` — 追加日志
 
 ### MCP Servers
-- `mcp__llm-review__chat` — Step 5 experiment plan review (optional)
+- `mcp__llm-review__chat` — Step 5 实验计划审查（可选）
 
 ### Claude Code Native
-- `Read` — read wiki pages
-- `Glob` — find existing experiments and claims
+- `Read` — 读取 wiki 页面
+- `Glob` — 查找已有实验和 claims
 
 ### Shared References
-- `.claude/skills/shared-references/cross-model-review.md` — Step 5 Review LLM review independence (if enabled)
+- `.claude/skills/shared-references/cross-model-review.md` — Step 5 Review LLM 审查独立性（若启用）
 
 ### Called by
-- `/research` Stage 2 (experiment design stage)
-- User directly
+- `/research` Stage 2（实验设计阶段）
+- 用户手动调用

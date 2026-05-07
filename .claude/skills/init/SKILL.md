@@ -1,63 +1,63 @@
 ---
-description: Bootstrap ΩmegaWiki from user sources plus optional discovery, then ingest the final paper set in parallel
+description: 基于用户素材与可选外部发现搭建 ΩmegaWiki，并用并行 `/ingest` 完成最终论文集的消化
 argument-hint: "[topic] [--no-introduction]"
 ---
 
 # /init
 
-> Build a wiki from `raw/` with deterministic source preparation, planner-guided discovery, provisional notes/web scaffolding, and parallel `/ingest` fan-out/fan-in.
+> 从 `raw/` 搭建 wiki：先做确定性 prepare，再跑 planner-guided discovery；`raw/notes/` 与 `raw/web/` 可种下 provisional scaffold；论文消化仍走并行 `/ingest` fan-out / fan-in。
 
-Use these local references on demand:
+按需打开这些本地参考文件：
 
-- `references/prepare-and-discovery.md` — prepare flow, final selection, fetch, and source-manifest rules
-- `references/planner-policy.md` — planner behavior and LLM trim expectations
-- `references/parallel-ingest.md` — worktree isolation, subagent prompt contract, merge, and cleanup
+- `references/prepare-and-discovery.md` — prepare 流程、最终选择、fetch 与 source-manifest 规则
+- `references/planner-policy.md` — planner 行为与 LLM 裁剪期望
+- `references/parallel-ingest.md` — worktree 隔离、子代理 prompt 合同、merge 与清理
 
 ## Inputs
 
-- `topic` (optional): research direction keywords; omit when `raw/` already defines the seed set
-- `--no-introduction` (optional): disable external discovery; use only when the user explicitly requests it
-- User-owned sources under `raw/papers/`, `raw/notes/`, `raw/web/`
+- `topic`（可选）：研究方向关键词；当 `raw/` 已定义 seed set 时可省略
+- `--no-introduction`（可选）：禁用外部发现；仅在用户明确要求时使用
+- 用户自有素材：`raw/papers/`、`raw/notes/`、`raw/web/`
 
 ## Outputs
 
-- `wiki/` scaffold and provisional pages (Summary, topics, ideas, concepts, claims)
-- `raw/tmp/` and `raw/discovered/` prepared sources
-- Final paper pages via parallel `/ingest` subagents
-- `.checkpoints/init-*.json` manifests for resume and replay
-- Updated `wiki/index.md`, `wiki/log.md`, `wiki/graph/*`
+- `wiki/` 骨架与 provisional 页面（Summary、topics、ideas、concepts、claims）
+- `raw/tmp/` 与 `raw/discovered/` 预处理来源
+- 并行 `/ingest` 产出的最终论文页面
+- `.checkpoints/init-*.json` 清单，用于恢复与重放
+- 更新后的 `wiki/index.md`、`wiki/log.md`、`wiki/graph/*`
 
 ## Wiki Interaction
 
 ### Reads
 
-- `raw/papers/`, `raw/notes/`, `raw/web/`
-- `.checkpoints/init-prepare.json` and `.checkpoints/init-sources.json` for resume, planning, and fan-out
-- `wiki/index.md` plus existing `wiki/topics/`, `wiki/ideas/`, `wiki/concepts/`, `wiki/claims/` for duplicate avoidance and scaffold alignment
+- `raw/papers/`、`raw/notes/`、`raw/web/`
+- `.checkpoints/init-prepare.json` 与 `.checkpoints/init-sources.json`，供 resume、planning 与 fan-out 使用
+- `wiki/index.md` 以及已有 `wiki/topics/`、`wiki/ideas/`、`wiki/concepts/`、`wiki/claims/`
 
 ### Writes
 
-- `wiki/` scaffold and provisional pages
-- `raw/tmp/` and `raw/discovered/`
-- `wiki/index.md`, `wiki/log.md`, `wiki/graph/*`
-- `.checkpoints/init-prepare.json`, `.checkpoints/init-plan.json`, `.checkpoints/init-sources.json`, and `init-session` checkpoint metadata
+- `wiki/` scaffold 与 provisional 页面
+- `raw/tmp/` 与 `raw/discovered/`
+- `wiki/index.md`、`wiki/log.md`、`wiki/graph/*`
+- `.checkpoints/init-prepare.json`、`.checkpoints/init-plan.json`、`.checkpoints/init-sources.json` 与 `init-session` checkpoint metadata
 
 ### Graph edges created
 
-- `/init` itself creates only scaffold-level edges when provisional pages need them
-- all paper-driven edges are delegated to `/ingest`
+- `/init` 本身只在 provisional 页面需要时写入少量 scaffold 级别的 edges
+- 论文驱动的 edges 全部委托给 `/ingest`
 
 ## Workflow
 
-**Pre-condition**: working directory is the project root containing `wiki/`, `raw/`, and `tools/`. Set `WIKI_ROOT=wiki/`. Resolve `PYTHON_BIN` once and reuse it for every Python command during `/init` so the workflow stays on the interpreter that `setup.sh` prepared:
+**前置条件**：当前目录为项目根，且包含 `wiki/`、`raw/`、`tools/`。设 `WIKI_ROOT=wiki/`。先解析一次 `PYTHON_BIN`，并在整个 `/init` 流程里复用它，确保运行时使用与 `setup.sh` 安装依赖时相同的解释器：
 
 ```bash
-# Find the project root via git so worktree subagents can still locate .venv.
-# .venv is gitignored, so a subagent whose cwd is ../.worktrees/<branch>/
-# doesn't have one — without this lookup it falls back to system python3 and
-# misses the .env-loaded API keys plus the installed deps (deepxiv-sdk etc.).
-# git rev-parse --git-common-dir returns the main repo's .git regardless of
-# which worktree the shell is in; its parent is the project root.
+# 通过 git 找到项目根，让 worktree 中的 subagent 也能定位 .venv。
+# .venv 被 gitignore，subagent 的 cwd 在 ../.worktrees/<branch>/ 时本地没有
+# .venv——若不解析项目根，PYTHON_BIN 会回退到系统 python3，既丢失 .env 里的
+# API key，也丢失安装的依赖（deepxiv-sdk 等）。
+# git rev-parse --git-common-dir 无论 cwd 位于哪个 worktree 都返回主仓库的
+# .git 目录；其父目录即项目根。
 GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null || true)
 PROJECT_ROOT=""
 if [ -n "$GIT_COMMON_DIR" ]; then
@@ -73,114 +73,114 @@ fi
 export PYTHON_BIN
 ```
 
-### Step 1: Initialize wiki structure
+### Step 1: 初始化 wiki 结构
 
 ```bash
 "$PYTHON_BIN" tools/research_wiki.py init wiki/
 ```
 
-Create the standard wiki directories, `graph/`, `outputs/`, `index.md`, and `log.md`. Do not add a second init log entry here.
+创建标准目录、`graph/`、`outputs/`、`index.md` 与 `log.md`。这里不要重复写第二条 init 日志。
 
-### Step 2: Prepare local inputs into `raw/tmp/`
+### Step 2: 把本地输入 prepare 到 `raw/tmp/`
 
 ```bash
 "$PYTHON_BIN" tools/init_discovery.py prepare --raw-root raw --pdf-titles-json .checkpoints/init-pdf-titles.json --output-manifest .checkpoints/init-prepare.json
 ```
 
-- before running `prepare`, inspect each local PDF and write the recovery handoff to `.checkpoints/init-pdf-titles.json` as either `{ "raw/papers/foo.pdf": "Recovered Paper Title" }` or `{ "raw/papers/foo.pdf": { "title": "Recovered Paper Title", "arxiv_id": "2401.00001" } }` when a confident arXiv ID is already known
-- use `"$PYTHON_BIN" tools/prepare_paper_source.py --raw-root raw --source <local-path> [--title "<recovered-title>"] [--arxiv-id "<recovered-arxiv-id>"]` for local paper normalization
-- local PDF recovery order is strict: handed-off arXiv ID or filename/path arXiv ID -> agent-recovered title via Semantic Scholar -> fetched arXiv source -> synthetic `.tex`
-- when the agent supplied a PDF title, treat that title as authoritative for the prepared manifest; fetched/source titles are sanitized fallback metadata only and must not overwrite it
-- do not use PDF metadata or body text as arXiv-ID hints during prepare
-- metadata or filename titles may remain as provisional display labels only; they are not trusted identity or title-search inputs
-- keep notes/web on their original source paths; `/init` reads them directly during planning
-- set each local paper's `canonical_ingest_path` to a prepared `raw/tmp/` path when available; otherwise fall back to the original `raw/papers/...` path
-- record warnings for failed decode / title recovery / arXiv source fetch rather than aborting `/init`
-- see `references/prepare-and-discovery.md` for the prepare decision tree and source-preference rules
+- 在运行 `prepare` 前，先读取每个本地 PDF，并把恢复 handoff 写入 `.checkpoints/init-pdf-titles.json`。格式既可以是 `{ "raw/papers/foo.pdf": "Recovered Paper Title" }`，也可以是在已知可信 arXiv ID 时写成 `{ "raw/papers/foo.pdf": { "title": "Recovered Paper Title", "arxiv_id": "2401.00001" } }`
+- 使用 `"$PYTHON_BIN" tools/prepare_paper_source.py --raw-root raw --source <local-path> [--title "<recovered-title>"] [--arxiv-id "<recovered-arxiv-id>"]` 做本地论文规范化
+- 本地 PDF 的恢复顺序必须严格遵守：handoff 进来的 arXiv ID 或 filename/path 中的 arXiv ID -> agent 恢复出的标题经 Semantic Scholar 搜索 -> 抓取到的 arXiv 源码 -> synthetic `.tex`
+- 如果 agent 已经提供了 PDF 标题，就把这个标题当作 prepared manifest 的 authoritative title；抓取源码里提取出的标题只能作为经过清洗后的 fallback metadata，不能反过来覆盖 agent 标题
+- prepare 阶段不得把 PDF metadata 或正文文本当作 arXiv-ID hint
+- metadata 或 filename 中的标题最多只是 provisional display label，不能当作可信 identity，也不能作为标题检索输入
+- notes/web 保持原始来源路径，`/init` 在 planning 阶段直接读取
+- 本地论文若存在 usable 的 prepared 结果，其 `canonical_ingest_path` 必须指向 `raw/tmp/`；否则回退到原始 `raw/papers/...`
+- decode / 标题恢复 / arXiv 源码抓取失败时记录 warning，而不是中止 `/init`
+- prepare 的细化决策树与来源优先级见 `references/prepare-and-discovery.md`
 
-### Step 3: Plan discovery, trim the final set, and write the source manifest
+### Step 3: 生成 discovery plan、裁剪最终论文集，并写出 source manifest
 
 ```bash
 "$PYTHON_BIN" tools/init_discovery.py plan [--topic "<topic>"] --mode auto --raw-root raw --wiki-root wiki --prepared-manifest .checkpoints/init-prepare.json --allow-introduction <true|false> --output-plan .checkpoints/init-plan.json
 ```
 
-- `mode=seeded` when the prepare manifest contains at least one parseable local paper; otherwise `mode=bootstrap`
-- `plan` must read `.checkpoints/init-prepare.json` instead of rescanning `raw/`
-- planner policy is qualitative at the skill layer: favor relevance, freshness, connectivity, and survey coverage
-- in seeded mode with limited introduced capacity, avoid over-prioritizing older citation-heavy anchors
-- in bootstrap mode, one older canonical anchor may be useful when it improves coverage
-- when DeepXiv search is available, use returned `relevance_score` in tool scoring rather than merely noting it in prose
-- exact ranking weights, shortlist constants, and threshold math belong to `tools/init_discovery.py`; treat the tool as the implementation authority and do not restate or override its constants in LLM reasoning
-- read `.checkpoints/init-plan.json` and explicitly trim the over-picked `shortlist` to a final **8-10** papers total before `fetch`
-- emit an explicit final selection artifact before `fetch` with `shortlist_count`, `final_count`, and the exact final `candidate_id` list in shortlist order
-- if `final_count` falls outside **8-10**, stop and revise the final selection before `fetch`, unless `--no-introduction` is active or the user already supplied more than 10 parseable papers
-- if `--no-introduction` is present, only use this branch when the user explicitly requested local-only behavior; still run `fetch` with zero external IDs so it writes `.checkpoints/init-sources.json`
-- see `references/planner-policy.md` for planner behavior, trim expectations, and source-of-truth boundaries
+- `mode=seeded` 取决于 prepare manifest 中是否存在可解析本地论文；否则为 `bootstrap`
+- `plan` 必须读取 `.checkpoints/init-prepare.json`，而不是重新扫描 `raw/`
+- skill 层只保留定性 planner 策略：优先 relevance、freshness、connectivity 与 survey coverage
+- 在 seeded 模式且 introduced 容量有限时，不要让偏旧且 citation 很高的 anchor 抢走太多名额
+- 在 bootstrap 模式下，如果确实有助于覆盖面，可以保留一篇偏旧 canonical anchor
+- 若 DeepXiv search 可用，要在工具打分里使用返回的 `relevance_score`，而不是只在文字里提一句
+- 精确 ranking weights、shortlist 常量与 threshold 计算都属于 `tools/init_discovery.py`；把工具视为实现层唯一权威，不要在 LLM 推理里重述或覆盖这些常量
+- 在 `fetch` 前读取 `.checkpoints/init-plan.json`，并把 over-picked 的 `shortlist` 明确裁成最终 **8-10** 篇
+- 在 `fetch` 前必须给出明确的最终选择结果，至少包含 `shortlist_count`、`final_count` 与按 shortlist 顺序排列的最终 `candidate_id` 列表
+- 若 `final_count` 不在 **8-10** 范围内，则必须先停止并修正最终选择，再执行 `fetch`；`--no-introduction` 或“用户已提供超过 10 篇可解析论文”除外
+- 若传入 `--no-introduction`，只有在用户明确要求只使用本地论文时，才走这一分支；即便如此也仍要执行 `fetch`（不给外部 ID），以写出 `.checkpoints/init-sources.json`
+- planner 行为、trim 期望与 source-of-truth 边界详见 `references/planner-policy.md`
 
-Then run:
+然后执行：
 
 ```bash
 "$PYTHON_BIN" tools/init_discovery.py fetch --raw-root raw --plan-json .checkpoints/init-plan.json --prepared-manifest .checkpoints/init-prepare.json --output-sources .checkpoints/init-sources.json --id <candidate-id> --id <candidate-id>
 ```
 
-- external papers downloaded by `/init` go to `raw/discovered/`, never `raw/papers/`
-- never fetch a paper that is already represented by a prepared local source from `raw/tmp/`
-- `.checkpoints/init-sources.json` is the single source of truth for downstream ingest order
+- `/init` 下载的论文只允许写入 `raw/discovered/`，绝不写入 `raw/papers/`
+- 若某篇候选已经由 prepared local source 覆盖，则禁止重复抓取
+- `.checkpoints/init-sources.json` 是下游 ingest 顺序的唯一真相源
 
-### Step 4: Create scaffold pages before paper ingest
+### Step 4: 在论文 ingest 前建立 scaffold 页面
 
-Create one `wiki/Summary/{area}.md`, the needed `wiki/topics/{slug}.md`, and provisional `ideas/`, `concepts/`, and `claims/` from notes/web when warranted.
+创建一篇 `wiki/Summary/{area}.md`、若干 `wiki/topics/{slug}.md`，以及来自 notes/web 的 provisional `ideas/`、`concepts/`、`claims/`。
 
-Rules:
+规则：
 
-- notes/web are authoritative for user intent, not for literature confidence
-- every notes/web-derived page must include this exact line immediately after frontmatter:
+- notes/web 对“用户意图”是权威，对“文献置信度”不是权威
+- 每个 notes/web 派生页面都必须在 frontmatter 后立即写入这一行：
 
 ```markdown
 Provisional note: seeded from raw/notes or raw/web during /init; pending validation from ingested papers.
 ```
 
-- `topics/`: create when a direction is explicit or repeated
-- `ideas/`: create when the user states or strongly implies a research direction or hypothesis
-- `concepts/`: create only when the mechanism recurs across notes/web, or appears once in notes/web and once in the final paper set
-- `claims/`: create only from explicit assertive statements, never by inference
-- for notes/web-derived claims, use `status: proposed`, `confidence: 0.2`, `source_papers: []`, and `evidence: []`
-- `/prefill` is optional background seeding and is not part of `/init`
-- `/init` must not create `people/` pages directly and must not auto-create foundations
+- `topics/`：方向被明确提到或反复出现时创建
+- `ideas/`：用户明确提出或强烈暗示研究方向 / 假设时创建
+- `concepts/`：技术机制在 notes/web 中反复出现，或在 notes/web 与最终论文集中各出现至少一次时创建
+- `claims/`：只允许从显式断言创建，禁止靠推断补全
+- notes/web 派生 claim 使用 `status: proposed`、`confidence: 0.2`、`source_papers: []`、`evidence: []`
+- `/prefill` 只是可选背景预填充，不属于 `/init`
+- `/init` 不得直接创建 `people/` 页面，也不得自动创建 foundations
 
-### Step 5: Parallel paper ingest with worktree isolation
+### Step 5: 通过 worktree 隔离并行 ingest 论文
 
-Paper sources for this step come strictly from `.checkpoints/init-sources.json`:
+本步骤的论文来源只能来自 `.checkpoints/init-sources.json`：
 
-- `origin=user_local`: canonical prepared `.tex` under `raw/tmp/` when available, otherwise fallback `raw/papers/...`
-- `origin=introduced`: fetched dirs or PDFs under `raw/discovered/`
+- `origin=user_local`：优先 ingest `raw/tmp/` 中的 canonical prepared `.tex`；prepare 失败时回退到原始 `raw/papers/...`
+- `origin=introduced`：ingest `raw/discovered/` 中抓取到的目录或 PDF
 
-Parallel ingest contract:
+并行 ingest 合同：
 
-- stash unrelated dirty files before fan-out, then record `stash_ref`, `base_branch`, and `base_commit` in checkpoint metadata
-- commit the freshly created scaffold and init manifests before fan-out so `BASE_COMMIT` actually contains the pages, manifests, and handoff metadata that subagents must branch from
-- verify `.gitattributes` contains `merge=union` for `wiki/log.md`, `wiki/graph/edges.jsonl`, `wiki/graph/citations.jsonl`, and `wiki/index.md` before creating worktrees
-- `/init` worktree mode must run from a named branch, not detached HEAD
-- create each worktree from `BASE_COMMIT`, not from the already checked-out `BASE_BRANCH`
-- subagent prompts must use **relative paths only**, and the subagent's shell working directory must be the worktree path (`$WT_PATH`), not the main repository root
-- execute `/ingest` for exactly one handed-off source path; do not bypass `/ingest`
-- in INIT MODE, consume the handed-off canonical path exactly as provided
-- skip `fetch_s2.py citations`
-- skip `fetch_s2.py references`
-- skip per-subagent `rebuild-index`
-- skip per-subagent `rebuild-context-brief`
-- skip per-subagent `rebuild-open-questions`
-- skip conflict-prone topic writes
-- commit the ingest result inside the worktree before exiting so fan-in merges a real paper-specific commit instead of an empty branch
-- see `references/parallel-ingest.md` for worktree commands, merge order, fan-in, and cleanup
+- fan-out 前先 stash 无关脏文件，再把 `stash_ref`、`base_branch`、`base_commit` 写入 checkpoint metadata
+- fan-out 前必须先提交刚创建的 scaffold 与 init manifests，确保 `BASE_COMMIT` 真的包含后续子代理要继承的页面、manifest 与 handoff metadata
+- 创建 worktree 前先验证 `.gitattributes` 对 `wiki/log.md`、`wiki/graph/edges.jsonl`、`wiki/graph/citations.jsonl`、`wiki/index.md` 使用了 `merge=union`
+- `/init` 的 worktree 模式必须运行在一个命名分支上，不能处于 detached HEAD
+- 每个 worktree 都必须从 `BASE_COMMIT` 拉出，而不是复用已经签出的 `BASE_BRANCH`
+- 子代理 prompt 只能使用**相对路径**，且子代理的 shell 工作目录必须是 worktree 路径（`$WT_PATH`），不能是主仓库根目录
+- 只对一个 handoff 进来的 source path 执行 `/ingest`，不得绕过 `/ingest`
+- 在 INIT MODE 下，必须原样消费 handoff 给它的 canonical path
+- 跳过 `fetch_s2.py citations`
+- 跳过 `fetch_s2.py references`
+- 跳过每个子代理自己的 `rebuild-index`
+- 跳过每个子代理自己的 `rebuild-context-brief`
+- 跳过每个子代理自己的 `rebuild-open-questions`
+- 跳过易冲突 topic 写入
+- 子代理退出前必须在各自 worktree 内提交 ingest 结果，避免 fan-in 时 merge 到空 branch
+- worktree 命令、merge 顺序、fan-in 与清理见 `references/parallel-ingest.md`
 
-### Step 6: Fan-in, rebuild, and final report
+### Step 6: fan-in、rebuild 与最终报告
 
-After all subagents complete:
+全部子代理完成后：
 
-- merge worktree branches sequentially on `BASE_BRANCH`
-- resolve true concept / claim conflicts conservatively: merge, do not multiply near-duplicates
-- run:
+- 在 `BASE_BRANCH` 上按顺序 merge worktree branches
+- concept / claim 冲突默认保守合并，不要扩散 near-duplicate 页面
+- 执行：
 
 ```bash
 "$PYTHON_BIN" tools/research_wiki.py dedup-edges wiki/
@@ -191,49 +191,49 @@ After all subagents complete:
 "$PYTHON_BIN" tools/lint.py --wiki-dir wiki/ --fix
 ```
 
-Report separately:
+报告中必须分开列出：
 
-- user-provided papers ingested through prepared `raw/tmp/` paths
-- user-provided papers that fell back to original `raw/papers/` paths
-- discovered papers from `raw/discovered/`
-- provisional pages seeded from notes/web
-- pages created by `/ingest`
-- pages updated by `/ingest`
-- any skipped or failed papers
+- 通过 `raw/tmp/` prepared path ingest 的用户论文
+- 因 prepare 失败而回退到原始 `raw/papers/` 的用户论文
+- `raw/discovered/` 中的 introduced 论文
+- 由 notes/web 种下的 provisional 页面
+- `/ingest` 新建的页面
+- `/ingest` 更新过的页面
+- 被跳过或失败的论文
 
-If `stash_ref` exists, pop it at the end. If stash pop fails, keep the checkpoint and report the failure.
+若 `stash_ref` 存在，在最后再 pop。若 stash pop 失败，保留 checkpoint 并在报告中说明。
 
 ## Constraints
 
-- Do not infer `--no-introduction` from repository state alone. Use it only when the user explicitly asked to disable external discovery.
-- `raw/papers/`, `raw/notes/`, and `raw/web/` are user-owned inputs
-- `raw/tmp/` and `raw/discovered/` are generated handoff areas; direct local `/ingest` may also prepare reusable local sidecars under `raw/tmp/`
-- `/init` may write external papers only to `raw/discovered/`; `/init` and direct local `/ingest` may write generated prepared local sources to `raw/tmp/`
-- `/prefill` is optional background seeding, not part of `/init`
-- no skill other than `/prefill` may auto-create foundations
-- `/init` must not create `people/` pages directly
-- notes/web-derived pages are provisional and must carry the exact notice line above
-- paper evidence outranks notes/web for claim confidence and concept consolidation
-- all paper ingest must run through parallel `/ingest` subagents with worktree isolation
-- Step 5 must read paper inputs from `.checkpoints/init-sources.json`, not by ad hoc folder scanning
-- exact deterministic planner policy belongs in `tools/init_discovery.py`, not in duplicated skill constants
+- 不得仅根据仓库状态推断 `--no-introduction`。只有当用户明确要求禁用外部发现时，才可使用它。
+- `raw/papers/`、`raw/notes/`、`raw/web/` 是用户自有输入
+- `raw/tmp/` 与 `raw/discovered/` 是生成型 handoff 区；直接本地 `/ingest` 也可以在 `raw/tmp/` 下准备可复用的 local sidecar
+- `/init` 只能把外部论文写到 `raw/discovered/`；`/init` 与直接本地 `/ingest` 可以把生成的 prepared local source 写到 `raw/tmp/`
+- `/prefill` 是可选背景预填充，不属于 `/init`
+- 只有 `/prefill` 可以自动创建 foundations
+- `/init` 不得直接创建 `people/` 页面
+- notes/web 派生页面必须包含上面的 exact provisional notice
+- 对 claim 置信度与 concept 合并，论文证据永远高于 notes/web
+- 所有论文 ingest 必须通过并行 `/ingest` 子代理执行
+- Step 5 必须读取 `.checkpoints/init-sources.json`，不得临时扫描目录
+- 精确的 planner 常量属于 `tools/init_discovery.py`，不属于重复写在 skill 文档中的常量
 
 ## Error Handling
 
-- **No parseable paper in `raw/papers/`**: enter bootstrap mode
-- **`raw/notes/` and `raw/web/` empty**: skip provisional seeding, continue
-- **PDF decode fails during prepare**: keep the local source, record the warning in `.checkpoints/init-prepare.json`, and fall back to the original path if needed
-- **No confident PDF title is recovered**: omit `--title`, allow filename/path arXiv-ID recovery only, then fall back directly to synthetic `.tex`; any metadata-or-filename title is display-only
-- **Chinese content is detected in `raw/notes/` or `raw/web/`**: keep going, but preserve a planner warning that note/web extraction and ranking may be less reliable and treat rankings plus provisional pages as lower-confidence
-- **S2 or DeepXiv unavailable**: planner falls back to the remaining sources; preserve the warning in the checkpointed plan and note degraded discovery in the report
-- **External fetch fails for one paper**: keep the remaining final set and report the failed download
-- **Single paper ingest fails**: record it via checkpoint, skip it, continue the rest, and list it in the report
-- **Current checkout is detached HEAD**: stop before worktree fan-out and ask the user to switch to or create a named branch first
-- **stash pop fails**: keep checkpoint metadata and report the manual recovery step
+- **`raw/papers/` 无可解析论文**：自动切换到 bootstrap 模式
+- **`raw/notes/` 与 `raw/web/` 为空**：跳过 provisional seeding，继续
+- **prepare 阶段的 PDF decode 失败**：保留本地来源，把 warning 记入 `.checkpoints/init-prepare.json`，必要时回退到原始路径
+- **没有恢复出可信 PDF 标题**：省略 `--title`，只允许走 filename/path arXiv-ID 恢复，然后直接回退到 synthetic `.tex`；metadata 或 filename 标题只用于显示
+- **`raw/notes/` 或 `raw/web/` 中检测到中文内容**：继续执行，但要保留 planner warning，说明 note/web 提取与排序可能更不可靠，并把 rankings 与 provisional 页面视为较低置信度
+- **S2 或 DeepXiv 不可用**：planner 使用剩余来源并继续执行；把 warning 保留在 checkpoint plan 中，并在最终报告里注明 discovery 降级
+- **某篇外部论文下载失败**：保留其余最终论文集，报告失败项
+- **单篇 ingest 失败**：写 checkpoint，跳过该篇，继续其他论文，并在最终报告中列出
+- **当前 checkout 处于 detached HEAD**：在 worktree fan-out 前停止，并要求用户先切换到或创建一个命名分支
+- **stash pop 失败**：保留 checkpoint metadata，并给出手动恢复提示
 
 ## Dependencies
 
-### Tools (via Bash)
+### Tools（via Bash）
 
 - `"$PYTHON_BIN" tools/research_wiki.py init wiki/`
 - `"$PYTHON_BIN" tools/research_wiki.py checkpoint-set-meta wiki/ init-session <key> <value>`
@@ -252,10 +252,10 @@ If `stash_ref` exists, pop it at the end. If stash pop fails, keep the checkpoin
 
 ### Skills
 
-- `/ingest` — one paper per subagent, in INIT MODE
+- `/ingest` — 每个子代理只 ingest 一篇论文，且运行在 INIT MODE
 
-### External APIs used by `init_discovery.py`
+### `init_discovery.py` 内部使用的外部 API
 
 - Semantic Scholar
-- DeepXiv (optional)
-- arXiv download endpoints
+- DeepXiv（可选）
+- arXiv 下载端点

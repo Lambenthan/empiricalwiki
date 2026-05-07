@@ -1,5 +1,5 @@
 # ============================================================================
-# OmegaWiki - One-Click Setup (Windows / PowerShell)
+# EmpiricalWiki - One-Click Setup (Windows / PowerShell)
 # ============================================================================
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File .\setup.ps1            # English (default)
@@ -32,7 +32,7 @@ if (-not (Test-Path $I18nDir)) {
 
 Write-Host ""
 Write-Host "============================================"
-Write-Host "  OmegaWiki - Setup (Windows)"
+Write-Host "  EmpiricalWiki - Setup (Windows)"
 Write-Host "============================================"
 Write-Host ""
 

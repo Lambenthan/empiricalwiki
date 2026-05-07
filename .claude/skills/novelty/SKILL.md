@@ -1,105 +1,105 @@
 ---
-description: Multi-source novelty verification — WebSearch + Semantic Scholar + wiki + Review LLM cross-verify — outputs novelty score and recommendations
+description: 多源 novelty 验证：WebSearch + Semantic Scholar + wiki + Review LLM cross-verify，输出 novelty 评分与建议
 argument-hint: <idea-description-or-slug>
 ---
 
 # /novelty
 
-> Verify the novelty of a research idea or method using multiple sources. Searches WebSearch,
-> Semantic Scholar, existing wiki work, and arXiv recent preprints, then Review LLM cross-verifies.
-> Outputs a novelty score (1-5), closest prior work, differentiation points, and next-step recommendations.
-> Can be used standalone or called by /ideate Phase 4.
+> 对一个研究想法或方法进行多源 novelty 验证。搜索 WebSearch、Semantic Scholar、
+> wiki 内已有工作和 arXiv 最新预印本，然后由 Review LLM 交叉验证，输出 novelty 评分（1-5）、
+> 最相似已有工作、差异化要点和下一步建议。
+> 可独立使用，也被 /ideate Phase 4 调用。
 
 ## Inputs
 
-- `target`: one of the following:
-  - free-text description of the idea (a paragraph or a few sentences)
-  - slug of an ideas/ page in the wiki (e.g. `sparse-lora-for-edge-devices`)
-  - paper title or arXiv URL (check novelty of that paper's method)
-- `--quick`: fast mode, skip Review LLM cross-verify (Step 3), search only
-- `--verbose`: output full search results, not just summaries
+- `target`：以下之一：
+  - idea 的自由文本描述（一段话或几句话）
+  - wiki 中 ideas/ 页面的 slug（如 `sparse-lora-for-edge-devices`）
+  - 论文标题或 arXiv URL（检查该论文方法的 novelty）
+- `--quick`：快速模式，跳过 Review LLM cross-verify（Step 3），仅做搜索
+- `--verbose`：输出完整搜索结果，不仅是摘要
 
 ## Outputs
 
-- **Novelty Report** (output to terminal, not written to wiki):
-  - Novelty Score (1-5)
-  - List of closest prior work (top 3-5)
-  - Differentiation points versus each prior work
-  - Review LLM cross-verify assessment (unless --quick)
-  - Recommended action: proceed / modify / abandon
-- This skill is a **read-only query** — it does not modify any wiki content
+- **Novelty Report**（输出到终端，不写入 wiki）：
+  - Novelty Score（1-5）
+  - 最相似的已有工作列表（top 3-5）
+  - 与每个已有工作的差异化要点
+  - Review LLM 交叉验证意见（除非 --quick）
+  - 推荐行动：proceed / modify / abandon
+- 该 skill 是**只读查询**，不修改 wiki 任何内容
 
 ## Wiki Interaction
 
 ### Reads
-- `wiki/papers/*.md` — search existing papers for similar methods
-- `wiki/concepts/*.md` — check concept overlap
-- `wiki/ideas/*.md` — check for duplication with existing ideas (especially `failure_reason` of failed ideas)
-- `wiki/claims/*.md` — check the current status of claims the idea depends on
-- `wiki/graph/context_brief.md` — global context to assist search
+- `wiki/papers/*.md` — 搜索已有论文中是否有类似方法
+- `wiki/concepts/*.md` — 检查概念重叠
+- `wiki/ideas/*.md` — 检查是否与已有 idea 重复（特别是 failed ideas 的 failure_reason）
+- `wiki/claims/*.md` — 检查 idea 所依赖的 claims 当前状态
+- `wiki/graph/context_brief.md` — 获取全局上下文辅助搜索
 
 ### Writes
-- **None**. Novelty check is a pure query operation; it does not modify the wiki.
+- **无**。Novelty check 是纯查询操作，不修改 wiki。
 
 ### Graph edges created
-- **None**.
+- **无**。
 
 ## Workflow
 
-**Precondition**: confirm working directory is the wiki project root (containing `wiki/`, `raw/`, `tools/`).
+**前置**：确认工作目录为 wiki 项目根（包含 `wiki/`、`raw/`、`tools/` 的目录）。
 
-### Step 1: Extract Method Signature
+### Step 1: 提取方法签名
 
-1. **If target is a slug**: read `wiki/ideas/{slug}.md`, extract title, Hypothesis, Approach sketch
-2. **If target is free text**: use directly
-3. **If target is an arXiv URL**: download the abstract, extract method description
-4. Extract the "method signature" from the target — the core elements of the method:
-   - **What**: what it does (task / goal)
-   - **How**: the method used (technical approach)
-   - **Why novel**: claimed innovation
-5. Generate 3-5 core keywords for subsequent searches
+1. **若 target 是 slug**：读取 `wiki/ideas/{slug}.md`，提取 title、Hypothesis、Approach sketch
+2. **若 target 是自由文本**：直接使用
+3. **若 target 是 arXiv URL**：下载摘要，提取方法描述
+4. 从 target 中提取「方法签名」——方法的核心要素：
+   - **What**：做什么（任务/目标）
+   - **How**：用什么方法（技术路线）
+   - **Why novel**：声称的创新点
+5. 生成 3-5 个核心关键词用于后续搜索
 
-### Step 2: Multi-Source Search
+### Step 2: 多源搜索
 
-Execute the following searches in parallel (use Agent tool for concurrency):
+并行执行以下搜索（使用 Agent tool 并发）：
 
-**Source A — Web Search (5+ queries):**
-1. Direct query: `"<method-name>" + "<task>"` — exact phrase search
-2. Component query: `<component-1> + <component-2> + <domain>` — component combination search
-3. Survey query: `"survey" OR "review" + <task-area> + 2024 2025`
-4. Competitor query: `<alternative-approach> + <same-task>`
-5. Recent query: `<method-keywords> + arXiv + 2025 2026`
+**Source A — Web Search（5+ 查询）：**
+1. 直接查询：`"<method-name>" + "<task>"` 精确短语搜索
+2. 组件查询：`<component-1> + <component-2> + <domain>` 组件组合搜索
+3. Survey 查询：`"survey" OR "review" + <task-area> + 2024 2025`
+4. 竞品查询：`<alternative-approach> + <same-task>`
+5. 最新查询：`<method-keywords> + arXiv + 2025 2026`
 
-**Source B — Semantic Scholar + DeepXiv:**
+**Source B — Semantic Scholar + DeepXiv：**
 ```bash
 python3 tools/fetch_s2.py search "<method-keywords>" --limit 20
 python3 tools/fetch_deepxiv.py search "<method-keywords>" --mode hybrid --limit 20
 ```
-Merge results from both sources (deduplicate by arxiv_id). DeepXiv's hybrid semantic search finds semantically similar work that S2 keyword search may miss.
-- Fetch details and TLDR for top 5 results:
+合并两个来源的结果（按 arxiv_id 去重）。DeepXiv 的混合语义搜索能发现 S2 关键词搜索遗漏的语义相似工作。
+- 对 top 5 结果获取详情和 TLDR：
 ```bash
 python3 tools/fetch_s2.py paper <s2_id>
 python3 tools/fetch_deepxiv.py brief <arxiv_id>
 ```
-Use DeepXiv brief TLDRs to quickly judge method similarity.
-**If DeepXiv is unavailable**: fall back to S2 search only (original behavior).
+使用 DeepXiv brief 的 TLDR 辅助快速判断方法相似度。
+**若 DeepXiv 不可用**：仅使用 S2 搜索（回退到原有行为）。
 
-**Source C — Wiki Internal Search:**
-1. Scan Key idea and Method sections of all pages in `wiki/papers/`
-2. Scan Definition and Variants sections of `wiki/concepts/`
-3. Scan all content in `wiki/ideas/`, with special attention to:
-   - ideas with status = failed and their failure_reason (anti-repetition)
-   - ideas with status = proposed/in_progress (avoid internal duplication)
-4. Read `wiki/graph/context_brief.md` for global perspective
+**Source C — Wiki 内部搜索：**
+1. 扫描 `wiki/papers/` 所有页面的 Key idea 和 Method 段落
+2. 扫描 `wiki/concepts/` 的 Definition 和 Variants 段落
+3. 扫描 `wiki/ideas/` 的全部内容，特别关注：
+   - status = failed 的 ideas 及其 failure_reason（anti-repetition）
+   - status = proposed/in_progress 的 ideas（避免内部重复）
+4. 读取 `wiki/graph/context_brief.md` 获取全局视角
 
-**Source D — Recent arXiv Preprints:**
-- Use WebSearch: `site:arxiv.org <method-keywords> 2025 2026`
+**Source D — arXiv 近期预印本：**
+- 使用 WebSearch 查询 `site:arxiv.org <method-keywords> 2025 2026`
 
-### Step 3: Review LLM Cross-Verify
+### Step 3: Review LLM 交叉验证
 
-(Skip if `--quick`)
+（若 `--quick` 则跳过此步）
 
-Submit the following to Review LLM for independent assessment:
+将以下信息提交 Review LLM 进行独立判断：
 
 ```
 mcp__llm-review__chat:
@@ -121,80 +121,80 @@ mcp__llm-review__chat:
     4. If score <= 2, what modification could increase novelty?
 ```
 
-### Step 4: Generate Novelty Report
+### Step 4: 生成 Novelty Report
 
-Synthesize Step 2 search results and Step 3 Review LLM assessment into a structured report:
+综合 Step 2 搜索结果和 Step 3 Review LLM 意见，生成结构化报告：
 
 ```markdown
 # Novelty Report: {idea title}
 
 ## Score: {1-5}/5 — {label}
 
-| Score | Label | Meaning |
-|-------|-------|---------|
-| 1 | Published | Highly similar published work exists |
-| 2 | Very Similar | Very similar method exists, only minor differences |
-| 3 | Incremental | Clear incremental contribution over existing work |
-| 4 | Novel Combination | Creatively combines existing techniques, producing new insight |
-| 5 | Fundamentally New | Proposes an entirely new paradigm or formulation |
+| Score | Label | 含义 |
+|-------|-------|------|
+| 1 | Published | 已有高度相似的发表工作 |
+| 2 | Very Similar | 存在非常相似的方法，仅细节差异 |
+| 3 | Incremental | 在已有工作基础上有明确的增量贡献 |
+| 4 | Novel Combination | 创新性地组合已有技术，产生新 insight |
+| 5 | Fundamentally New | 提出全新范式或 formulation |
 
 ## Closest Prior Work
 
-1. **{title}** ({year}) — {one-sentence description of the similarity}
-   - Difference: {key distinction between this method and the prior work}
-   - Wiki link: [[slug]] (if it exists)
+1. **{title}** ({year}) — {一句话描述相似之处}
+   - 差异：{本方法与之的关键区别}
+   - Wiki 链接：[[slug]]（若存在）
 2. ...
 
 ## Review LLM Assessment
-{summary of Review LLM's independent judgment}
+{Review LLM 的独立判断摘要}
 
 ## Anti-repetition Check
-- Failed ideas in wiki: {list relevant failed ideas with failure_reason}
-- In-progress ideas in wiki: {list potentially overlapping ideas}
+- Wiki 中已有 failed ideas：{列出相关 failed ideas 及 failure_reason}
+- Wiki 中已有 in_progress ideas：{列出可能重叠的 ideas}
 
 ## Recommendation
 - **{proceed / modify / abandon}**
-- Rationale: {one paragraph}
-- If modify: suggested differentiation directions: {specific suggestions}
+- 理由：{一段话}
+- 若 modify：建议的差异化方向：{具体建议}
 ```
 
-**Scoring rules (composite judgment):**
-- Take the lower of Claude's search-based score and Review LLM's score (conservative principle)
-- If wiki contains a failed idea whose failure_reason overlaps with this idea → lower score by 1
-- If wiki contains a highly overlapping in_progress idea → mark as abandon (internal duplication)
+**评分规则（综合判断）：**
+- Claude 搜索结果 和 Review LLM 意见取较低分（保守原则）
+- 若 wiki 中存在 failed idea 且 failure_reason 与本 idea 相关 → 降 1 分
+- 若 wiki 中存在 in_progress idea 高度重叠 → 标记为 abandon（内部重复）
 
 ## Constraints
 
-- **Do not modify the wiki**: novelty check is a pure query; all results are output to terminal only
-- **Conservative scoring**: underestimate novelty rather than overestimate to avoid wasting effort on known work
-- **Must check failed ideas**: ideas with status=failed in wiki/ideas/ are important anti-repetition signals
-- **Search coverage**: at least 5 distinct WebSearch queries + Semantic Scholar + wiki internal search
-- **Review LLM independence**: do not include Claude's own novelty judgment when submitting to Review LLM; let Review LLM assess independently
-- **Cite real sources**: all prior work listed in the report must be real (returned by WebSearch/S2); do not fabricate
+- **不修改 wiki**：novelty check 是纯查询操作，所有结果仅输出到终端
+- **保守评分**：宁可低估 novelty 也不高估，避免在已有工作上浪费精力
+- **必须检查 failed ideas**：wiki/ideas/ 中 status=failed 的 ideas 是重要的 anti-repetition 信号
+- **搜索覆盖面**：至少 5 个不同的 WebSearch 查询 + Semantic Scholar + wiki 内部搜索
+- **Review LLM 独立性**：提交给 Review LLM 时不包含 Claude 自己的 novelty 判断，让 Review LLM 独立评估
+- **引用真实来源**：报告中列出的所有 prior work 必须是真实存在的（WebSearch/S2 返回的），不得编造
 
 ## Error Handling
 
-- **WebSearch unavailable**: skip Sources A and D, rely only on S2 + wiki search; note limited coverage in report
-- **Semantic Scholar API unavailable**: skip S2 portion, use DeepXiv + WebSearch as compensation
-- **DeepXiv API unavailable**: skip DeepXiv portion, rely on S2 + WebSearch (fall back to original behavior)
-- **Review LLM unavailable**: skip Step 3; annotate report with "Review LLM cross-verify unavailable, single-model assessment only"
-- **Wiki empty**: proceed with external searches normally; annotate wiki internal search section with "wiki empty"
-- **idea slug not found**: prompt user to check the slug, list available slugs in wiki/ideas/
+- **WebSearch 不可用**：跳过 Source A 和 D，仅依赖 S2 + wiki 搜索，在报告中注明覆盖面不足
+- **Semantic Scholar API 不可用**：跳过 S2 部分，依赖 DeepXiv + WebSearch 补偿
+- **DeepXiv API 不可用**：跳过 DeepXiv 部分，依赖 S2 + WebSearch（回退到原有行为）
+- **Review LLM 不可用**：跳过 Step 3，报告标注「Review LLM cross-verify unavailable, single-model assessment only」
+- **Wiki 为空**：正常执行外部搜索，wiki 内部搜索部分标注「wiki empty」
+- **idea slug 不存在**：提示用户检查 slug，列出 wiki/ideas/ 中的可用 slugs
 
 ## Dependencies
 
 ### Tools（via Bash）
-- `python3 tools/fetch_s2.py search "<query>" --limit 20` — Semantic Scholar keyword search
-- `python3 tools/fetch_s2.py paper <s2_id>` — fetch paper details
-- `python3 tools/fetch_deepxiv.py search "<query>" --mode hybrid --limit 20` — DeepXiv semantic search
-- `python3 tools/fetch_deepxiv.py brief <arxiv_id>` — fetch paper TLDR for similarity judgment
+- `python3 tools/fetch_s2.py search "<query>" --limit 20` — Semantic Scholar 关键词搜索
+- `python3 tools/fetch_s2.py paper <s2_id>` — 获取论文详情
+- `python3 tools/fetch_deepxiv.py search "<query>" --mode hybrid --limit 20` — DeepXiv 语义搜索
+- `python3 tools/fetch_deepxiv.py brief <arxiv_id>` — 获取论文 TLDR 辅助相似度判断
 
 ### MCP Servers
-- `mcp__llm-review__chat` — Review LLM cross-verify (Step 3)
+- `mcp__llm-review__chat` — Review LLM 交叉验证（Step 3）
 
 ### Claude Code Native
-- `WebSearch` — multi-query web search (Step 2 Sources A + D)
-- `Agent` tool — parallel execution of multi-source search (Step 2)
+- `WebSearch` — 多查询 web 搜索（Step 2 Source A + D）
+- `Agent` tool — 并行执行多源搜索（Step 2）
 
 ### Shared References
-- `.claude/skills/shared-references/cross-model-review.md` (created in Phase 2, Review LLM independence principle)
+- `.claude/skills/shared-references/cross-model-review.md`（Phase 2 创建，Review LLM 独立性原则）

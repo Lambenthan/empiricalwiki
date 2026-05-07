@@ -1,102 +1,102 @@
 ---
-description: End-to-end research orchestrator — idea discovery → experiment design → execution → verdict → paper writing, with human gates and session-resumable state
+description: 端到端研究编排器：idea 发现 → 实验设计 → 执行 → 判决 → 论文撰写，带人工门控和状态恢复
 argument-hint: <research-direction-or-brief> [--auto] [--start-from stage1|stage2|stage3|stage3-collect|stage3-check|stage4|stage5] [--skip-paper] [--venue ICLR|NeurIPS|ICML|ACL|CVPR]
 ---
 
 # /research
 
-> End-to-end research orchestrator that composes all skills into a complete research workflow.
-> Stage 0 (Bootstrap) + 5 Stages + 2 Human Gates, covering the full pipeline from empty wiki to paper submission.
-> **Zero-friction entry**: if the wiki is empty, Bootstrap is triggered automatically (search + auto-ingest 5 papers); no need to run /init manually.
-> Every Gate and Stage saves progress to `wiki/outputs/pipeline-progress.md`, supporting cross-session recovery.
+> 端到端研究编排器，将所有 skill 组合为完整的研究流程。
+> Stage 0 (Bootstrap) + 5 个 Stage + 2 个 Human Gate，覆盖从空 wiki 到论文提交的全流程。
+> **零摩擦入口**：wiki 为空时自动触发 Bootstrap（搜索 + auto-ingest 5 篇论文），无需手动 /init。
+> 每个 Gate 和 Stage 保存进度到 `wiki/outputs/pipeline-progress.md`，支持跨 session 恢复。
 >
-> **Stage 3 is non-blocking**: experiments are deployed and control returns immediately (`--auto` mode automatically sets up a CronCreate to monitor every 30 minutes).
-> When all experiments finish, Stage 4 is triggered automatically. Use `/exp-status` at any time to check progress.
+> **Stage 3 为非阻塞设计**：实验部署后立即返回（`--auto` 模式自动设置 CronCreate 每 30 分钟监控），
+> 实验全部完成后自动进入 Stage 4。可随时用 `/exp-status` 查看进度。
 >
-> `--auto` mode skips manual confirmation (automatically selects the top-1 idea). `--skip-paper` runs the research without writing a paper.
+> `--auto` 模式跳过人工确认（自动选 top-1 idea），`--skip-paper` 只做研究不写论文。
 
 ## Inputs
 
-- `direction`: research direction description or path to a `RESEARCH_BRIEF.md` file
-  - Text form: one-sentence description of the research direction (e.g. "sparse LoRA for edge devices")
-  - File form: structured RESEARCH_BRIEF.md (containing domain, constraints, target venues)
-- `--auto` (optional): fully automatic mode; Gate 1 auto-selects top-1 idea, Gate 2 auto-continues, Stage 3b auto-creates CronCreate
-- `--start-from <stage>` (optional): resume execution from the specified stage
-  - Valid values: `stage1`, `stage2`, `stage3`, `stage3-collect`, `stage3-check`, `stage4`, `stage5`
-  - `stage3-collect`: skip deploy, go directly to Stage 3c (collect results from already-deployed experiments)
-  - `stage3-check`: check experiment status only (equivalent to `/exp-status --pipeline {slug}`), do not continue execution
-  - Requires `wiki/outputs/pipeline-progress.md` to exist
-- `--skip-paper` (optional): run research only (Stages 1-4), skip paper writing (Stage 5), but still run /exp-eval (Stage 4)
-- `--venue` (optional): target conference (ICLR / NeurIPS / ICML / ACL / CVPR), passed to /paper-plan
+- `direction`：研究方向描述或 `RESEARCH_BRIEF.md` 文件路径
+  - 文本形式：一句话描述研究方向（如 "sparse LoRA for edge devices"）
+  - 文件形式：结构化的 RESEARCH_BRIEF.md（含 domain、constraints、target venues）
+- `--auto`（可选）：全自动模式，Gate 1 自动选 top-1 idea，Gate 2 自动继续，Stage 3b 自动 CronCreate
+- `--start-from <stage>`（可选）：从指定 stage 恢复执行
+  - 有效值：`stage1`、`stage2`、`stage3`、`stage3-collect`、`stage3-check`、`stage4`、`stage5`
+  - `stage3-collect`：跳过 deploy，直接进入 Stage 3c（收集已部署实验的结果）
+  - `stage3-check`：只检查实验状态（等同于 `/exp-status --pipeline {slug}`），不继续执行
+  - 需要 `wiki/outputs/pipeline-progress.md` 存在
+- `--skip-paper`（可选）：只做研究（Stage 1-4），不写论文（跳过 Stage 5），但仍执行 /exp-eval（Stage 4）
+- `--venue`（可选）：目标会议（ICLR / NeurIPS / ICML / ACL / CVPR），传递给 /paper-plan
 
 ## Outputs
 
-- **Wiki updates** (delegated to sub-skills): ideas/, experiments/, claims/, outputs/, graph/
-- **wiki/outputs/pipeline-progress.md** — pipeline progress snapshot (for recovery)
-- **wiki/outputs/PIPELINE_REPORT.md** — full pipeline report
-- **paper/ directory** (if not --skip-paper) — submittable paper
-- **wiki/log.md** — log appended after each stage
+- **wiki 更新**（通过子 skill 委托）：ideas/、experiments/、claims/、outputs/、graph/
+- **wiki/outputs/pipeline-progress.md** — 流水线进度快照（用于恢复）
+- **wiki/outputs/PIPELINE_REPORT.md** — 完整流水线报告
+- **paper/ 目录**（若未 --skip-paper）— 可提交的论文
+- **wiki/log.md** — 每个 stage 追加日志
 
 ## Wiki Interaction
 
 ### Reads
-- `wiki/graph/context_brief.md` — global context (passed to sub-skills)
-- `wiki/graph/open_questions.md` — knowledge gaps (passed to /ideate)
-- `wiki/ideas/*.md` — Gate 1 selection, Stage 4 verdict
-- `wiki/experiments/*.md` — Stage 3-4 status checks
-- `wiki/claims/*.md` — Stage 4 verdict, Stage 5 paper planning
-- `wiki/outputs/pipeline-progress.md` — --start-from state recovery
-- `wiki/papers/*.md` — Stage 5 paper writing context
+- `wiki/graph/context_brief.md` — 全局上下文（传递给子 skills）
+- `wiki/graph/open_questions.md` — 知识缺口（传递给 /ideate）
+- `wiki/ideas/*.md` — Gate 1 选择、Stage 4 判决
+- `wiki/experiments/*.md` — Stage 3-4 状态检查
+- `wiki/claims/*.md` — Stage 4 判决、Stage 5 论文规划
+- `wiki/outputs/pipeline-progress.md` — --start-from 恢复状态
+- `wiki/papers/*.md` — Stage 5 论文写作上下文
 
 ### Writes
-- `wiki/outputs/pipeline-progress.md` — save progress at each Gate (wiki entity writes are delegated to sub-skills)
-- `wiki/outputs/PIPELINE_REPORT.md` — final report
-- `wiki/log.md` — append log entries
-- All other wiki entity writes are delegated to sub-skills (do not directly write to ideas/experiments/claims/)
+- `wiki/outputs/pipeline-progress.md` — 每个 Gate 保存进度（委托写入 wiki 实体的操作由子 skill 完成）
+- `wiki/outputs/PIPELINE_REPORT.md` — 最终报告
+- `wiki/log.md` — 追加日志
+- 其他 wiki 实体写入均通过子 skill 委托（不直接写入 ideas/experiments/claims/）
 
 ### Graph edges created
-- None directly — all graph edges are delegated to sub-skills (/ideate, /exp-design, /exp-eval each create their own edges)
+- 无直接创建 — 所有 graph edges 通过子 skill 代理（/ideate、/exp-design、/exp-eval 各自创建 edges）
 
 ## Workflow
 
-**Precondition**:
-1. Confirm working directory is the wiki project root (containing `wiki/`, `raw/`, `tools/`)
-2. If `--start-from` is specified, read `wiki/outputs/pipeline-progress.md` to restore state
+**前置**：
+1. 确认工作目录为 wiki 项目根（包含 `wiki/`、`raw/`、`tools/` 的目录）
+2. 若 `--start-from` 指定，读取 `wiki/outputs/pipeline-progress.md` 恢复状态
 
-### Step 0: Initialize
+### Step 0: 初始化
 
-1. **Parse input**:
-   - If file path: read RESEARCH_BRIEF.md, extract direction, domain, constraints, target_venue
-   - If text: use as direction; leave domain/constraints blank
-   - Generate slug: `python3 tools/research_wiki.py slug "{direction}"`
+1. **解析输入**：
+   - 若为文件路径：读取 RESEARCH_BRIEF.md，提取 direction、domain、constraints、target_venue
+   - 若为文本：作为 direction，domain/constraints 留空
+   - 生成 slug：`python3 tools/research_wiki.py slug "{direction}"`
 
-2. **Auto-recovery detection** (when `--start-from` is not specified):
-   - If `wiki/outputs/pipeline-progress.md` exists and `status == running`:
-     - Read direction, current_stage, started, slug
-     - Use AskUserQuestion to prompt the user:
+2. **自动恢复检测**（无 `--start-from` 时）：
+   - 若 `wiki/outputs/pipeline-progress.md` 存在 且 `status == running`：
+     - 读取 direction、current_stage、started、slug
+     - 使用 AskUserQuestion 提示用户选择：
        ```
-       Unfinished pipeline detected:
-       Direction: {direction}
-       Current stage: {current_stage}
-       Started: {started}
+       检测到未完成的 pipeline:
+       方向: {direction}
+       当前阶段: {current_stage}
+       开始时间: {started}
 
-       [1] Resume from {current_stage} (recommended)
-       [2] Start a new pipeline (will overwrite old progress)
-       [3] View experiment status first (/exp-status --pipeline {slug})
+       [1] 从 {current_stage} 继续（推荐）
+       [2] 开始新的 pipeline（将覆盖旧进度）
+       [3] 先查看实验状态（/exp-status --pipeline {slug}）
        ```
-     - If --auto or user selects [1]: auto-set `--start-from {current_stage}`, continue execution
-     - If user selects [2]: continue creating new pipeline (overwrite old progress file)
-     - If user selects [3]: call `/exp-status --pipeline {slug}` then exit without continuing
+     - 若 --auto 或用户选 [1]：自动设 `--start-from {current_stage}`，继续执行
+     - 若用户选 [2]：继续创建新 pipeline（覆盖旧进度文件）
+     - 若用户选 [3]：调用 `/exp-status --pipeline {slug}` 后退出，不继续执行
 
-3. **Check recovery** (when `--start-from` is specified):
-   - If `wiki/outputs/pipeline-progress.md` exists:
-     - Read progress file, restore idea_slug, experiment_slugs, stage3a_deployed, claim_slugs, monitoring_cron_id
-     - Jump to specified stage
-   - If progress file does not exist: report error and exit; prompt user to run the full pipeline first
-   - **`--start-from stage3-check`**: equivalent to calling `/exp-status --pipeline {slug}`; display status then exit
-   - **`--start-from stage3-collect`**: skip Stage 3a+3b; go directly to Stage 3c (collect already-deployed experiments)
+3. **检查恢复**（有 `--start-from` 时）：
+   - 若 `wiki/outputs/pipeline-progress.md` 存在：
+     - 读取进度文件，恢复 idea_slug、experiment_slugs、stage3a_deployed、claim_slugs、monitoring_cron_id
+     - 跳转到指定 stage
+   - 若进度文件不存在：报错退出，提示先运行完整流水线
+   - **`--start-from stage3-check`**：等同于调用 `/exp-status --pipeline {slug}`，展示状态后退出
+   - **`--start-from stage3-collect`**：跳过 Stage 3a+3b，直接进入 Stage 3c（收集已部署实验）
 
-3. **Create progress file** `wiki/outputs/pipeline-progress.md`:
+3. **创建进度文件** `wiki/outputs/pipeline-progress.md`：
    ```yaml
    ---
    slug: "{pipeline-slug}"
@@ -126,64 +126,64 @@ argument-hint: <research-direction-or-brief> [--auto] [--start-from stage1|stage
    - Stage 5: pending
    ```
 
-4. **Append log**:
+4. **追加日志**：
    ```bash
    python3 tools/research_wiki.py log wiki/ \
      "research | started | direction: {direction} | mode: {auto|interactive}"
    ```
 
-5. **Snapshot wiki state** (for Growth Report in Step Final):
+5. **Snapshot wiki 状态**（用于 Step Final 的 Growth Report）：
    ```bash
    python3 tools/research_wiki.py maturity wiki/ --json
    ```
-   Save returned JSON to memory variable `maturity_before`.
+   保存返回的 JSON 到内存变量 `maturity_before`。
 
-### Stage 0: Bootstrap (triggered automatically when wiki is empty)
+### Stage 0: Bootstrap（wiki 为空时自动触发）
 
-**Trigger condition**: run `python3 tools/research_wiki.py maturity wiki/ --json`. If `level == "cold"` and `papers < 3`: enter Bootstrap automatically. Otherwise skip and proceed to Stage 1.
+**触发条件**：运行 `python3 tools/research_wiki.py maturity wiki/ --json`，若 `level == "cold"` 且 `papers < 3`：自动进入 Bootstrap。否则跳过，直接进入 Stage 1。
 
-1. **Initialize wiki structure** (if not yet initialized):
+1. **初始化 wiki 结构**（若未初始化）：
    ```bash
    python3 tools/research_wiki.py init wiki/
    ```
 
-2. **Search for relevant papers** (use Agent tool with 3 parallel searches):
-   - DeepXiv: `python3 tools/fetch_deepxiv.py search "{direction}" --mode hybrid --limit 20`
-   - Semantic Scholar: `python3 tools/fetch_s2.py search "{direction}" --limit 20`
-   - arXiv: `python3 tools/fetch_arxiv.py` (using direction keywords)
-   - If DeepXiv is unavailable: skip; use only S2 + arXiv
+2. **搜索相关论文**（使用 Agent tool 并行 3 路搜索）：
+   - DeepXiv：`python3 tools/fetch_deepxiv.py search "{direction}" --mode hybrid --limit 20`
+   - Semantic Scholar：`python3 tools/fetch_s2.py search "{direction}" --limit 20`
+   - arXiv：`python3 tools/fetch_arxiv.py`（使用 direction 关键词）
+   - 若 DeepXiv 不可用：跳过，仅使用 S2 + arXiv
 
-3. **Merge, rank, and select top 5**:
-   - Deduplicate by arxiv_id
-   - Ranking priority: DeepXiv relevance score > S2 citation count > recency
-   - Select top 5 (5 = minimum threshold for cold→warm)
+3. **合并排名 & 选取 top 5**：
+   - 按 arxiv_id 去重
+   - 排序优先级：DeepXiv relevance score > S2 citation count > recency
+   - 取 top 5 篇（5 = cold→warm 最低门槛）
 
-4. **Auto-ingest each paper**:
+4. **逐一 auto-ingest**：
    ```
    Skill: ingest
    Args: "{arxiv_url_or_path}"
    ```
-   Output progress after each ingest: `[{i}/5] Ingested: {paper_title}`
+   每篇 ingest 后输出进度：`[{i}/5] Ingested: {paper_title}`
 
-5. **Rebuild derived data**:
+5. **重建派生数据**：
    ```bash
    python3 tools/research_wiki.py rebuild-context-brief wiki/
    python3 tools/research_wiki.py rebuild-open-questions wiki/
    ```
 
-6. **Bootstrap report**:
+6. **Bootstrap 报告**：
    ```bash
    python3 tools/research_wiki.py maturity wiki/ --json
    ```
-   Output to terminal:
+   输出到终端：
    ```
-   Bootstrap complete:
+   Bootstrap 完成：
    Papers: {N} | Claims: {M} | Concepts: {K} | Edges: {E}
    Maturity: cold → {new_level}
-   Proceeding to Stage 1: Idea Discovery...
+   继续进入 Stage 1: Idea Discovery...
    ```
 
-7. **Log + update progress**:
+7. **日志 + 进度更新**：
    ```bash
    python3 tools/research_wiki.py log wiki/ \
      "research | stage0-bootstrap | auto-ingested {N} papers | maturity: {level}"
@@ -193,66 +193,66 @@ argument-hint: <research-direction-or-brief> [--auto] [--start-from stage1|stage
 
 ### Stage 1: Idea Discovery
 
-Call `/ideate`:
+调用 `/ideate`：
 
 ```
 Skill: ideate
 Args: "{direction}" --domain {domain}
 ```
 
-**After completion**:
-1. Read the generated ideas, sorted by priority
-2. Update pipeline-progress: Stage 1 → completed, record generated idea slugs
-3. Append log
+**完成后**：
+1. 读取生成的 ideas，按 priority 排序
+2. 更新 pipeline-progress：Stage 1 → completed，记录生成的 idea slugs
+3. 追加日志
 
-### Gate 1: Select Idea
+### Gate 1: 选择 Idea
 
-**If `--auto` mode**:
-- Automatically select the highest-priority (top-1) idea
-- Output selection result to terminal without waiting for confirmation
+**若 `--auto` 模式**：
+- 自动选择 priority 最高（排名 top-1）的 idea
+- 在终端输出选择结果，不等待确认
 
-**If interactive mode**:
-- List all generated ideas (slug, title, priority, novelty score)
-- Use AskUserQuestion to prompt user to select one idea (or enter "stop" to halt)
-- If user selects stop: save progress, terminate pipeline
+**若交互模式**：
+- 列出所有生成的 ideas（slug、title、priority、novelty score）
+- 使用 AskUserQuestion 提示用户选择一个 idea（或输入 stop 停止）
+- 若用户选择 stop：保存进度，终止流水线
 
-**Save progress**:
-- Update pipeline-progress: Gate 1 → passed, record idea_slug
-- Update selected idea status: proposed → in_progress
+**保存进度**：
+- 更新 pipeline-progress：Gate 1 → passed，记录 idea_slug
+- 更新选中 idea 的 status: proposed → in_progress
 
 ### Stage 2: Experiment Design
 
-Call `/exp-design`:
+调用 `/exp-design`：
 
 ```
 Skill: exp-design
 Args: "{idea_slug}" --review
 ```
 
-**After completion**:
-1. Read generated experiment slugs (pages in wiki/experiments/ where linked_idea == idea_slug)
-2. Update pipeline-progress: Stage 2 → completed, record experiment_slugs
+**完成后**：
+1. 读取生成的 experiment slugs（从 wiki/experiments/ 中 linked_idea == idea_slug 的页面）
+2. 更新 pipeline-progress：Stage 2 → completed，记录 experiment_slugs
 
-### Stage 3: Experiment Execution (non-blocking)
+### Stage 3: Experiment Execution（非阻塞）
 
-Stage 3 is divided into three sub-stages, allowing experiments to run asynchronously in the background without blocking the session.
+Stage 3 分为三个子阶段，允许实验在后台异步运行，不阻塞 session。
 
 #### Stage 3a: Deploy All
 
-Deploy each experiment in run order (baseline → validation → ablation → robustness) by calling `/exp-run {experiment_slug}` (default deploy mode, Phase 1+2):
+按 run order（baseline → validation → ablation → robustness）依次调用 `/exp-run {experiment_slug}`（默认 deploy 模式，Phase 1+2）：
 
 ```
 Skill: exp-run
 Args: "{experiment_slug}"
 ```
 
-(Default deploy mode, Phase 1+2: returns immediately after deployment, does not wait for experiment to finish)
+（**默认 deploy 模式**，Phase 1+2，部署后立即返回，不等待实验完成）
 
-**After each deployment**:
-- Record deployment result (success/failure) in memory
-- If deploy fails: record to pipeline-progress with a warning (baseline deploy failure gets a stronger warning), but **continue deploying remaining experiments** (do not abort)
+**每次部署后**：
+- 记录部署结果（成功/失败）到内存
+- 若 deploy 失败：记录到 pipeline-progress 中，在报告中标注警告（基线 deploy 失败时加强警告），但**继续部署其余实验**（不中止）
 
-**After all deployments complete**, update pipeline-progress.md:
+**全部部署完成后**，更新 pipeline-progress.md：
 ```bash
 python3 tools/research_wiki.py set-meta \
   wiki/outputs/pipeline-progress.md current_stage stage3-await
@@ -260,160 +260,160 @@ python3 tools/research_wiki.py set-meta \
   wiki/outputs/pipeline-progress.md stage3a_deployed \
   "[{experiment_slug_1}, {experiment_slug_2}, ...]"
 ```
-Append log:
+追加日志：
 ```bash
 python3 tools/research_wiki.py log wiki/ \
   "research | stage3a | deployed {N} experiments | pipeline: {slug}"
 ```
 
-#### Stage 3b: Await (non-blocking)
+#### Stage 3b: Await（非阻塞）
 
-After all experiments are deployed, compute ETA, save progress, and end the current session.
+实验部署完毕后，计算 ETA、保存进度并结束当前 session。
 
-1. Update pipeline-progress:
+1. 更新 pipeline-progress：
    ```bash
    python3 tools/research_wiki.py set-meta \
      wiki/outputs/pipeline-progress.md current_stage stage3-await
    ```
-2. **Compute estimated completion time for each experiment**:
-   For each deployed experiment, read `started` and `estimated_hours` from frontmatter:
+2. **计算各实验预计完成时间**：
+   对每个已部署实验，读取 frontmatter 的 `started` 和 `estimated_hours` 字段：
    - `eta = started + estimated_hours`
-   - `recommended_return = max(all etas) + 30-minute buffer, rounded up to nearest hour or half-hour`
-3. Append log:
+   - `recommended_return = max(所有 eta) + 30 分钟缓冲，向上取整到最近整点或半点`
+3. 追加日志：
    ```bash
    python3 tools/research_wiki.py log wiki/ \
      "research | stage3b | awaiting {N} experiments | latest eta: {YYYY-MM-DD HH:MM} | pipeline: {slug}"
    ```
-4. Output instructions then **end current session**:
+4. 输出操作指引后**结束当前 session**：
    ```
-   Stage 3a complete: {N} experiments all deployed:
+   ✅ Stage 3a 完成：{N} 个实验已全部部署：
 
-   Experiment                      Environment     Est. Duration   Est. Completion
-   ──────────────────────────────  ──────────────  ─────────────   ───────────────
-   exp-foo-baseline                local           ~8h             Tomorrow 09:30
-   exp-foo-validation              remote (gpu1)   ~6h             Today 23:00
-   exp-foo-ablation                local           ~4h             Today 21:00
+   实验                          环境            预计时长   预计完成
+   ────────────────────────────  ────────────    ────────   ──────────────
+   exp-foo-baseline              local           ~8h        明天 09:30
+   exp-foo-validation            remote (gpu1)   ~6h        今天 23:00
+   exp-foo-ablation              local           ~4h        今天 21:00
 
-   Latest completion: Tomorrow 09:30 (exp-foo-baseline)
-   Recommended time to return: Tomorrow 10:00+
+   ⏳ 最晚完成：明天 09:30（exp-foo-baseline）
+   建议 明天 10:00 之后运行：
 
-     /exp-status                              ← confirm all experiments complete
-     /research --start-from stage3-collect    ← collect results and continue
+     /exp-status                              ← 确认所有实验完成
+     /research --start-from stage3-collect    ← 收集结果并继续
 
-   Progress saved to wiki/outputs/pipeline-progress.md; current session can be closed.
+   进度已保存至 wiki/outputs/pipeline-progress.md，当前 session 可以关闭。
    ```
 
-#### Stage 3c: Collect (triggered after experiments complete)
+#### Stage 3c: Collect（实验完成后触发）
 
-**Trigger**: user manually runs `/research --start-from stage3-collect`
+**触发条件**：用户手动运行 `/research --start-from stage3-collect`
 
-For each deployed experiment (read from `stage3a_deployed` list):
+对每个已部署的 experiment（从 `stage3a_deployed` 列表读取）：
 ```
 Skill: exp-run
 Args: "{experiment_slug} --collect"
 ```
 
-(Collect mode, Phase 3+4: check completion status and collect results)
+（collect 模式，Phase 3+4：检查完成状态并收集结果）
 
-**Decision after each collect**:
-- If outcome == failed and this is the baseline experiment → **terminate pipeline**, report baseline cannot be reproduced
-- If outcome == failed and this is a validation experiment → record failure, continue collecting remaining experiments, proceed to Stage 4 evaluation
-- If outcome == inconclusive → record and continue
+**每次 collect 后的决策**：
+- 若 outcome == failed 且为 baseline experiment → **终止流水线**，报告基线无法复现
+- 若 outcome == failed 且为 validation experiment → 记录失败，继续收集其余实验，进入 Stage 4 评估
+- 若 outcome == inconclusive → 记录，继续
 
-**After all collects complete**:
-- Update pipeline-progress: Stage 3 → completed
+**全部 collect 完成后**：
+- 更新 pipeline-progress：Stage 3 → completed
   ```bash
   python3 tools/research_wiki.py set-meta \
     wiki/outputs/pipeline-progress.md current_stage stage4
   ```
-- Append log:
+- 追加日志：
   ```bash
   python3 tools/research_wiki.py log wiki/ \
     "research | stage3c | collected {N} experiments | pipeline: {slug}"
   ```
-- Proceed to Stage 4
+- 继续进入 Stage 4
 
 ### Stage 4: Verdict & Iteration
 
-Call `/exp-eval` for each completed experiment:
+对每个 completed experiment 调用 `/exp-eval`：
 
 ```
 Skill: exp-eval
 Args: "{experiment_slug}" --auto
 ```
 
-**Evaluate whether claims are sufficient**:
-1. Read the latest status of all target claims
-2. Determine whether iteration is needed:
-   - **Claims sufficient** (primary claim confidence >= 0.7 and status is supported or weakly_supported) → proceed to Gate 2
-   - **Claims insufficient** (confidence < 0.4 or status is challenged) → enter iteration
+**评估 claims 是否充分**：
+1. 读取所有 target claims 的最新状态
+2. 判断是否需要迭代：
+   - **claims 充分**（主要 claim confidence >= 0.7，且 status 为 supported 或 weakly_supported）→ 进入 Gate 2
+   - **claims 不足**（confidence < 0.4 或 status 为 challenged）→ 进入迭代
 
-**Iteration path** (when claims are insufficient, up to 1 retry):
-1. Analyze the cause of failure
-2. Call `/refine` to improve the experiment plan:
+**迭代路径**（claims 不足时，最多 1 次重试）：
+1. 分析失败原因
+2. 调用 `/refine` 改进 experiment plan：
    ```
    Skill: refine
    Args: "{experiment_plan_slug}" --max-rounds 2 --focus evidence
    ```
-3. Re-run Stage 3 → Stage 4 for new/modified experiments
-4. Maximum 2 iterations (prevents infinite loops); each stage has at most 1 auto-retry
+3. 对新增/修改的 experiments 重新执行 Stage 3 → Stage 4
+4. 最多迭代 2 轮（防止无限循环），每个 stage 最多 1 次 auto retry
 
-**After completion**:
-- Update pipeline-progress: Stage 4 → completed, record claim_slugs
+**完成后**：
+- 更新 pipeline-progress：Stage 4 → completed，记录 claim_slugs
 
-### Gate 2: Confirm Paper Ready
+### Gate 2: 确认 Paper Ready
 
-**If `--skip-paper`**: skip Gate 2 and Stage 5, generate final report directly
+**若 `--skip-paper`**：跳过 Gate 2 和 Stage 5，直接生成最终报告
 
-**If `--auto` mode**: automatically continue, enter Stage 5
+**若 `--auto` 模式**：自动继续，进入 Stage 5
 
-**If interactive mode**:
-- Display claim status summary:
+**若交互模式**：
+- 展示 claim 状态摘要：
   ```
   Claim: {slug} | Status: {status} | Confidence: {confidence}
   Evidence: {count} sources ({strong}/{moderate}/{weak})
   ```
-- Use AskUserQuestion to prompt user: ready for paper / need more experiments / stop here
-- If "need more experiments": return to Stage 2 for replanning
-- If "stop here": save progress, generate final report (without paper)
+- 使用 AskUserQuestion 提示用户确认：ready for paper / need more experiments / stop here
+- 若 "need more experiments"：返回 Stage 2 重新规划
+- 若 "stop here"：保存进度，生成最终报告（不含论文）
 
-**Save progress**:
-- Update pipeline-progress: Gate 2 → passed
+**保存进度**：
+- 更新 pipeline-progress：Gate 2 → passed
 
 ### Stage 5: Paper Writing
 
-Call sub-skills in sequence: /paper-plan → /paper-draft → /refine → /paper-compile
+依次调用子 skills：/paper-plan → /paper-draft → /refine → /paper-compile
 
-**5a. Call /paper-plan**:
+**5a. 调用 /paper-plan**：
 ```
 Skill: paper-plan
 Args: "{claim_slugs}" --venue {venue}
 ```
 
-**5b. Call /paper-draft**:
+**5b. 调用 /paper-draft**：
 ```
 Skill: paper-draft
 Args: "wiki/outputs/PAPER_PLAN.md" --review
 ```
 
-**5c. Call /refine on paper**:
+**5c. 调用 /refine on Paper**：
 ```
 Skill: refine
 Args: "paper/main.tex" --max-rounds 3 --target-score 8 --focus writing
 ```
 
-**5d. Call /paper-compile**:
+**5d. 调用 /paper-compile**：
 ```
 Skill: paper-compile
 Args: "paper/"
 ```
 
-**After completion**:
-- Update pipeline-progress: Stage 5 → completed, status: completed
+**完成后**：
+- 更新 pipeline-progress：Stage 5 → completed, status: completed
 
 ### Step Final: Pipeline Report
 
-Generate `wiki/outputs/PIPELINE_REPORT.md`:
+生成 `wiki/outputs/PIPELINE_REPORT.md`：
 
 ```markdown
 # Research Pipeline Report
@@ -468,81 +468,81 @@ Generate `wiki/outputs/PIPELINE_REPORT.md`:
 | Edges | {N} | {N} | +{N} |
 | Maturity | {level} | {level} | {status} |
 | Coverage | {%} | {%} | +{%} |
-(Data from comparing `maturity_before` from Step 0 against a fresh call to `maturity --json` here. Only rows with delta != 0 are shown.)
+（数据来自 Step 0 step 5 的 `maturity_before` 与此处重新调用 `maturity --json` 的对比。仅展示 delta != 0 的行。）
 
 ## Next Steps
 - {recommendations based on remaining gaps or unresolved issues}
 ```
 
-Append log:
+追加日志：
 ```bash
 python3 tools/research_wiki.py log wiki/ \
   "research | completed | idea: {slug} | claims: {N} updated | paper: {yes/no}"
 ```
 
-Update pipeline-progress: status: completed
+更新 pipeline-progress：status: completed
 
 ## Constraints
 
-- **Orchestrator does not directly modify wiki entities or embed sub-skill logic**: all wiki modifications are delegated to sub-skills; the pipeline only coordinates by calling them via the Skill tool
-- **Gates and Stages must save progress**: every Gate and Stage must save pipeline-progress.md when completed or entering await
-- **Stage 3a deploy failures do not abort**: record a warning and continue deploying; do not terminate early (baseline collect failure is what triggers termination)
-- **Baseline collect failure terminates**: in Stage 3c, if baseline outcome == failed, terminate the pipeline
-- **Stage 3b ends the session**: after Stage 3b completes, the current session ends; do not continue waiting for experiments
-- **Maximum 2 iterations**: Stage 4 iterates at most 2 times to prevent infinite loops
-- **--auto does not skip computation**: auto mode skips human confirmation but skips no computation steps
-- **--skip-paper still runs Stage 4 /exp-eval**: claim updates must be completed even when not writing a paper
-- **Pass sub-skill parameters through**: correctly pass domain, --venue, and other parameters to sub-skills
-- **Log every Stage**: append a log.md audit entry after each Stage completes
-- **Do not re-run completed stages**: --start-from skips already-completed stages
-- **Progress file at wiki/outputs/pipeline-progress.md**: consistent location for easy discovery and recovery
-- **Auto-recovery first**: if no --start-from is given and an unfinished pipeline exists, default to prompting the user to resume rather than starting fresh
+- **编排器不直接修改 wiki 实体，不嵌入子 skill 逻辑**：所有 wiki 修改通过子 skill 委托完成，pipeline 只负责协调，通过 Skill tool 调用
+- **Gate 和 Stage 必须保存进度**：每个 Gate 和 Stage 完成/进入等待时必须保存 pipeline-progress.md
+- **Stage 3a 部署失败不中止**：deploy 失败时记录警告继续部署，不提前终止（baseline collect 失败时才终止）
+- **baseline collect 失败终止**：Stage 3c collect 结果，baseline outcome == failed 时终止流水线
+- **Stage 3b 结束 session**：Stage 3b 完成后当前 session 结束，不继续等待实验
+- **最多 2 轮迭代**：Stage 4 迭代最多 2 轮，防止无限循环
+- **--auto 不跳过计算**：auto 模式跳过人工确认，但不跳过任何计算步骤
+- **--skip-paper 仍执行 Stage 4 /exp-eval**：即使不写论文，也要完成 claim 更新
+- **子 skill 参数透传**：将 domain、--venue 等参数正确传递给子 skill
+- **日志记录每个 Stage**：每个 Stage 完成后追加 log.md 审计日志
+- **不重复执行已完成 stage**：--start-from 跳过已完成的 stages
+- **进度文件在 wiki/outputs/pipeline-progress.md**：统一位置，便于发现和恢复
+- **自动恢复优先**：无 --start-from 且有未完成 pipeline 时，默认提示用户恢复而不是重新开始
 
 ## Error Handling
 
-- **pipeline-progress missing but --start-from specified**: report error; prompt user to run the full pipeline first
-- **pipeline-progress corrupted or malformed**: attempt to infer progress from current wiki state (read ideas/experiments/claims statuses), recover to the nearest Gate
-- **Sub-skill call fails**: record error to pipeline-progress, report the failed stage, suggest --start-from to resume
-- **All ideas generation fails**: terminate pipeline; suggest the user adjust the research direction
-- **All experiment deploys fail**: terminate pipeline (Stage 3a); generate failure report; suggest checking GPU/SSH configuration
-- **Stage 3c baseline collect fails**: terminate pipeline; report baseline cannot be reproduced; suggest re-running /exp-design
-- **All experiment collects fail (non-baseline)**: proceed to Stage 4 evaluation (treat failures as evidence)
-- **Gate user selects stop**: save progress to pipeline-progress; generate partial report
-- **RESEARCH_BRIEF.md malformed**: fall back to plain-text direction; ignore structured fields
-- **Wiki empty (no papers/concepts)**: auto-trigger Stage 0 Bootstrap (search + auto-ingest 5 papers)
-- **Claims still insufficient after iteration**: annotate report with "claims insufficient after max iterations"; let user decide whether to continue
-- **User selects view status (auto-recovery detection [3])**: call `/exp-status --pipeline {slug}` then exit without starting a new pipeline
+- **pipeline-progress 不存在但指定 --start-from**：报错，提示先运行完整流水线
+- **pipeline-progress 损坏或格式异常**：尝试从 wiki 当前状态推断进度（读取 ideas/experiments/claims 状态），恢复到最近的 Gate
+- **子 skill 调用失败**：记录错误到 pipeline-progress，报告失败的 stage，建议 --start-from 恢复
+- **所有 ideas 生成失败**：终止流水线，建议用户调整 research direction
+- **所有实验 deploy 失败**：终止流水线（Stage 3a），生成失败报告，建议检查 GPU/SSH 配置
+- **Stage 3c baseline collect 失败**：终止流水线，报告基线无法复现，建议重新 /exp-design
+- **所有实验 collect 失败（其他非 baseline）**：进入 Stage 4 评估（以失败为证据）
+- **Gate 用户选择 stop**：保存进度到 pipeline-progress，生成部分报告
+- **RESEARCH_BRIEF.md 格式错误**：降级为纯文本 direction，忽略结构化字段
+- **wiki 为空（无 papers/concepts）**：自动触发 Stage 0 Bootstrap（搜索 + auto-ingest 5 篇论文）
+- **迭代后 claims 仍不足**：在报告中标注 "claims insufficient after max iterations"，由用户决定是否继续
+- **用户选择查看状态（自动恢复检测 [3]）**：调用 `/exp-status --pipeline {slug}` 后退出，不继续执行新流水线
 
 ## Dependencies
 
 ### Skills（via Skill tool）
 - `/ingest` — Stage 0 Bootstrap auto-ingest
-- `/ideate` — Stage 1 idea discovery
-- `/exp-design` — Stage 2 experiment design
-- `/exp-run` — Stage 3a (deploy mode) and Stage 3c (--collect mode)
-- `/exp-status` — user manually checks experiment progress; `--auto-advance` can automatically trigger Stage 4 when all complete
-- `/exp-eval` — Stage 4 verdict
-- `/refine` — Stage 4 iteration + Stage 5 paper improvement
-- `/paper-plan` — Stage 5 paper planning
-- `/paper-draft` — Stage 5 paper writing
-- `/paper-compile` — Stage 5 paper compilation
+- `/ideate` — Stage 1 idea 发现
+- `/exp-design` — Stage 2 实验设计
+- `/exp-run` — Stage 3a（deploy 模式）和 Stage 3c（--collect 模式）
+- `/exp-status` — 用户手动查看实验进度，`--auto-advance` 可在所有完成时自动触发 Stage 4
+- `/exp-eval` — Stage 4 判决
+- `/refine` — Stage 4 迭代 + Stage 5 论文改进
+- `/paper-plan` — Stage 5 论文规划
+- `/paper-draft` — Stage 5 论文撰写
+- `/paper-compile` — Stage 5 论文编译
 
 ### Tools（via Bash）
-- `python3 tools/research_wiki.py slug "{title}"` — generate pipeline slug
-- `python3 tools/research_wiki.py set-meta <path> <field> <value>` — update pipeline-progress fields
-- `python3 tools/research_wiki.py log wiki/ "<message>"` — append log entry
-- `python3 tools/research_wiki.py maturity wiki/ --json` — check wiki maturity (Stage 0 trigger + Growth Report)
-- `python3 tools/research_wiki.py init wiki/` — initialize wiki structure (Stage 0)
-- `python3 tools/fetch_deepxiv.py search "{query}" --mode hybrid --limit 20` — DeepXiv semantic search (Stage 0)
-- `python3 tools/fetch_s2.py search "{query}" --limit 20` — Semantic Scholar search (Stage 0)
-- `python3 tools/fetch_arxiv.py` — arXiv RSS search (Stage 0)
+- `python3 tools/research_wiki.py slug "{title}"` — 生成 pipeline slug
+- `python3 tools/research_wiki.py set-meta <path> <field> <value>` — 更新 pipeline-progress 字段
+- `python3 tools/research_wiki.py log wiki/ "<message>"` — 追加日志
+- `python3 tools/research_wiki.py maturity wiki/ --json` — 检查 wiki 成熟度（Stage 0 触发条件 + Growth Report）
+- `python3 tools/research_wiki.py init wiki/` — 初始化 wiki 结构（Stage 0）
+- `python3 tools/fetch_deepxiv.py search "{query}" --mode hybrid --limit 20` — DeepXiv 语义搜索（Stage 0）
+- `python3 tools/fetch_s2.py search "{query}" --limit 20` — Semantic Scholar 搜索（Stage 0）
+- `python3 tools/fetch_arxiv.py` — arXiv RSS 搜索（Stage 0）
 
 ### MCP Servers
-- None directly — all Review LLM interactions are used indirectly via sub-skills
+- 无直接 MCP 调用 — 所有 Review LLM 交互通过子 skill 间接使用
 
 ### Claude Code Native
-- `Read` — read pipeline-progress, wiki pages, RESEARCH_BRIEF
-- `Write` — write pipeline-progress, PIPELINE_REPORT
-- `Glob` — find experiments, ideas, claims
-- `Skill` — call sub-skills (core capability)
-- `AskUserQuestion` — user interaction at Gates and auto-recovery detection
+- `Read` — 读取 pipeline-progress、wiki 页面、RESEARCH_BRIEF
+- `Write` — 写入 pipeline-progress、PIPELINE_REPORT
+- `Glob` — 查找 experiments、ideas、claims
+- `Skill` — 调用子 skills（核心能力）
+- `AskUserQuestion` — Gate 和自动恢复检测的用户交互

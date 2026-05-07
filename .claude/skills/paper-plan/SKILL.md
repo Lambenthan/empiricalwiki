@@ -1,87 +1,87 @@
 ---
-description: Compile a paper outline from the claim graph — evidence map → narrative structure → section plan + figure plan + citation plan, Review LLM review mandatory
+description: 从 claim graph 编译论文大纲：编译 evidence map → 叙事结构 → 章节计划 + figure plan + citation plan，Review LLM review 必选
 argument-hint: <claim-slugs...> --venue <ICLR|NeurIPS|ICML|ACL|CVPR|IEEE> [--title <working-title>]
 ---
 
 # /paper-plan
 
-> Compile a paper outline from the wiki's claim graph.
-> Input target claims (status: supported or weakly_supported), specify the target venue,
-> compile an evidence map from the wiki → determine narrative structure → generate a section outline + figure plan + citation plan.
-> Review LLM review is a mandatory step (acting as area chair to assess outline persuasiveness).
-> Output PAPER_PLAN.md to wiki/outputs/.
+> 从 wiki 的 claim graph 编译论文大纲。
+> 输入 target claims（status: supported 或 weakly_supported），指定目标会议/期刊，
+> 从 wiki 编译 evidence map → 确定叙事结构 → 生成章节大纲 + figure plan + citation plan。
+> Review LLM review 是必选步骤（作为 area chair 审查大纲说服力）。
+> 输出 PAPER_PLAN.md 到 wiki/outputs/。
 >
-> Key distinction: the outline is claim-graph-driven — each section exists because it supports a claim,
-> not because paper convention requires that section.
+> 关键差异：大纲由 claim graph 驱动 — 每个 section 存在是因为它支撑某个 claim，
+> 而非因为论文惯例要求有该 section。
 
 ## Inputs
 
-- `claims`: list of target claim slugs (space-separated)
-  - each claim should have status `supported` or `weakly_supported`
-  - if `proposed` or `challenged` claims are included, warn but continue
-- `--venue` (required): target venue, determines page limit and format requirements
-  - supported: `ICLR` / `NeurIPS` / `ICML` / `ACL` / `CVPR` / `IEEE`
-- `--title` (optional): working title; if omitted, generated from target claims
+- `claims`：目标 claims 的 slug 列表（空格分隔）
+  - 每个 claim 应为 `supported` 或 `weakly_supported` 状态
+  - 若包含 `proposed` 或 `challenged` 状态的 claim，发出警告但继续
+- `--venue`（必选）：目标会议/期刊，决定页数限制和格式要求
+  - 支持：`ICLR` / `NeurIPS` / `ICML` / `ACL` / `CVPR` / `IEEE`
+- `--title`（可选）：工作标题，若不提供则从 target claim 生成
 
 ## Outputs
 
-- `wiki/outputs/paper-plan-{slug}-{date}.md` — complete paper plan (PAPER_PLAN.md)
-- `wiki/graph/edges.jsonl` — new derived_from edges (plan → source claims/papers)
-- `wiki/graph/context_brief.md` — rebuilt
-- `wiki/log.md` — appended log entry
-- **PAPER_PLAN_REPORT** (printed to terminal) — plan summary
+- `wiki/outputs/paper-plan-{slug}-{date}.md` — 完整论文计划（PAPER_PLAN.md）
+- `wiki/graph/edges.jsonl` — 新增 derived_from 边（plan → source claims/papers）
+- `wiki/graph/context_brief.md` — 重建
+- `wiki/log.md` — 追加日志
+- **PAPER_PLAN_REPORT**（输出到终端）— 计划摘要
 
 ## Wiki Interaction
 
 ### Reads
-- `wiki/claims/*.md` — status, confidence, evidence list, conditions of target claims
-- `wiki/experiments/*.md` — supporting experiments for claims (results, metrics, key_result)
-- `wiki/papers/*.md` — evidence source papers (Method, Results, Related)
-- `wiki/concepts/*.md` — technical concepts involved (supports Method section writing)
-- `wiki/topics/*.md` — research direction context (supports Introduction positioning)
-- `wiki/ideas/*.md` — motivation and hypothesis of original ideas
-- `wiki/graph/context_brief.md` — global context
-- `wiki/graph/open_questions.md` — knowledge gaps (annotate paper limitations)
-- `wiki/graph/edges.jsonl` — relationship graph (build narrative logic chain)
-- `.claude/skills/shared-references/academic-writing.md` — writing principles
-- `.claude/skills/shared-references/citation-verification.md` — citation discipline
+- `wiki/claims/*.md` — 目标 claims 的 status、confidence、evidence 列表、conditions
+- `wiki/experiments/*.md` — claims 的 supporting experiments（结果、metrics、key_result）
+- `wiki/papers/*.md` — evidence 来源论文（Method、Results、Related）
+- `wiki/concepts/*.md` — 涉及的技术概念（支持 Method 章节撰写）
+- `wiki/topics/*.md` — 研究方向上下文（支持 Introduction 定位）
+- `wiki/ideas/*.md` — 原始 idea 的 motivation 和 hypothesis
+- `wiki/graph/context_brief.md` — 全局上下文
+- `wiki/graph/open_questions.md` — 知识缺口（标注论文 limitation）
+- `wiki/graph/edges.jsonl` — 关系图谱（构建叙事逻辑链）
+- `.claude/skills/shared-references/academic-writing.md` — 写作原则
+- `.claude/skills/shared-references/citation-verification.md` — 引用纪律
 
 ### Writes
-- `wiki/outputs/paper-plan-{slug}-{date}.md` — paper plan file
-- `wiki/graph/edges.jsonl` — derived_from edges
-- `wiki/graph/context_brief.md` — rebuilt
-- `wiki/log.md` — appended operation log
+- `wiki/outputs/paper-plan-{slug}-{date}.md` — 论文计划文件
+- `wiki/graph/edges.jsonl` — derived_from 边
+- `wiki/graph/context_brief.md` — 重建
+- `wiki/log.md` — 追加操作日志
 
 ### Graph edges created
-- `derived_from`: paper-plan → claims (which claims the plan is derived from)
-- `derived_from`: paper-plan → papers (which papers the plan cites)
+- `derived_from`：paper-plan → claims（计划从哪些 claims 派生）
+- `derived_from`：paper-plan → papers（计划引用哪些论文）
 
 ## Workflow
 
-**Precondition**: confirm the working directory is the wiki project root (the directory containing `wiki/`, `raw/`, `tools/`).
+**前置**：确认工作目录为 wiki 项目根（包含 `wiki/`、`raw/`、`tools/` 的目录）。
 
-### Step 1: Load Claim Graph
+### Step 1: 加载 Claim Graph
 
-1. Read `wiki/claims/{slug}.md` for all target claims
-2. For each claim, collect its evidence list:
-   - each evidence item's source (paper slug or experiment slug)
-   - evidence type (supports / contradicts / tested_by / invalidates)
-   - evidence strength (weak / moderate / strong)
-3. For each evidence source, read the corresponding wiki page:
-   - `wiki/experiments/{source}.md` → key_result, metrics, outcome
-   - `wiki/papers/{source}.md` → Method, Results
-4. Load relevant edges from `wiki/graph/edges.jsonl` to build relationships between claims
-5. Read `wiki/graph/context_brief.md` for global context
-6. Read `wiki/graph/open_questions.md` to annotate known limitations
+1. 读取所有 target claims 的 `wiki/claims/{slug}.md`
+2. 对每个 claim，收集其 evidence 列表：
+   - 每条 evidence 的 source（paper slug 或 experiment slug）
+   - evidence type（supports / contradicts / tested_by / invalidates）
+   - evidence strength（weak / moderate / strong）
+3. 对每条 evidence source，读取对应的 wiki 页面：
+   - `wiki/experiments/{source}.md` → key_result、metrics、outcome
+   - `wiki/papers/{source}.md` → Method、Results
+4. 从 `wiki/graph/edges.jsonl` 加载相关边，构建 claims 之间的关系
+5. 读取 `wiki/graph/context_brief.md` 获取全局上下文
+6. 读取 `wiki/graph/open_questions.md` 标注 known limitations
 
-**Validation**:
-- If any target claim has status `proposed`: warn "claim is unvalidated; paper may lack evidence support"
-- If any target claim has confidence < 0.5: warn "claim confidence is low; consider running more experiments first"
-- If no experiment evidence supports any claim: error "at least one experimental result is required to plan a paper"
+**验证**：
+- 若任何 target claim 的 status 为 `proposed`：警告「claim 尚未验证，论文可能缺乏证据支撑」
+- 若任何 target claim 的 confidence < 0.5：警告「claim confidence 较低，建议先运行更多实验」
+- 若无 experiment evidence 支撑任何 claim：错误「至少需要一个实验结果才能规划论文」
 
-### Step 2: Compile Evidence Map from Wiki
+### Step 2: 从 Wiki 编译 Evidence Map
 
-Generate a structured matrix mapping claims → evidence → sections:
+生成一个结构化矩阵，映射 claims → evidence → sections：
 
 ```markdown
 | Claim | Status | Confidence | Evidence Sources | Strength | Paper Section |
@@ -91,32 +91,32 @@ Generate a structured matrix mapping claims → evidence → sections:
 | [[supporting-claim-2]] | weakly_supported | 0.55 | exp-scaling | weak | Exp 5.4 (Scaling) |
 ```
 
-Map claims to paper structure along each dimension:
-- **Target claim** → core contribution, drives Abstract + Introduction + Method
-- **Decomposition claims** → factor contributions, drives Ablation subsections
-- **Contextual claims** → background knowledge, drives Related Work + Introduction
+按维度映射 claims 到论文结构：
+- **Target claim** → 核心贡献，驱动 Abstract + Introduction + Method
+- **Decomposition claims** → 各因素贡献，驱动 Ablation subsections
+- **Contextual claims** → 背景知识，驱动 Related Work + Introduction
 
-### Step 3: Determine Narrative Structure
+### Step 3: 确定叙事结构
 
-Follow the hourglass principle in `shared-references/academic-writing.md`:
+遵循 `shared-references/academic-writing.md` 的 hourglass 原则：
 
-1. **Identify the paper's core storyline**:
-   - Gap (extracted from ideas/ motivation or gap_map)
-   - Solution (extracted from target claim's approach)
-   - Evidence (extracted from experiments' results)
-   - Impact (inferred from claim confidence + scope)
+1. **确定 paper 的核心故事线**：
+   - Gap（从 ideas/ 的 motivation 或 gap_map 提取）
+   - Solution（从 target claim 的 approach 提取）
+   - Evidence（从 experiments 的 results 提取）
+   - Impact（从 claim confidence + scope 推断）
 
-2. **Determine the narrative angle**:
-   - What problem does the paper solve? (problem-driven vs. method-driven vs. data-driven)
-   - Who is the primary audience? (theory / systems / applications)
-   - How does it differentiate from the 3 most relevant recent papers?
+2. **确定叙事角度**：
+   - 论文解决什么问题？（问题驱动 vs 方法驱动 vs 数据驱动）
+   - 主要读者是谁？（理论/系统/应用）
+   - 与最近最相关的 3 篇论文如何区分？
 
-3. **Establish section → claim mapping**:
-   Every section must support at least one claim. A section with no claim support is filler and should be removed.
+3. **建立 section → claim 映射**：
+   每个 section 必须至少支撑一个 claim。没有 claim 支撑的 section 是填充，应删除。
 
-### Step 4: Generate Section Outline
+### Step 4: 生成章节大纲
 
-Generate the outline according to venue format requirements; each section includes:
+按 venue 格式要求生成大纲，每个 section 包含：
 
 ```markdown
 ## 1. Introduction (1.5 pages)
@@ -201,11 +201,11 @@ Generate the outline according to venue format requirements; each section includ
 - {from gap_map open questions}
 ```
 
-**Page budget**: allocated by `--venue` (refer to the venue table in academic-writing.md); total section pages <= venue main-body limit.
+**Page budget**：根据 `--venue` 分配（参考 academic-writing.md 的 venue 表），总 section 页数 <= venue 主文限制。
 
 ### Step 5: Figure Plan
 
-Design each planned figure/table:
+为每个计划中的 figure/table 设计：
 
 ```markdown
 ## Figure Plan
@@ -233,20 +233,20 @@ Design each planned figure/table:
 
 ### Step 6: Citation Plan
 
-Following `shared-references/citation-verification.md`:
+参照 `shared-references/citation-verification.md`：
 
-1. List all wiki papers referenced via `[[slug]]` in the outline
-2. For each paper, pre-fetch BibTeX:
-   - DBLP first, then CrossRef, then S2
-   - Success: record BibTeX key + source
-   - Failure: mark `[UNCONFIRMED]`
-3. Generate citation coverage report:
+1. 列出大纲中所有 `[[slug]]` 引用的 wiki papers
+2. 对每篇论文，pre-fetch BibTeX：
+   - 先 DBLP，再 CrossRef，再 S2
+   - 成功：记录 BibTeX key + 来源
+   - 失败：标记 `[UNCONFIRMED]`
+3. 生成 citation coverage 报告：
    ```
    Citations: 15 total, 12 verified (DBLP: 8, CrossRef: 3, S2: 1), 3 [UNCONFIRMED]
    ```
-4. For [UNCONFIRMED] entries, provide suggested URLs for manual verification
+4. 对 [UNCONFIRMED] 条目，提供建议的手动检查 URL
 
-### Step 7: Review LLM Review (mandatory)
+### Step 7: Review LLM Review（必选）
 
 ```
 mcp__llm-review__chat:
@@ -277,25 +277,25 @@ mcp__llm-review__chat:
     5. Are the figures/tables sufficient to tell the story?
 ```
 
-Revise the outline based on Review LLM feedback (add sections, adjust page budget, add figures/tables, correct narrative structure).
+根据 Review LLM 反馈修改大纲（补充 section、调整 page budget、添加 figure/table、修正叙事结构）。
 
-### Step 8: Write to Wiki
+### Step 8: 输出到 Wiki
 
-1. **Generate slug**:
+1. **生成 slug**：
    ```bash
    python3 tools/research_wiki.py slug "<working-title>"
    ```
 
-2. **Write PAPER_PLAN.md**:
-   Create `wiki/outputs/paper-plan-{slug}-{date}.md` containing:
-   - Metadata (venue, title, date, target claims)
-   - Evidence Map (Step 2)
-   - Complete section outline (Step 4, with Review LLM revisions)
-   - Figure/Table Plan (Step 5)
-   - Citation Plan + coverage report (Step 6)
-   - Review LLM Review Summary (Step 7 key feedback and revision record)
+2. **写入 PAPER_PLAN.md**：
+   创建 `wiki/outputs/paper-plan-{slug}-{date}.md`，包含：
+   - 元信息（venue、title、date、target claims）
+   - Evidence Map（Step 2）
+   - 完整章节大纲（Step 4，含 Review LLM 修改）
+   - Figure/Table Plan（Step 5）
+   - Citation Plan + coverage report（Step 6）
+   - Review LLM Review Summary（Step 7 关键反馈和修改记录）
 
-3. **Add graph edges**:
+3. **添加 graph edges**：
    ```bash
    # plan → target claim
    python3 tools/research_wiki.py add-edge wiki/ \
@@ -308,18 +308,18 @@ Revise the outline based on Review LLM feedback (add sections, adjust page budge
      --type derived_from --evidence "Paper plan cites this paper"
    ```
 
-4. **Rebuild derived data**:
+4. **重建派生数据**：
    ```bash
    python3 tools/research_wiki.py rebuild-context-brief wiki/
    ```
 
-5. **Append log**:
+5. **追加日志**：
    ```bash
    python3 tools/research_wiki.py log wiki/ \
      "paper-plan | {venue} paper outline for [[{slug}]] | claims: {claim-list} | citations: {verified}/{total}"
    ```
 
-6. **Print PAPER_PLAN_REPORT to terminal**:
+6. **输出 PAPER_PLAN_REPORT 到终端**：
    ```markdown
    # Paper Plan Report
 
@@ -355,48 +355,48 @@ Revise the outline based on Review LLM feedback (add sections, adjust page budge
 
 ## Constraints
 
-- **--venue is required**: page limits and format requirements vary significantly by venue; cannot be omitted
-- **At least one experiment evidence**: purely theoretical claims are insufficient for an empirical paper; at least one experimental result is required
-- **Page budget must be feasible**: total section pages <= venue main-body limit; otherwise adjust (compress or move to appendix)
-- **Review LLM review is mandatory**: cannot be skipped; catching problems at the outline stage has the lowest cost
-- **All citations from wiki**: every paper in the citation plan must exist in wiki/papers/
-- **claim → section mapping must be complete**: every target claim must appear in at least one section
-- **Every section must have a claim**: a section with no claim support is filler and should be removed or merged
-- **Graph edges via tools/research_wiki.py**: do not manually edit edges.jsonl
-- **Citations use [[slug]]**: all citations in the outline use wikilink syntax
+- **--venue 必选**：不同会议的页数限制、格式要求差异大，不可省略
+- **至少一个 experiment evidence**：纯理论 claim 不足以支撑实验性论文，需至少一个实验结果
+- **page budget 必须可行**：总 section 页数 <= venue 主文限制，否则调整（压缩或移至 appendix）
+- **Review LLM review 必选**：不可跳过。大纲阶段发现问题成本最低
+- **所有引用来自 wiki**：citation plan 中的每篇论文必须在 wiki/papers/ 中存在
+- **claim → section 映射完整**：每个 target claim 必须出现在至少一个 section 中
+- **每个 section 必须有 claim**：无 claim 支撑的 section 视为填充，应删除或合并
+- **graph edges 使用 tools/research_wiki.py**：不手动编辑 edges.jsonl
+- **引用使用 [[slug]]**：大纲中所有引用使用 wikilink 语法
 
 ## Error Handling
 
-- **Insufficient claim status**: if all claims are `proposed`, error "claims are unvalidated; run experiments first"
-- **No experiment evidence**: error "at least one experimental result is required"; suggest running /exp-design + /exp-run first
-- **Insufficient wiki papers**: if the citation plan has fewer than 5 wiki papers, warn "related work coverage is insufficient; consider /ingest of more papers first"
-- **Page budget exceeded**: automatically move lower-priority sections to appendix plan; report the adjustment
-- **Review LLM unavailable**: fall back to Claude self-review; report annotated "single-model review — cross-model verification unavailable"
-- **BibTeX fetch failed**: mark [UNCONFIRMED]; summarize in the citation plan report
-- **Slug conflict**: append date suffix
-- **Target claim not found**: error; list candidates in wiki/claims/
+- **claim 状态不足**：若所有 claims 均为 proposed，报错「claims 尚未验证，建议先运行实验」
+- **无 experiment evidence**：报错「至少需要一个实验结果」，建议先运行 /exp-design + /exp-run
+- **wiki papers 不足**：若 citation plan 中 wiki 论文 < 5 篇，警告「相关工作覆盖不足，建议先 /ingest 更多论文」
+- **page budget 超限**：自动将低优先级 section 移至 appendix 计划，报告调整
+- **Review LLM 不可用**：降级为 Claude 自审，报告标注「single-model review — cross-model verification unavailable」
+- **BibTeX 获取失败**：标记 [UNCONFIRMED]，在 citation plan 报告中汇总
+- **slug 冲突**：追加日期后缀
+- **target claim 找不到**：报错，列出 wiki/claims/ 中候选
 
 ## Dependencies
 
 ### Tools（via Bash）
-- `python3 tools/research_wiki.py slug "<title>"` — generate slug
-- `python3 tools/research_wiki.py add-edge wiki/ ...` — add graph edge
-- `python3 tools/research_wiki.py rebuild-context-brief wiki/` — rebuild query_pack
-- `python3 tools/research_wiki.py log wiki/ "<message>"` — append log
-- `python3 tools/fetch_s2.py search "<title>"` — Semantic Scholar search (citation plan fallback)
+- `python3 tools/research_wiki.py slug "<title>"` — 生成 slug
+- `python3 tools/research_wiki.py add-edge wiki/ ...` — 添加 graph edge
+- `python3 tools/research_wiki.py rebuild-context-brief wiki/` — 重建 query_pack
+- `python3 tools/research_wiki.py log wiki/ "<message>"` — 追加日志
+- `python3 tools/fetch_s2.py search "<title>"` — Semantic Scholar 搜索（citation plan fallback）
 
 ### MCP Servers
-- `mcp__llm-review__chat` — Step 7 outline review (mandatory)
+- `mcp__llm-review__chat` — Step 7 大纲审查（必选）
 
 ### Claude Code Native
-- `Read` — read wiki pages
-- `Glob` — find claims, experiments, papers
-- `WebFetch` — DBLP / CrossRef BibTeX fetch (Step 6)
+- `Read` — 读取 wiki 页面
+- `Glob` — 查找 claims、experiments、papers
+- `WebFetch` — DBLP / CrossRef BibTeX 获取（Step 6）
 
 ### Shared References
-- `.claude/skills/shared-references/academic-writing.md` — narrative structure and section design principles
-- `.claude/skills/shared-references/citation-verification.md` — citation fetch and verification rules
+- `.claude/skills/shared-references/academic-writing.md` — 叙事结构和章节设计原则
+- `.claude/skills/shared-references/citation-verification.md` — 引用获取和验证规则
 
 ### Called by
-- `/research` Stage 5 (paper writing stage)
-- Manual user invocation
+- `/research` Stage 5（论文写作阶段）
+- 用户手动调用

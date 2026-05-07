@@ -1,101 +1,101 @@
 ---
-description: View the status of all running experiments; optionally auto-collect completed experiments and advance the pipeline
+description: 查看所有运行中实验的状态，可选自动收集已完成实验并推进流水线
 argument-hint: "[--pipeline <slug>] [--collect-ready] [--auto-advance]"
 ---
 
 # /exp-status
 
-> Unified experiment status monitoring entry point.
-> Scans all `running` experiments, performs a live status check on each (screen session / SSH),
-> and outputs a status table (alive / anomaly / completed) to guide the user's next actions.
+> 统一的实验状态监控入口。
+> 扫描所有 `running` 实验，对每个实验执行实时状态检查（screen session / SSH），
+> 输出状态表（alive / anomaly / completed），引导用户下一步操作。
 >
-> When used with `/research --auto`, acts as a periodic checker scheduled by CronCreate:
-> when all experiments in a pipeline are completed, automatically triggers `/research --start-from stage4`.
+> 与 `/research --auto` 配合时作为 CronCreate 调度的定期检查器：
+> 当 pipeline 的所有实验都完成时，自动触发 `/research --start-from stage4`。
 
 ## Inputs
 
-- No arguments (default): check all `running` experiments, print status table
-- `--pipeline <slug>` (optional): check only experiments belonging to the specified pipeline; additionally print overall pipeline progress
-- `--collect-ready` (optional): auto-call `/exp-run --collect` for all experiments whose session has already ended
-- `--auto-advance` (optional, requires `--pipeline <slug>`): if all pipeline experiments are `completed`,
-  automatically trigger `/research --start-from stage4` without waiting for the user
+- 无参数（默认）：检查所有 `running` 实验，输出状态表
+- `--pipeline <slug>`（可选）：只检查属于指定 pipeline 的实验，额外输出 pipeline 整体进度
+- `--collect-ready`（可选）：对所有"session 已消失"的实验自动调用 `/exp-run --collect` 收集结果
+- `--auto-advance`（可选，需配合 `--pipeline <slug>`）：若 pipeline 所有实验均已 `completed`，
+  自动触发 `/research --start-from stage4`，无需用户手动运行
 
 ## Outputs
 
-- **Status report** (terminal output, all modes): list of experiments in running/anomaly/completed states
-- `wiki/experiments/{slug}.md` — updated (outcome/key_result/status) when `--collect-ready` triggers Phase 4
-- `wiki/outputs/pipeline-progress.md` — `--auto-advance` updates current_stage → stage4 (done internally by /research --start-from stage4)
-- `wiki/log.md` — appended status check log
+- **状态报告**（终端输出，所有模式）：running/anomaly/completed 三种状态的实验列表
+- `wiki/experiments/{slug}.md` — `--collect-ready` 触发 Phase 4 时更新（outcome/key_result/status）
+- `wiki/outputs/pipeline-progress.md` — `--auto-advance` 时更新 current_stage → stage4（由 /research --start-from stage4 内部完成）
+- `wiki/log.md` — 追加状态检查日志
 
 ## Wiki Interaction
 
 ### Reads
-- `wiki/experiments/*.md` — status, remote frontmatter (server/session/started), date_planned
-- `wiki/outputs/pipeline-progress.md` — in `--pipeline` mode, identifies target experiments and monitoring_cron_id
+- `wiki/experiments/*.md` — status、remote frontmatter（server/session/started）、date_planned
+- `wiki/outputs/pipeline-progress.md` — `--pipeline` 模式下识别目标实验和 monitoring_cron_id
 
 ### Writes
-- `wiki/experiments/{slug}.md` — updated via /exp-run --collect in `--collect-ready` mode
-- `wiki/outputs/pipeline-progress.md` — updated by /research when `--auto-advance` triggers Stage 4
-- `wiki/log.md` — appended status check log
+- `wiki/experiments/{slug}.md` — `--collect-ready` 模式下通过 /exp-run --collect 触发更新
+- `wiki/outputs/pipeline-progress.md` — `--auto-advance` 触发 Stage 4 时由 /research 更新
+- `wiki/log.md` — 追加状态检查日志
 
 ### Graph edges created
-- None (result writes triggered indirectly via /exp-run --collect do not produce new edges)
+- 无（通过 /exp-run --collect 间接触发的结果写入不产生新 edges）
 
 ## Workflow
 
-**Precondition**: confirm working directory is the wiki project root (directory containing `wiki/`, `raw/`, `tools/`).
+**前置**：确认工作目录为 wiki 项目根（包含 `wiki/`、`raw/`、`tools/` 的目录）。
 
-### Step 1: Collect Target Experiment List
+### Step 1: 收集目标实验列表
 
-1. **Determine check scope**:
-   - If `--pipeline <slug>` is specified:
-     - Read `wiki/outputs/pipeline-progress.md`, extract the slug list from the `stage3a_deployed` field
-     - If the file does not exist or slug does not match: report error, suggest running `/research` first or specifying manually
-   - Otherwise:
-     - Use Glob to scan `wiki/experiments/*.md`, filter for `status == running`
+1. **确定检查范围**：
+   - 若指定 `--pipeline <slug>`：
+     - 读取 `wiki/outputs/pipeline-progress.md`，提取 `stage3a_deployed` 字段的 slug 列表
+     - 若文件不存在或 slug 不匹配：报错，建议先运行 `/research` 或手动指定
+   - 否则：
+     - 用 Glob 扫描 `wiki/experiments/*.md`，过滤 `status == running` 的实验
 
-2. **If no running experiments**:
-   - Print a friendly message:
+2. **若无 running 实验**：
+   - 输出友好提示：
      ```
      No running experiments found.
      - To start an experiment: /exp-run <slug>
      - To see all experiments: check wiki/experiments/
      ```
-   - Return
+   - 返回
 
-### Step 2: Check Status of Each Experiment
+### Step 2: 逐实验状态检查
 
-For each target experiment, execute in parallel (or sequentially):
+对每个目标实验并行（或依次）执行：
 
-1. **Read experiment page**: from `wiki/experiments/{slug}.md` get:
-   - `remote` block (if present, this is a remote experiment)
-   - `run_log` path
-   - `started` (from `remote.started` or `date_planned`, used to compute elapsed time)
-   - Deployment environment (has remote block → remote, otherwise → local)
+1. **读取实验页面**：从 `wiki/experiments/{slug}.md` 获取：
+   - `remote` 块（有则为 remote 实验）
+   - `run_log` 路径
+   - `started`（来自 `remote.started` 或 `date_planned`，用于计算 elapsed）
+   - 部署环境（有 remote 块 → remote，否则 → local）
 
-2. **Check process status**:
-   - **Local**: `screen -ls | grep "exp-{slug}"`
-     - Has output → `alive: true`
-     - No output → `alive: false` (session is gone)
-   - **Remote**: `python3 tools/remote.py check --name "exp-{slug}"`
-     - Parse JSON: `alive`, `last_lines`, `anomalies`
+2. **检查进程状态**：
+   - **Local**：`screen -ls | grep "exp-{slug}"`
+     - 有结果 → `alive: true`
+     - 无结果 → `alive: false`（session 已消失）
+   - **Remote**：`python3 tools/remote.py check --name "exp-{slug}"`
+     - 解析 JSON：`alive`、`last_lines`、`anomalies`
 
-3. **If alive == true**:
-   - Fetch recent logs (at most 20 lines):
-     - Local: `tail -20 {run_log}`
-     - Remote: use `last_lines` from the `check` command response
-   - Extract latest metric (loss, accuracy, step, etc. — grep the last metric line)
-   - Detect anomalies (NaN/OOM/Traceback/Inf): use `anomalies` field from `remote.py check` (remote), or manual grep (local)
-   - Compute elapsed time (current time − started)
-   - Classify as: `running` or `anomaly`
+3. **若 alive == true**：
+   - 获取最近日志（最多 20 行）：
+     - Local：`tail -20 {run_log}`
+     - Remote：使用 `check` 命令返回的 `last_lines`
+   - 提取最新 metric（loss、accuracy、step 等——grep 最后一个 metric 行）
+   - 检测异常（NaN/OOM/Traceback/Inf）：使用 `remote.py check` 的 `anomalies` 字段（remote），或手动 grep（local）
+   - 计算 elapsed time（当前时间 - started）
+   - 分类为：`running` 或 `anomaly`
 
-4. **If alive == false**:
-   - Classify as: `completed_pending_collect` (session gone but wiki status is still running)
-   - If wiki status is already `completed`: classify as `collected`
+4. **若 alive == false**：
+   - 分类为：`completed_pending_collect`（session 消失但 wiki 状态还是 running）
+   - 若 wiki status 已经是 `completed`：归为 `collected` 类
 
-5. **Aggregate results**: build status dict `{slug: {state, elapsed, latest_metric, anomalies}}`
+5. **汇总结果**：构建状态字典 `{slug: {state, elapsed, latest_metric, anomalies}}`
 
-### Step 3: Print Status Report
+### Step 3: 输出状态报告
 
 ```markdown
 # Experiment Status — {YYYY-MM-DD HH:MM}
@@ -135,51 +135,51 @@ For each target experiment, execute in parallel (or sequentially):
 ```
 ```
 
-Append log:
+追加日志：
 ```bash
 python3 tools/research_wiki.py log wiki/ \
   "exp-status | running: {N}, anomaly: {M}, pending-collect: {K}"
 ```
 
-### Step 4: --collect-ready Auto-Collect (if specified)
+### Step 4: --collect-ready 自动收集（若指定）
 
-For each `completed_pending_collect` experiment, call `/exp-run --collect`:
+对每个 `completed_pending_collect` 实验，调用 `/exp-run --collect`：
 
 ```
 Skill: exp-run
 Args: "{slug} --collect"
 ```
 
-Collect each completed experiment sequentially (not in parallel, to avoid concurrent wiki writes).
+依次（不并行，避免并发写入 wiki）收集每个完成的实验。
 
-After all collections are done, re-print the updated status report.
+收集完成后，重新输出更新的状态报告。
 
-### Step 5: --auto-advance Pipeline Advance (if both --pipeline and --auto-advance are specified)
+### Step 5: --auto-advance Pipeline 推进（若同时指定 --pipeline 和 --auto-advance）
 
-1. **Check pipeline completion condition**:
-   - Read `stage3a_deployed` list from `wiki/outputs/pipeline-progress.md`
-   - Check the status of each slug's `wiki/experiments/{slug}.md`
-   - **Condition met**: all experiments have status == `completed`
+1. **检查 pipeline 完成条件**：
+   - 读取 `wiki/outputs/pipeline-progress.md` 的 `stage3a_deployed` 列表
+   - 检查每个 slug 对应的 `wiki/experiments/{slug}.md` 的 status
+   - **条件成立**：所有 experiments 的 status == `completed`
 
-2. **If condition is not met** (some experiments still running or pending collect):
-   - Print current progress: `Pipeline {slug}: {M}/{N} experiments completed`
-   - Return (do not advance)
-   - Cron will trigger again in 30 minutes
+2. **若条件不成立**（仍有 running 或 pending-collect 实验）：
+   - 输出当前进度：`Pipeline {slug}: {M}/{N} experiments completed`
+   - 返回（不推进）
+   - cron 将在 30 分钟后再次运行
 
-3. **If condition is met (all experiments completed)**:
+3. **若条件成立（所有实验已 completed）**：
 
-   a. **Print notification and trigger Stage 4**:
-   - Print:
+   a. **输出通知并触发 Stage 4**：
+   - 输出：
      ```
      ✅ All experiments completed for pipeline {slug}!
      Advancing to Stage 4 (Verdict & Iteration)...
      ```
-   - Append log:
+   - 追加日志：
      ```bash
      python3 tools/research_wiki.py log wiki/ \
        "exp-status | pipeline {slug}: all experiments done, advancing to stage4"
      ```
-   - Trigger next stage:
+   - 触发下一阶段：
      ```
      Skill: research
      Args: "--start-from stage4"
@@ -187,43 +187,43 @@ After all collections are done, re-print the updated status report.
 
 ## Constraints
 
-- **Read-only in non --collect-ready mode**: without `--collect-ready`, do not modify any wiki files
-- **`--auto-advance` requires `--pipeline`**: using `--auto-advance` alone is invalid, report an error
-- **Status checks must be non-blocking**: each experiment check should complete quickly (single SSH check or screen -ls)
-- **Anomalies are not auto-fixed**: `/exp-status` only reports anomalies; fixes require the user to manually call `/exp-run --collect`
-- **pipeline-progress.md must exist**: in `--pipeline` mode, if the file is missing, report an error
+- **只读非 --collect-ready 模式**：无 `--collect-ready` 时不修改任何 wiki 文件
+- **`--auto-advance` 必须配合 `--pipeline`**：单独使用 `--auto-advance` 无效，报错提示
+- **状态检查不阻塞**：每个实验的检查应快速完成（单次 SSH check 或 screen -ls）
+- **anomaly 不自动修复**：`/exp-status` 只报告 anomaly，修复由用户手动调用 `/exp-run --collect` 处理
+- **pipeline-progress.md 必须存在**：`--pipeline` 模式下，文件不存在则报错
 
 ## Error Handling
 
-- **No running experiments**: print friendly message, not an error; provide next step suggestions
-- **`--pipeline` but pipeline-progress.md does not exist**: report error "Pipeline progress file not found. Run `/research <direction>` first or check wiki/outputs/"
-- **`--auto-advance` without `--pipeline`**: report error "--auto-advance requires --pipeline <slug>"
-- **SSH connection fails** (remote experiment): mark that experiment as `check_failed`, note it in the report, continue checking other experiments
-- **screen -ls returns nothing**: does not mean the experiment failed — may be a brief delay; mark as `completed_pending_collect`
-- **`/exp-run --collect` fails** (`--collect-ready` mode): record the failure, continue collecting other experiments, report all failures at the end
+- **无运行中实验（No running experiments）**：友好提示，不报错，给出下一步建议
+- **`--pipeline` 但 pipeline-progress.md 不存在**：报错 "Pipeline progress file not found. Run `/research <direction>` first or check wiki/outputs/"
+- **`--auto-advance` 无 `--pipeline`**：报错 "–-auto-advance requires --pipeline <slug>"
+- **SSH 连接失败**（remote 实验）：标记该实验为 `check_failed`，在报告中注明，继续检查其他实验
+- **screen -ls 无输出**：不代表实验失败，可能是轻微延迟；标记为 `completed_pending_collect`
+- **`/exp-run --collect` 失败**（`--collect-ready` 模式）：记录失败，继续收集其他实验，最后报告失败列表
 
 ## Dependencies
 
 ### Skills（via Skill tool）
-- `/exp-run` — call collect phase in `--collect-ready` mode
-- `/research` — trigger Stage 4 via `--auto-advance`
+- `/exp-run` — `--collect-ready` 模式下调用 collect 阶段
+- `/research` — `--auto-advance` 触发 Stage 4
 
 ### Tools（via Bash）
-- `python3 tools/remote.py check --name "exp-{slug}"` — remote experiment status check
-- `python3 tools/remote.py tail-log --name "exp-{slug}" --lines 20` — fetch remote logs
-- `python3 tools/research_wiki.py set-meta <path> <field> <value>` — update pipeline-progress
-- `python3 tools/research_wiki.py log wiki/ "<message>"` — append log
-- `screen -ls` — local process status
-- `tail -20 {log}` — fetch local logs
+- `python3 tools/remote.py check --name "exp-{slug}"` — remote 实验状态检查
+- `python3 tools/remote.py tail-log --name "exp-{slug}" --lines 20` — remote 日志获取
+- `python3 tools/research_wiki.py set-meta <path> <field> <value>` — 更新 pipeline-progress
+- `python3 tools/research_wiki.py log wiki/ "<message>"` — 追加日志
+- `screen -ls` — local 进程状态
+- `tail -20 {log}` — local 日志获取
 
 ### Claude Code Native
-- `Read` — read experiment pages and pipeline-progress
-- `Write` — update pipeline-progress status
-- `Glob` — scan wiki/experiments/*.md
-- `Bash` — screen/tail and other system commands
-- `Skill` — call /exp-run --collect and /research
+- `Read` — 读取实验页面和 pipeline-progress
+- `Write` — pipeline-progress 状态更新
+- `Glob` — 扫描 wiki/experiments/*.md
+- `Bash` — screen/tail 等系统命令
+- `Skill` — 调用 /exp-run --collect 和 /research
 
 ### Called by
-- CronCreate schedule (created by `/research --auto` Stage 3b: triggers every 30 minutes)
-- User directly
-- `/research` Stage 3b (in interactive mode, suggested to user)
+- CronCreate 调度（由 `/research --auto` Stage 3b 创建：每 30 分钟触发一次）
+- 用户手动调用
+- `/research` Stage 3b（交互模式下建议用户调用）

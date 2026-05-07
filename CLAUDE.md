@@ -1,160 +1,171 @@
-# ΩmegaWiki — Runtime Schema
+# EmpiricalWiki — Runtime Schema
 
-> CS/AI ΩmegaWiki. Powered by Claude Code.
-> This file is the wiki's runtime entry point: defines page structure, link conventions, and workflow constraints.
-
-> **Maintenance note**: Managed under `i18n/`. Edit `i18n/en/CLAUDE.md` (not the active copy at the root). Run `./setup.sh --lang <current>` to sync.
+> 面向经管、会计、金融、管理、经济学实证研究的垂类 LLM Wiki。由 Claude Code 驱动。
+> 本文件是 wiki 的运行时入口，定义页面结构、链接规范、workflow 约束。
 
 ---
 
-## Repository Layout
+## 仓库布局
 
-Open `docs/runtime-directory-structure.en.md` only when you need the full repo tree.
+需要完整仓库树时，再打开 `docs/runtime-directory-structure.zh.md`。
 
-Keep this mental map in immediate context:
+平时请优先记住这个心智地图：
 
-### `wiki/` is the main product surface
+### `wiki/` 是主要工作面
 
-- `wiki/index.md` is the catalog of all wiki pages
-- `wiki/log.md` is the append-only activity log
-- `wiki/papers/` holds paper summaries
-- `wiki/concepts/`, `wiki/topics/`, and `wiki/foundations/` hold reusable knowledge structure
-- `wiki/people/`, `wiki/ideas/`, `wiki/experiments/`, and `wiki/claims/` hold research actors, hypotheses, tests, and assertions
-- `wiki/Summary/` holds area-level syntheses
-- `wiki/outputs/` holds generated artifacts
-- `wiki/graph/` is derived state; do not edit it manually
+- `wiki/index.md` 是所有 wiki 页面的目录
+- `wiki/log.md` 是 append-only 活动日志
+- `wiki/papers/` 存放实证论文结构化卡片
+- `wiki/variables/`、`wiki/datasets/`、`wiki/models/`、`wiki/mechanisms/`、`wiki/hypotheses/`、`wiki/identification/`、`wiki/robustness/`、`wiki/heterogeneity/`、`wiki/tables/` 存放实证研究设计层
+- `wiki/concepts/`、`wiki/topics/`、`wiki/foundations/` 存放可复用知识结构
+- `wiki/people/`、`wiki/ideas/`、`wiki/experiments/`、`wiki/claims/` 存放研究者、假设、实验和断言
+- `wiki/Summary/` 存放领域级综述
+- `wiki/outputs/` 存放生成产物
+- `wiki/graph/` 是派生状态，禁止手动编辑
 
-### Formatting guardrail
+### 格式护栏
 
-- Open `docs/runtime-page-templates.en.md` before drafting or repairing wiki page structure, YAML, or body sections
-- Open `docs/runtime-support-files.en.md` when you need graph-derived file details or `index.md` / `log.md` format
-- `SKILL.md` is the immediate entrypoint for a skill; some larger skills may also provide local on-demand reference files under their skill directory
-- `/init` is the first concrete example of this pattern: read `skills/init/SKILL.md` first, then open `skills/init/references/*` only when needed
+- 在新建或修复 wiki 页面结构、YAML、正文章节前，先打开 `docs/runtime-page-templates.zh.md`
+- 需要 graph 派生文件细节或 `index.md` / `log.md` 格式时，打开 `docs/runtime-support-files.zh.md`
+- `SKILL.md` 是 skill 的即时入口；较大的 skill 也可以在各自目录下提供按需读取的本地参考文件
+- `/init` 是这一模式的第一个具体例子：先读 `skills/init/SKILL.md`，只有在需要时再打开 `skills/init/references/*`
 
-### `raw/` and `config/`
+### `raw/` 与 `config/`
 
-- `raw/papers/`, `raw/notes/`, and `raw/web/` are user-owned inputs
-- `raw/discovered/` stores externally fetched papers from `/init` and `/daily-arxiv`
-- `raw/tmp/` stores generated prepared local sidecars for `/init` and direct local `/ingest`
-- `config/` holds environment and remote-server templates
-
----
-
-## 9 Page Types
-
-`papers`, `concepts`, `topics`, `people`, `ideas`, `experiments`, `claims`, `Summary`, `foundations`.
-
-Open `docs/runtime-page-templates.en.md` for page templates and `docs/runtime-support-files.en.md` for graph/index/log references.
+- `raw/papers/`、`raw/notes/`、`raw/web/` 是用户自有输入
+- `raw/discovered/` 存放 `/init` 与 `/daily-arxiv` 抓取的外部论文
+- `raw/tmp/` 存放 `/init` 与直接本地 `/ingest` 使用的生成型 prepared sidecar
+- `config/` 存放环境与远程服务器模板
 
 ---
 
-## Link Syntax
+## 页面类型
 
-All internal links use Obsidian wikilinks:
+实证研究核心类型：`papers`、`variables`、`datasets`、`models`、`mechanisms`、`hypotheses`、`identification`、`robustness`、`heterogeneity`、`tables`。
+
+保留的通用研究 wiki 类型：`concepts`、`topics`、`people`、`ideas`、`experiments`、`claims`、`Summary`、`foundations`。
+
+页面模板看 `docs/runtime-page-templates.zh.md`；graph/index/log 参考看 `docs/runtime-support-files.zh.md`。
+
+---
+
+## 链接语法
+
+所有内部链接使用 Obsidian wikilink：
 
 ```markdown
-[[slug]]                    ← link to any page in this wiki
-[[lora-low-rank-adaptation]] ← links to papers/lora-low-rank-adaptation.md
-[[flash-attention]]          ← links to concepts/flash-attention.md
+[[slug]]                    ← 链接到本 wiki 内任意页面
+[[patient-capital]] ← 链接到 variables/patient-capital.md 或 concepts/patient-capital.md
+[[耐心资本]]        ← 中文实证论文允许使用 CJK slug
 ```
 
-**Naming convention**: all lowercase, hyphen-separated, no spaces.
+**命名规范**：英文全小写、连字符分隔、无空格；中文标题允许保留 CJK 字符。
 
 ---
 
-## Cross-Reference Rules
+## Cross Reference 规则
 
-When writing a forward link, **always write the reverse link simultaneously**:
+写正向链接时**必须同步写反向链接**：
 
-| Forward action | Required reverse action |
-|----------------|------------------------|
-| papers/A writes `Related: [[concept-B]]` | concepts/B appends A to `key_papers` |
-| papers/A writes `[[researcher-C]]` | people/C appends A to `Key papers` |
-| papers/A writes `supports: [[claim-D]]` | claims/D appends `{source: A, type: supports}` to `evidence` |
-| topics/T writes `key_people: [[person-D]]` | people/D appends T to `Research areas` |
-| concepts/K writes `key_papers: [[paper-E]]` | papers/E appends K to `Related` |
-| concepts/K writes part_of `[[topic-F]]` | topics/F appends K to overview paragraph |
-| ideas/I writes `origin_gaps: [[claim-C]]` | claims/C appends I to `## Linked ideas` |
-| experiments/E writes `target_claim: [[claim-C]]` | claims/C appends `{source: E, type: tested_by}` to `evidence` |
-| claims/C writes `source_papers: [[paper-P]]` | papers/P appends C to `## Related` |
-| any page links to `[[foundation-X]]` | **no reverse link** — foundations are terminal: they receive inward links from papers/concepts/etc. but never write `key_papers` or any back-reference field |
+| 正向操作 | 必须同步的反向操作 |
+|----------|-------------------|
+| papers/A 写 `Related: [[concept-B]]` | concepts/B 的 `key_papers` 追加 `A` |
+| papers/A 写 `[[researcher-C]]` | people/C 的 `Key papers` 追加 `A` |
+| papers/A 写 `supports: [[claim-D]]` | claims/D 的 `evidence` 追加 `{source: A, type: supports}` |
+| papers/A 写 `operationalizes: [[variable-V]]` | variables/V 的 `source_papers` 追加 A |
+| papers/A 写 `uses_dataset: [[dataset-D]]` | datasets/D 的 `source_papers` 追加 A |
+| papers/A 写 `estimates_model: [[model-M]]` | models/M 的 `source_papers` 追加 A |
+| papers/A 写 `tests_mechanism: [[mechanism-M]]` | mechanisms/M 的 `source_papers` 或 `evidence` 追加 A |
+| papers/A 写 `tests_hypothesis: [[hypothesis-H]]` | hypotheses/H 的 `source_papers` 追加 A |
+| papers/A 写 `addresses_endogeneity_with: [[identification-I]]` | identification/I 的 `source_papers` 追加 A |
+| papers/A 写 `uses_robustness_check: [[robustness-R]]` | robustness/R 的 `source_papers` 追加 A |
+| papers/A 写 `uses_heterogeneity_split: [[heterogeneity-H]]` | heterogeneity/H 的 `source_papers` 追加 A |
+| topics/T 写 `key_people: [[person-D]]` | people/D 的 `Research areas` 追加 T |
+| concepts/K 写 `key_papers: [[paper-E]]` | papers/E 的 `Related` 追加 `K` |
+| concepts/K 写 part_of `[[topic-F]]` | topics/F 的概述段落追加 `K` |
+| ideas/I 写 `origin_gaps: [[claim-C]]` | claims/C 的 `## Linked ideas` 追加 I |
+| experiments/E 写 `target_claim: [[claim-C]]` | claims/C 的 `evidence` 追加 `{source: E, type: tested_by}` |
+| claims/C 写 `source_papers: [[paper-P]]` | papers/P 的 `## Related` 追加 C |
+| 任意页面链接到 `[[foundation-X]]` | **不写反向链接** — foundations 是终端节点：接收来自 papers/concepts 等页面的入链，但不写 `key_papers` 或任何反向引用字段 |
 
 ---
 
-## Graph Rules
+## Graph 规则
 
-- `graph/` is auto-generated; do not edit it manually
-- core derived files are `edges.jsonl`, `citations.jsonl`, `context_brief.md`, and `open_questions.md`
-- semantic edge types include paper-paper (`same_problem_as`, `similar_method_to`, `complementary_to`, `builds_on`, `compares_against`, `improves_on`, `challenges`, `surveys`), paper-concept (`introduces_concept`, `uses_concept`, `extends_concept`, `critiques_concept`), and existing claim/experiment/provenance types (`supports`, `contradicts`, `tested_by`, `invalidates`, `addresses_gap`, `derived_from`, `inspired_by`)
-- `/ingest` paper-paper and paper-concept semantic edges must include `confidence: high|medium|low`
-- symmetric paper-paper edges are stored once with sorted endpoints and `symmetric: true`
-- bibliographic citations live in `citations.jsonl` as `type: cites`
-- use `tools/research_wiki.py add-edge`, `add-citation`, `rebuild-context-brief`, and `rebuild-open-questions`
+- `graph/` 是自动生成目录，不要手动编辑
+- 核心派生文件是 `edges.jsonl`、`citations.jsonl`、`context_brief.md`、`open_questions.md`
+- semantic edge type 包括 paper-paper（`same_problem_as`、`similar_method_to`、`complementary_to`、`builds_on`、`compares_against`、`improves_on`、`challenges`、`surveys`）、paper-concept（`introduces_concept`、`uses_concept`、`extends_concept`、`critiques_concept`）、实证抽取（`operationalizes`、`uses_dataset`、`estimates_model`、`tests_mechanism`、`tests_hypothesis`、`addresses_endogeneity_with`、`uses_robustness_check`、`uses_heterogeneity_split`、`reports_table`），以及既有 claim/experiment/provenance 类型（`supports`、`contradicts`、`tested_by`、`invalidates`、`addresses_gap`、`derived_from`、`inspired_by`）
+- `/ingest` 产生的 paper-paper 与 paper-concept semantic edge 必须带 `confidence: high|medium|low`
+- 对称 paper-paper edge 只存一行，endpoint 按顺序排序，并写 `symmetric: true`
+- bibliographic citation 存在 `citations.jsonl`，`type: cites`
+- 用 `tools/research_wiki.py add-edge`、`add-citation`、`rebuild-context-brief`、`rebuild-open-questions` 维护
 
-## log.md Format
+## log.md 格式
 
-Standard log line:
+标准日志行：
 
 ```markdown
 ## [YYYY-MM-DD] skill | details
 ```
 
----
+## Python 环境
 
-## Python Environment
-
-- prefer `.venv/bin/python` (Unix/macOS) or `.venv/Scripts/python.exe` (Windows) when `.venv/` exists
-- otherwise use the active conda env if present
-- otherwise fall back to `python3` (Unix/macOS) or `python` (Windows)
-- Python tools auto-load API keys from `~/.env` and project-root `.env` via `tools/_env.py`
+- 有 `.venv/` 时优先用 `.venv/bin/python`（Unix/macOS）或 `.venv/Scripts/python.exe`（Windows）
+- 否则使用当前激活的 conda 环境
+- 再否则回退到 `python3`（Unix/macOS）或 `python`（Windows）
+- Python 工具会通过 `tools/_env.py` 自动加载 `~/.env` 与项目根目录 `.env`
 
 ---
 
-## Constraints
+## 约束
 
-- **`raw/papers/`, `raw/notes/`, `raw/web/` are user-owned**: treat them as authoritative inputs. `/init` and `/daily-arxiv` may add externally fetched papers only under `raw/discovered/`. `/init` and direct local `/ingest` may add generated prepared local sidecars under `raw/tmp/` (additions only — never overwrite an existing user-owned file). `/edit` may add raw sources only when the user explicitly asked for it. `/init` subagents running `/ingest` in INIT MODE still treat `raw/` as strictly read-only and must consume the handed-off canonical path directly.
-- **User-facing skill parameters are user-owned**: flags and values shown in a skill's `argument-hint` belong to the user's command, not to agent strategy. Do not invent, flip, or drop those parameters from repository state alone. If the user omitted a parameter, only use a default or derived value when that skill explicitly documents omission behavior; otherwise leave it unset or ask the user. Internal derived settings that are not user-facing parameters may still be inferred by the skill.
-- **INIT MODE handoff is manifest-driven**: when `/init` writes `.checkpoints/init-sources.json`, that manifest becomes the single source of truth for ingest order and canonical source paths. Prepared local inputs should point to `raw/tmp/`; introduced external papers should point to `raw/discovered/`.
-- **graph/ is auto-generated**: never manually edit files in `graph/` — only via `tools/research_wiki.py`.
-- **Bidirectional links**: always write the reverse link when writing a forward link.
-- **tex priority**: .tex > .pdf; fallback chain: tex fails → PDF parse, PDF fails → vision API.
-- **index.md updated on every ingest**; log.md is append-only.
-- **lint default is report-only**: `--fix` auto-fixes deterministic issues (xref backlinks, missing field defaults); `--suggest` outputs suggestions for non-deterministic issues; `--fix --dry-run` previews fixes.
-- **Slug generation rule**: paper title keywords, hyphen-joined, all lowercase.
-- **Importance scoring**: 1 = niche, 2 = useful, 3 = field-standard, 4 = influential, 5 = seminal.
-- **Failed ideas must record reason**: `failure_reason` is anti-repetition memory — prevents re-exploring known dead ends.
-- **Claim confidence range**: 0.0-1.0; re-evaluate every time evidence changes.
-- **Experiments must link to a claim**: every experiment requires `target_claim`; results must be written back to the claim's evidence.
-- **Experiment code goes in experiments/code/{slug}/**: `/exp-run` writes code to this path (`train.py`, `config.yaml`, `run.sh`, `requirements.txt`) — not to the project root or elsewhere.
-- **DeepXiv token**: `DEEPXIV_TOKEN` env variable. If unset, the SDK auto-registers (writes to `~/.env`). Free tier: 10,000 requests/day. When DeepXiv is unavailable, all skills fall back to S2+RSS mode.
+- **`raw/papers/`、`raw/notes/`、`raw/web/` 归用户所有**：把它们当作权威输入。`/init` 与 `/daily-arxiv` 只能把外部抓取论文追加到 `raw/discovered/`。`/init` 与直接本地 `/ingest` 可以把生成的本地预处理 sidecar 写到 `raw/tmp/`（只增不改，绝不覆盖用户自有文件）。`/edit` 仅在用户明确要求时才允许新增 raw 来源。`/init` 在 INIT MODE 下 fan-out 的 `/ingest` 子代理仍必须把 `raw/` 视为严格只读，并直接消费交接的 canonical path。
+- **skill 的用户可见参数归用户所有**：skill 的 `argument-hint` 中列出的 flag 与取值属于用户命令，而不是 agent 可自行决定的策略开关。不得仅根据仓库状态擅自补出、切换或删除这些参数。若用户未提供某个参数，只有在该 skill 明确写出省略时的默认或推导规则时，才可使用该默认或推导值；否则应保持未设置，必要时询问用户。不是用户可见参数的内部派生设置，skill 仍可自行推断。
+- **INIT MODE 交接由 manifest 驱动**：当 `/init` 写出 `.checkpoints/init-sources.json` 后，该 manifest 就是 ingest 顺序与规范来源路径的唯一真相来源。预处理后的本地输入应指向 `raw/tmp/`；外部引入论文应指向 `raw/discovered/`。
+- **graph/ 自动生成**：不得手动编辑 `graph/` 下的文件，仅通过 `tools/research_wiki.py` 维护。
+- **实证抽取优先**：阅读实证论文时，先抽取变量、数据来源、模型设定、理论机制、异质性、稳健性和识别策略，再写通用概念或 idea。
+- **双向链接**：写正向链接时同步写反向链接。
+- **tex 优先**：.tex > .pdf，fallback 链：tex 失败 → PDF 解析，PDF 失败 → vision API。
+- **index.md 每次 ingest 立即更新**，log.md append-only。
+- **lint 默认只报告**：`--fix` 自动修复确定性问题（xref 反向链接、缺失字段默认值）；`--suggest` 输出非确定性问题的建议供用户批准；`--fix --dry-run` 预览修复。
+- **slug 生成规则**：论文标题关键词，连字符连接；英文全小写，中文标题允许保留 CJK 字符。
+- **importance 评分**：1 = niche, 2 = useful, 3 = field-standard, 4 = influential, 5 = seminal。
+- **idea 失败必须记录原因**：`failure_reason` 字段是反重复记忆，防止重复探索已知死路。
+- **claim confidence 区间**：0.0-1.0，evidence 每次变动时重新评估。
+- **实验模块对经管实证是可选项**：Stata 式实证流程优先使用 `models/`、`tables/`、`identification/` 和 `robustness/`。`experiments/` 仅保留给计算实验、仿真或机器学习任务。
+- **DeepXiv token**：`DEEPXIV_TOKEN` 环境变量。未设置时 SDK 自动注册（写入 `~/.env`）。免费额度 10,000 请求/天。DeepXiv 不可用时所有 skill 自动回退到 S2+RSS 模式。
 
 ---
 
 ## Skills
 
-| Skill | File | Trigger |
-|-------|------|---------|
-| `/setup` | `skills/setup/SKILL.md` | manual (first-time config) |
-| `/reset` | `skills/reset/SKILL.md` | manual (`--scope wiki\|raw\|log\|checkpoints\|all`) |
-| `/init` | `skills/init/SKILL.md` | manual |
-| `/prefill` | `skills/prefill/SKILL.md` | manual (`[domain] [--add concept]`) |
-| `/ingest` | `skills/ingest/SKILL.md` | manual |
-| `/discover` | `skills/discover/SKILL.md` | manual / internal (called by `/ingest --discover`) |
-| `/ask` | `skills/ask/SKILL.md` | manual |
-| `/edit` | `skills/edit/SKILL.md` | manual |
-| `/check` | `skills/check/SKILL.md` | biweekly/manual |
-| `/daily-arxiv` | `skills/daily-arxiv/SKILL.md` | cron 08:00 / manual |
-| `/novelty` | `skills/novelty/SKILL.md` | manual |
-| `/review` | `skills/review/SKILL.md` | manual |
-| `/ideate` | `skills/ideate/SKILL.md` | manual |
-| `/exp-design` | `skills/exp-design/SKILL.md` | manual |
-| `/exp-run` | `skills/exp-run/SKILL.md` | manual (`<slug> [--collect] [--full] [--env local\|remote]`) |
-| `/exp-status` | `skills/exp-status/SKILL.md` | manual (`[--pipeline <slug>] [--collect-ready] [--auto-advance]`) |
-| `/exp-eval` | `skills/exp-eval/SKILL.md` | manual |
-| `/refine` | `skills/refine/SKILL.md` | manual |
-| `/paper-plan` | `skills/paper-plan/SKILL.md` | manual |
-| `/paper-draft` | `skills/paper-draft/SKILL.md` | manual |
-| `/paper-compile` | `skills/paper-compile/SKILL.md` | manual |
-| `/survey` | `skills/survey/SKILL.md` | manual |
-| `/research` | `skills/research/SKILL.md` | manual |
-| `/rebuttal` | `skills/rebuttal/SKILL.md` | manual |
+| Skill | 文件 | 触发 |
+|-------|------|------|
+| `/setup` | `skills/setup/SKILL.md` | 手动（首次配置） |
+| `/reset` | `skills/reset/SKILL.md` | 手动（`--scope wiki\|raw\|log\|checkpoints\|all`） |
+| `/init` | `skills/init/SKILL.md` | 手动 |
+| `/prefill` | `skills/prefill/SKILL.md` | 手动（`[domain] [--add concept]`） |
+| `/ingest` | `skills/ingest/SKILL.md` | 手动 |
+| `/empirical-ingest` | `skills/empirical-ingest/SKILL.md` | 手动 |
+| `/variable-map` | `skills/variable-map/SKILL.md` | 手动 |
+| `/empirical-design` | `skills/empirical-design/SKILL.md` | 手动 |
+| `/stata-plan` | `skills/stata-plan/SKILL.md` | 手动 |
+| `/discover` | `skills/discover/SKILL.md` | 手动 / 内部（`/ingest --discover` 时调用） |
+| `/ask` | `skills/ask/SKILL.md` | 手动 |
+| `/edit` | `skills/edit/SKILL.md` | 手动 |
+| `/check` | `skills/check/SKILL.md` | 每两周/手动 |
+| `/daily-arxiv` | `skills/daily-arxiv/SKILL.md` | cron 08:00 / 手动 |
+| `/novelty` | `skills/novelty/SKILL.md` | 手动 |
+| `/review` | `skills/review/SKILL.md` | 手动 |
+| `/ideate` | `skills/ideate/SKILL.md` | 手动 |
+| `/exp-design` | `skills/exp-design/SKILL.md` | 手动 |
+| `/exp-run` | `skills/exp-run/SKILL.md` | 手动（`<slug> [--collect] [--full] [--env local\|remote]`） |
+| `/exp-status` | `skills/exp-status/SKILL.md` | 手动（`[--pipeline <slug>] [--collect-ready] [--auto-advance]`） |
+| `/exp-eval` | `skills/exp-eval/SKILL.md` | 手动 |
+| `/refine` | `skills/refine/SKILL.md` | 手动 |
+| `/paper-plan` | `skills/paper-plan/SKILL.md` | 手动 |
+| `/paper-draft` | `skills/paper-draft/SKILL.md` | 手动 |
+| `/paper-compile` | `skills/paper-compile/SKILL.md` | 手动 |
+| `/survey` | `skills/survey/SKILL.md` | 手动 |
+| `/research` | `skills/research/SKILL.md` | 手动 |
+| `/rebuttal` | `skills/rebuttal/SKILL.md` | 手动 |

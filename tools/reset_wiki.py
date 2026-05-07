@@ -25,16 +25,13 @@ import shutil
 import sys
 from pathlib import Path
 
-ENTITY_DIRS = [
-    "papers", "concepts", "topics", "people",
-    "ideas", "experiments", "claims", "Summary",
-    "foundations",
-]
+from _schemas import ENTITY_DIRS
+
 RAW_SUBDIRS = ["papers", "discovered", "tmp", "notes", "web"]
 ALL_SCOPES = ["wiki", "raw", "log", "checkpoints"]
 
 INDEX_TEMPLATE = "# Wiki Index\n\n" + "\n".join(f"{e}:" for e in ENTITY_DIRS) + "\n"
-LOG_TEMPLATE = "# OmegaWiki Log\n\n"
+LOG_TEMPLATE = "# EmpiricalWiki Log\n\n"
 GRAPH_FILES = ["edges.jsonl", "citations.jsonl", "context_brief.md", "open_questions.md"]
 
 

@@ -1,211 +1,210 @@
 ---
-description: Ask the wiki a question, retrieve and synthesize relevant pages, optionally crystallize the answer back into the wiki
+description: 对 wiki 提问，综合检索相关页面后回答，好的回答可 crystallize 回 wiki
 argument-hint: <question>
 ---
 
 # /ask
 
-> Ask a question to the wiki knowledge base. The LLM reads context_brief.md for global context,
-> retrieves relevant pages, synthesizes an answer with citations. Good answers can be
-> crystallized back into the wiki — written to outputs/ or as new concept/claim pages —
-> so exploration compounds like ingestion does.
+> 对 wiki 知识库提问。LLM 读取 context_brief.md 获取全局上下文，检索相关页面，
+> 综合回答并附带引用。好的回答可以 crystallize 回 wiki——写入 outputs/ 或创建新的
+> concept/claim 页面，让探索成果像 ingest 一样持续积累。
 
 ## Inputs
 
-- `question`: natural-language question (e.g. "What is the core difference between LoRA and Adapter?")
-- `--crystallize` (optional): if specified, crystallize the answer back into the wiki (default: answer only, no write)
-- `--format` (optional): output format, default `markdown`, options: `table` / `timeline` / `bullets`
+- `question`：自然语言问题（如 "LoRA 和 Adapter 的核心区别是什么？"）
+- `--crystallize`（可选）：若指定，将回答 crystallize 回 wiki（默认仅回答不写入）
+- `--format`（可选）：输出格式，默认 `markdown`，可选 `table` / `timeline` / `bullets`
 
 ## Outputs
 
-- **Always**: terminal output of synthesized answer (with `[[slug]]` citations)
-- **If crystallize**:
-  - `wiki/outputs/{query-slug}.md` — query result page (default crystallize target)
-  - or `wiki/concepts/{slug}.md` — if the answer reveals a new cross-paper concept
-  - or `wiki/claims/{slug}.md` — if the answer surfaces a new verifiable assertion
-  - updated `wiki/graph/edges.jsonl` (relationships produced by crystallize)
-  - updated `wiki/index.md` and `wiki/log.md`
+- **始终**：终端输出综合回答（含 `[[slug]]` 引用）
+- **若 crystallize**：
+  - `wiki/outputs/{query-slug}.md` — 查询结果页面（默认 crystallize 目标）
+  - 或 `wiki/concepts/{slug}.md` — 若回答揭示了新的跨论文概念
+  - 或 `wiki/claims/{slug}.md` — 若回答发现了可验证的新断言
+  - 更新的 `wiki/graph/edges.jsonl`（crystallize 产生的关系）
+  - 更新的 `wiki/index.md` 和 `wiki/log.md`
 
 ## Wiki Interaction
 
 ### Reads
-- `wiki/graph/context_brief.md` — global compressed context (claims, gaps, failed ideas, papers, edges)
-- `wiki/index.md` — page catalog for locating relevant pages
-- `wiki/graph/open_questions.md` — open questions, helps identify whether the question touches known gaps
-- `wiki/papers/*.md` — paper pages relevant to the question
-- `wiki/concepts/*.md` — concept pages relevant to the question
-- `wiki/claims/*.md` — claim pages relevant to the question
-- `wiki/topics/*.md` — topic pages relevant to the question
-- `wiki/people/*.md` — if the question involves specific researchers
-- `wiki/ideas/*.md` — if the question involves research ideas or failed ideas
-- `wiki/experiments/*.md` — if the question involves experiment results
-- `wiki/Summary/*.md` — if the question involves domain-wide landscape
+- `wiki/graph/context_brief.md` — 全局压缩上下文（claims, gaps, failed ideas, papers, edges）
+- `wiki/index.md` — 页面目录，用于定位相关页面
+- `wiki/graph/open_questions.md` — 开放问题，辅助判断问题是否涉及已知知识缺口
+- `wiki/papers/*.md` — 与问题相关的论文页面
+- `wiki/concepts/*.md` — 与问题相关的概念页面
+- `wiki/claims/*.md` — 与问题相关的 claim 页面
+- `wiki/topics/*.md` — 与问题相关的 topic 页面
+- `wiki/people/*.md` — 若问题涉及特定研究者
+- `wiki/ideas/*.md` — 若问题涉及研究想法或 failed ideas
+- `wiki/experiments/*.md` — 若问题涉及实验结果
+- `wiki/Summary/*.md` — 若问题涉及领域全景
 
-### Writes (crystallize mode only)
-- `wiki/outputs/{query-slug}.md` — CREATE (query result page)
-- `wiki/concepts/{slug}.md` — CREATE (newly discovered concept) or EDIT (supplement existing concept)
-- `wiki/claims/{slug}.md` — CREATE (newly discovered assertion) or EDIT (add evidence)
-- `wiki/graph/edges.jsonl` — APPEND (relationships produced by crystallize)
-- `wiki/graph/context_brief.md` — REBUILD (if crystallize created new pages)
-- `wiki/graph/open_questions.md` — REBUILD (if crystallize created new pages)
-- `wiki/index.md` — EDIT (if crystallize created new pages)
+### Writes（仅 crystallize 模式）
+- `wiki/outputs/{query-slug}.md` — CREATE（查询结果页面）
+- `wiki/concepts/{slug}.md` — CREATE（新发现概念）或 EDIT（补充已有概念）
+- `wiki/claims/{slug}.md` — CREATE（新发现断言）或 EDIT（补充 evidence）
+- `wiki/graph/edges.jsonl` — APPEND（crystallize 产生的关系）
+- `wiki/graph/context_brief.md` — REBUILD（若 crystallize 创建了新页面）
+- `wiki/graph/open_questions.md` — REBUILD（若 crystallize 创建了新页面）
+- `wiki/index.md` — EDIT（若 crystallize 创建了新页面）
 - `wiki/log.md` — APPEND
 
-### Graph edges created (crystallize only)
-- `output → paper`: `derived_from` (papers cited in the answer)
-- `output → concept`: `derived_from` (concepts cited in the answer)
-- `output → claim`: `derived_from` (claims cited in the answer)
-- `concept → paper`: `supports` (if a new concept is generalized from papers)
-- `claim → paper`: `supports` (if a new claim is extracted from papers)
+### Graph edges created（仅 crystallize）
+- `output → paper`: `derived_from`（回答引用的论文）
+- `output → concept`: `derived_from`（回答引用的概念）
+- `output → claim`: `derived_from`（回答引用的 claim）
+- `concept → paper`: `supports`（若新概念从论文中归纳）
+- `claim → paper`: `supports`（若新 claim 从论文中提取）
 
 ## Workflow
 
-**Precondition**: confirm working directory is the wiki project root (containing `wiki/`, `raw/`, `tools/`).
-Set `WIKI_ROOT=wiki/`.
+**前置**：确认工作目录为 wiki 项目根（包含 `wiki/`、`raw/`、`tools/` 的目录）。
+设 `WIKI_ROOT=wiki/`。
 
-### Step 1: Load Global Context
+### Step 1: 加载全局上下文
 
-1. Read `wiki/graph/context_brief.md` — get compressed snapshot of wiki's current knowledge (claims, gaps, papers, edges)
-2. Read `wiki/graph/open_questions.md` — understand known open questions and knowledge gaps
-3. If both are missing, rebuild first:
+1. 读取 `wiki/graph/context_brief.md`——获取 wiki 当前知识的压缩快照（claims, gaps, papers, edges）
+2. 读取 `wiki/graph/open_questions.md`——了解已知的开放问题和知识缺口
+3. 若两者都不存在，先重建：
    ```bash
    python3 tools/research_wiki.py rebuild-context-brief wiki/
    python3 tools/research_wiki.py rebuild-open-questions wiki/
    ```
 
-### Step 2: Retrieve Relevant Pages
+### Step 2: 检索相关页面
 
-1. Read `wiki/index.md`, match relevant slugs against question keywords
-2. Extract claims and papers semantically related to the question from context_brief.md
-3. Sort by relevance, select top-K pages (K ≤ 15 to avoid exceeding context window)
-4. Read full content of selected pages
-5. If the question involves relationships (e.g. "difference between X and Y"), additionally read edges connecting X and Y from `wiki/graph/edges.jsonl`
+1. 读取 `wiki/index.md`，基于 question 关键词匹配相关 slugs
+2. 从 context_brief.md 中提取与 question 语义相关的 claims 和 papers
+3. 按相关性排序，选取 top-K 页面（K ≤ 15，避免上下文过长）
+4. 读取选中页面的完整内容
+5. 若 question 涉及关系（如 "X 和 Y 的区别"），额外读取 `wiki/graph/edges.jsonl` 中连接 X 和 Y 的边
 
-### Step 3: Synthesize Answer
+### Step 3: 综合回答
 
-1. Synthesize an answer to the user's question based on collected page content
-2. Answer requirements:
-   - **Cited**: every key claim must include a `[[slug]]` wikilink pointing to its source page
-   - **Structured**: organize output according to `--format` parameter (markdown / table / timeline / bullets)
-   - **Acknowledge uncertainty**: clearly flag "insufficient evidence in wiki" for parts with weak support
-   - **Flag knowledge gaps**: if the question touches a known gap in open_questions.md, call it out explicitly
-   - **Cite claim confidence**: when referencing claims, note their confidence and status
-3. If the question exceeds the wiki's current knowledge, honestly say so and suggest:
-   - which papers to ingest to fill the gap
-   - possible search directions (arXiv keywords, Semantic Scholar queries)
+1. 基于收集的页面内容，综合回答用户问题
+2. 回答要求：
+   - **有引用**：每个关键论断必须附带 `[[slug]]` wikilink 指向来源页面
+   - **有结构**：根据 `--format` 参数组织输出（markdown / table / timeline / bullets）
+   - **识别不确定性**：对 wiki 中证据不足的部分明确标注 "wiki 中尚无充分证据"
+   - **标注知识缺口**：若问题触及 open_questions.md 中的已知缺口，明确指出
+   - **引用 claim confidence**：涉及 claim 时注明其 confidence 和 status
+3. 若问题超出 wiki 当前知识范围，坦诚告知并建议：
+   - 需要 ingest 哪些论文来填补
+   - 可能的搜索方向（arXiv 关键词、Semantic Scholar 查询）
 
-### Step 4: Assess Crystallize Value
+### Step 4: 评估 crystallize 价值
 
-1. Judge whether the answer is worth writing back to the wiki (make a recommendation even if `--crystallize` was not specified)
-2. Signals that crystallize is worthwhile:
-   - The answer synthesizes information from multiple papers, forming a new cross-paper insight
-   - The answer reveals a concept not yet explicitly recorded in the wiki
-   - The answer surfaces a new verifiable assertion (claim)
-   - The answer addresses a known gap in open_questions.md
-3. Signals that crystallize is not worthwhile:
-   - The answer merely restates the content of a single page
-   - The question is a simple factual lookup (e.g. "What year was LoRA published?")
-   - The answer relies primarily on inference rather than wiki evidence
-4. Append a crystallize recommendation at the end of the answer:
+1. 判断回答是否值得写回 wiki（即使用户未指定 `--crystallize`，也给出建议）
+2. Crystallize 值得的信号：
+   - 回答综合了多篇论文的信息，形成了新的跨论文洞察
+   - 回答揭示了一个 wiki 中尚未显式记录的概念
+   - 回答发现了一个可验证的新断言（claim）
+   - 回答回应了 open_questions.md 中的一个已知缺口
+3. Crystallize 不值得的信号：
+   - 回答只是复述了单一页面的内容
+   - 问题是简单事实查询（如 "LoRA 是哪年发表的？"）
+   - 回答主要依赖推测而非 wiki 中的证据
+4. 在回答末尾附带 crystallize 建议：
    ```
-   💡 Crystallize recommendation: [worthwhile / not needed] — [reason]
+   💡 Crystallize 建议：[值得/不必要] — [原因]
    ```
 
-### Step 5: Crystallize Back to Wiki (if user confirms or --crystallize was specified)
+### Step 5: Crystallize 回 wiki（若用户确认或指定了 --crystallize）
 
-Choose the crystallize target based on answer content:
+根据回答内容选择 crystallize 目标：
 
-**Case A — Write to outputs/ (default):**
-1. Generate slug: `python3 tools/research_wiki.py slug "<query-summary>"`
-2. Create `wiki/outputs/{query-slug}.md`:
+**Case A — 写入 outputs/（默认）：**
+1. 生成 slug：`python3 tools/research_wiki.py slug "<query-summary>"`
+2. 创建 `wiki/outputs/{query-slug}.md`：
    ```yaml
    ---
    title: ""
    slug: ""
-   query: ""           # original question
-   source_pages: []    # slugs of all pages cited in the answer
+   query: ""           # 原始问题
+   source_pages: []    # 回答引用的所有页面 slugs
    date_created: YYYY-MM-DD
    ---
    ```
-   Body is the answer content (preserve wikilinks)
-3. Add a graph edge for each cited source page:
+   正文为回答内容（保留 wikilinks）
+3. 为每个引用的源页面添加 graph edge：
    ```bash
    python3 tools/research_wiki.py add-edge wiki/ --from outputs/<slug> --to papers/<source-slug> --type derived_from --evidence "query answer"
    ```
 
-**Case B — Create new concept:**
-1. If the answer reveals a new concept: create `wiki/concepts/{slug}.md` using the CLAUDE.md concept template
+**Case B — 创建新 concept：**
+1. 若回答揭示了新概念：按 CLAUDE.md concept 模板创建 `wiki/concepts/{slug}.md`
 2. maturity: emerging
-3. key_papers: extracted from answer citations
-4. Add graph edges (concept → papers)
-5. Append reverse links to relevant paper pages under `## Related`
+3. key_papers: 从回答引用中提取
+4. 添加 graph edges（concept → papers）
+5. 在相关 paper 页面的 `## Related` 追加反向链接
 
-**Case C — Create new claim:**
-1. If the answer surfaces a new assertion: create `wiki/claims/{slug}.md` using the CLAUDE.md claim template
-2. status: proposed (synthesized from query, not direct experimental evidence)
-3. confidence: set initial value based on strength of cited evidence
-4. source_papers: extracted from answer citations
-5. Add graph edges (claim → papers)
-6. Append reverse links to relevant paper pages under `## Related`
+**Case C — 创建新 claim：**
+1. 若回答发现新断言：按 CLAUDE.md claim 模板创建 `wiki/claims/{slug}.md`
+2. status: proposed（从查询综合得出，非直接实验证据）
+3. confidence: 基于引用 evidence 的强度设置初始值
+4. source_papers: 从回答引用中提取
+5. 添加 graph edges（claim → papers）
+6. 在相关 paper 页面的 `## Related` 追加反向链接
 
-### Step 6: Update Navigation and Graph (crystallize only)
+### Step 6: 更新导航与图谱（仅 crystallize）
 
-1. **index.md**: append new page entries under the appropriate category
-2. **log.md**:
+1. **index.md**：在对应分类下追加新建页面条目
+2. **log.md**：
    ```bash
    python3 tools/research_wiki.py log wiki/ "ask | <question-summary> | crystallized: <target-path>"
    ```
-   If not crystallized:
+   若未 crystallize：
    ```bash
    python3 tools/research_wiki.py log wiki/ "ask | <question-summary> | answer-only"
    ```
-3. **Rebuild derived graph files** (only if crystallize created new pages):
+3. **重建 graph 派生文件**（仅 crystallize 创建了新页面时）：
    ```bash
    python3 tools/research_wiki.py rebuild-context-brief wiki/
    python3 tools/research_wiki.py rebuild-open-questions wiki/
    ```
 
-### Step 7: Report to User
+### Step 7: 报告给用户
 
-Output a summary including:
-- Number and list of retrieved pages
-- Answer (with citations and formatting)
-- Knowledge gap annotations (if any)
-- Crystallize recommendation or execution result
-- Follow-up suggestions (papers recommended for ingestion, related open questions)
+输出摘要，包含：
+- 检索的页面数量和列表
+- 回答（带引用和格式）
+- 知识缺口标注（若有）
+- Crystallize 建议或执行结果
+- 后续建议（推荐 ingest 的论文、相关的 open questions）
 
 ## Constraints
 
-- **No fabrication**: answers must be grounded in actual wiki content; do not invent from LLM pre-training knowledge
-- **Citations must exist**: every `[[slug]]` must point to a page that actually exists in the wiki
-- **raw/ is read-only**: do not modify files under `raw/`
-- **graph/ only via tools**: do not hand-edit files under `graph/`
-- **Crystallize requires confirmation**: unless the user explicitly specifies `--crystallize`, only recommend but do not write
-- **Context limit**: retrieve at most 15 pages to stay within context window
-- **Cite claim confidence**: when referencing claims, always note their confidence value and status
-- **Flag gaps**: if the question touches a known gap in open_questions.md, explicitly call it out
-- **outputs/ frontmatter must include query and source_pages**: ensures traceability
+- **不得虚构**：回答必须基于 wiki 中的实际内容，不得凭 LLM 预训练知识编造
+- **引用必须存在**：每个 `[[slug]]` 必须指向 wiki 中实际存在的页面
+- **raw/ 只读**：不得修改 `raw/` 下的文件
+- **graph/ 仅通过 tools 维护**：不得手动编辑 `graph/` 下的文件
+- **Crystallize 需确认**：除非用户显式指定 `--crystallize`，否则仅建议但不执行写入
+- **上下文限制**：检索页面数量 ≤ 15，避免超出上下文窗口
+- **claim confidence 引用**：涉及 claim 时必须注明其 confidence 值和 status
+- **gap 标注**：若问题涉及 open_questions.md 中的已知缺口，必须明确指出
+- **outputs/ frontmatter 必须包含 query 和 source_pages**：确保可追溯
 
 ## Error Handling
 
-- **context_brief.md missing**: run `python3 tools/research_wiki.py rebuild-context-brief wiki/` to rebuild, then retry
-- **wiki is empty**: inform the user to first run `/init` or `/ingest` to build the knowledge base
-- **no matching pages**: honestly report that no relevant content exists in the wiki, suggest search and ingest directions
-- **crystallize slug conflict**: append a numeric suffix (e.g. `query-result-2`)
-- **index.md missing**: run `python3 tools/research_wiki.py init wiki/` to initialize, then retry
+- **context_brief.md 不存在**：运行 `python3 tools/research_wiki.py rebuild-context-brief wiki/` 重建后重试
+- **wiki 为空**：告知用户先运行 `/init` 或 `/ingest` 建立知识基础
+- **无相关页面匹配**：坦诚告知 wiki 中无相关内容，建议搜索和 ingest 方向
+- **crystallize slug 冲突**：追加数字后缀（如 `query-result-2`）
+- **index.md 不存在**：运行 `python3 tools/research_wiki.py init wiki/` 初始化后重试
 
 ## Dependencies
 
 ### Tools（via Bash）
-- `python3 tools/research_wiki.py slug "<title>"` — slug generation
-- `python3 tools/research_wiki.py add-edge wiki/ --from <id> --to <id> --type <type> --evidence "<text>"` — add graph edge
-- `python3 tools/research_wiki.py rebuild-context-brief wiki/` — rebuild compressed context
-- `python3 tools/research_wiki.py rebuild-open-questions wiki/` — rebuild knowledge gap map
-- `python3 tools/research_wiki.py log wiki/ "<message>"` — append log entry
-- `python3 tools/research_wiki.py init wiki/` — initialize wiki (fallback)
+- `python3 tools/research_wiki.py slug "<title>"` — slug 生成
+- `python3 tools/research_wiki.py add-edge wiki/ --from <id> --to <id> --type <type> --evidence "<text>"` — 添加 graph edge
+- `python3 tools/research_wiki.py rebuild-context-brief wiki/` — 重建压缩上下文
+- `python3 tools/research_wiki.py rebuild-open-questions wiki/` — 重建知识缺口地图
+- `python3 tools/research_wiki.py log wiki/ "<message>"` — 追加日志
+- `python3 tools/research_wiki.py init wiki/` — 初始化 wiki（fallback）
 
 ### Skills（via Skill tool）
-- `/ingest` — referenced when suggesting the user supplement knowledge
+- `/ingest` — 若建议用户补充知识时引用
 
 ### Shared References
-- `.claude/skills/shared-references/citation-verification.md` (created in Phase 3)
+- `.claude/skills/shared-references/citation-verification.md`（Phase 3 创建）

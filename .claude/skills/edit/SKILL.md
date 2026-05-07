@@ -1,60 +1,60 @@
 ---
 name: edit
-description: Add or remove raw sources, or update wiki content, per user request
+description: 根据用户要求增删 raw sources 或更新 wiki 内容
 argument-hint: "[request]"
 ---
 
 # /edit
 
-> Add or remove raw sources, or update wiki content, per user request.
+> 根据用户要求增删 raw sources 或更新 wiki 内容。
 
-## Trigger
+## 触发
 
-User manual: `/edit <user request>`
+用户手动：`/edit <用户要求>`
 
-## Inputs
+## 输入
 
-User request, for example:
-- "Download this paper to raw/papers/"
-- "Delete raw/papers/xxx.pdf"
-- "Update the SOTA tracker in topics/efficient-llm-adaptation"
-- "Add a new variant to concepts/lora"
+用户请求，例如：
+- "把这篇论文下载到 raw/papers/"
+- "删除 raw/papers/xxx.pdf"
+- "更新 topics/efficient-llm-adaptation 的 SOTA tracker"
+- "给 concepts/lora 加一个新变体"
 
-## Outputs
+## 输出
 
-Updated wiki files, `index.md`, `log.md`
+更新后的 wiki 文件、`index.md`、`log.md`
 
-## Steps
+## 步骤
 
-### STEP 1: Parse User Intent
+### STEP 1: 解析用户意图
 
-1. **Add raw sources**:
-   - If the user provides a local path: copy to the corresponding directory under `raw/`
-   - If the user provides an arXiv URL: download to `raw/papers/`
-   - If the user provides a web URL: fetch content with markdownify and save to `raw/web/`
-2. **Delete raw sources**:
-   - Confirm then execute deletion
-3. **Update wiki**:
-   - Read the relevant pages and modify content per user instructions
+1. **增加 raw sources**：
+   - 若用户提供了本地路径：复制到 `raw/` 对应目录
+   - 若用户提供了 arXiv URL：下载到 `raw/papers/`
+   - 若用户提供了网页 URL：用 markdownify 抓取内容存到 `raw/web/`
+2. **删除 raw sources**：
+   - 确认后执行删除
+3. **更新 wiki**：
+   - 读取相关页面，按用户要求修改内容
 
-### STEP 2: Execute Updates
+### STEP 2: 执行更新
 
-1. Newly added raw sources can later be incorporated into the wiki via `/ingest`
-2. Direct wiki modifications: update the specified fields/content in specific pages per user instructions
-3. When writing forward links, simultaneously write reverse links
+1. 增加的 raw sources 后续可通过 `/ingest` 纳入 wiki
+2. 直接 wiki 修改：按用户指令更新特定页面的特定字段/内容
+3. 写正向链接时同步写反向链接
 
-### STEP 3: Update Navigation
+### STEP 3: 更新导航
 
-1. `EDIT wiki/index.md`: update relevant entries
-2. `APPEND wiki/log.md`: `## [{date}] update | {description}`
+1. `EDIT wiki/index.md`：更新相关条目
+2. `APPEND wiki/log.md`：`## [{date}] update | {description}`
 
-### STEP 4: Report
+### STEP 4: 报告
 
-- List all changes made
-- Suggest follow-up actions (e.g. ingest newly added raw sources if applicable)
+- 列出变更内容
+- 提示后续操作（如需要 ingest 新增的 raw sources）
 
-## Constraints
+## 约束
 
-- `raw/` is read-only for existing files (this skill may add files to `raw/`, but must not modify existing ones)
-- Wiki modifications must follow template structure
-- Bidirectional links must be kept in sync
+- `raw/` 只读（本 skill 可以往 `raw/` 添加文件，但不修改已有文件）
+- wiki 修改遵循模板结构
+- 双向链接同步维护

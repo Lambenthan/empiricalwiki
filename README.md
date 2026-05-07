@@ -22,6 +22,16 @@
 
 ---
 
+## Local Empirical Research Adaptation
+
+This local copy has been adapted into **EmpiricalWiki**, a vertical version for accounting, finance, management, and economics empirical research.
+
+Start with [README_EMPIRICAL.md](README_EMPIRICAL.md) if your workflow is literature reading, variable mapping, data construction, regression design, robustness checks, and Stata planning.
+
+New local commands include `/empirical-ingest`, `/variable-map`, `/empirical-design`, and `/stata-plan`.
+
+---
+
 ## Team
 
 ΩmegaWiki is built by [DAIR Lab](https://cuibinpku.github.io/) at Peking University — a fully agentic platform that automates the complete research pipeline, from knowledge ingestion to paper submission.

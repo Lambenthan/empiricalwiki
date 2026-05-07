@@ -1,87 +1,87 @@
 ---
-description: General-purpose cross-model review — Review LLM independently reviews any research artifact, outputs structured scores, wiki entity mapping, and improvement suggestions
+description: 通用跨模型审查：Review LLM 对任意研究制品进行独立评审，输出结构化评分、wiki 实体映射与改进建议
 argument-hint: <artifact-path-or-slug> [--difficulty standard|hard|adversarial] [--focus method|evidence|writing|completeness]
 ---
 
 # /review
 
-> Review any research artifact (idea, proposal, experiment plan, paper draft, claim) using cross-model review.
-> Uses Review LLM as an independent reviewer. Outputs a structured score, actionable improvement suggestions,
-> and a mapping to wiki entities (which claims need strengthening, which gaps are discovered).
-> Supports three difficulty levels (standard / hard / adversarial) and four review focuses.
-> Can be used standalone or called by /ideate, /refine, /exp-design.
+> 对任意研究制品（idea、proposal、experiment plan、paper draft、claim）进行跨模型审查。
+> 使用 Review LLM 作为独立审稿人，输出结构化评分、可操作的改进建议，以及与 wiki 实体的映射
+> （哪些 claims 需要加强，哪些 gaps 被发现）。
+> 支持三种难度级别（standard / hard / adversarial）和四种审查焦点。
+> 可独立使用，也被 /ideate、/refine、/exp-design 调用。
 
 ## Inputs
 
-- `artifact`: the artifact to review, one of:
-  - slug of a wiki page (e.g. `sparse-lora-for-edge-devices`, searched in ideas/experiments/claims/)
-  - file path (e.g. `wiki/outputs/paper-draft-v1.md`)
-  - free text (directly pasted proposal or idea description)
-- `--difficulty` (optional, default `standard`):
-  - `standard`: single-round review, delivers structured feedback
-  - `hard`: multi-round dialogue (up to 3 rounds), Claude rebuts each weakness
-  - `adversarial`: multi-round dialogue (up to 3 rounds), Review LLM additionally attempts to find fatal flaws, simulating the harshest reviewer
-- `--focus` (optional, default comprehensive review):
-  - `method`: focus on technical correctness, novelty, and feasibility of method design
-  - `evidence`: focus on sufficiency of evidence, experimental rigor, claim support
-  - `writing`: focus on clarity, structural organization, and argumentative logic
-  - `completeness`: focus on missing content (related work, ablations, baselines)
+- `artifact`：要审查的制品，以下之一：
+  - wiki 页面的 slug（如 `sparse-lora-for-edge-devices`，从 ideas/experiments/claims/ 中查找）
+  - 文件路径（如 `wiki/outputs/paper-draft-v1.md`）
+  - 自由文本（直接粘贴的 proposal 或 idea 描述）
+- `--difficulty`（可选，默认 `standard`）：
+  - `standard`：单轮审查，给出结构化反馈
+  - `hard`：多轮对话（最多 3 轮），Claude 对每个 weakness 进行 rebuttal
+  - `adversarial`：多轮对话（最多 3 轮），Review LLM 额外尝试找致命缺陷，模拟最严苛的审稿人
+- `--focus`（可选，默认全面审查）：
+  - `method`：聚焦方法设计的正确性、创新性、可行性
+  - `evidence`：聚焦证据是否充分、实验是否严谨、claim 是否 well-supported
+  - `writing`：聚焦表达清晰度、结构组织、论证逻辑
+  - `completeness`：聚焦是否遗漏关键内容（相关工作、ablation、baseline）
 
 ## Outputs
 
-- **Review Report** (output to terminal):
-  - Overall Score (1-10)
-  - Strengths (list of positives)
-  - Weaknesses (list of issues, ranked by severity)
-  - Questions (reviewer questions)
-  - Actionable Suggestions (improvement suggestions ranked by priority)
-  - Wiki Entity Mapping (which claims need strengthening, which gaps were found)
-  - Verdict: `ready` / `needs-work` / `major-revision` / `rethink`
-- If `--difficulty >= hard`: additionally includes multi-round dialogue history and final revised score
-- This skill **does not directly modify the wiki**, but outputs a list of suggested wiki updates
+- **Review Report**（输出到终端）：
+  - Overall Score（1-10）
+  - Strengths（优点列表）
+  - Weaknesses（缺点列表，按严重程度排序）
+  - Questions（审稿人的疑问）
+  - Actionable Suggestions（可操作的改进建议，按优先级排序）
+  - Wiki Entity Mapping（哪些 claims 需要加强，哪些 gaps 被发现）
+  - Verdict：`ready` / `needs-work` / `major-revision` / `rethink`
+- 若 `--difficulty >= hard`：额外包含多轮对话记录和最终修正后的评分
+- 该 skill **不直接修改 wiki**，但会输出建议的 wiki 更新列表
 
 ## Wiki Interaction
 
 ### Reads
-- `wiki/papers/*.md` — locate papers cited by the artifact, verify citation accuracy
-- `wiki/concepts/*.md` — understand technical concepts involved in the artifact
-- `wiki/claims/*.md` — check the current status and confidence of claims the artifact depends on
-- `wiki/experiments/*.md` — find related experiment results
-- `wiki/ideas/*.md` — if reviewing an idea, check its context
-- `wiki/graph/context_brief.md` — global context
-- `wiki/graph/open_questions.md` — check completeness against the gap map
-- `.claude/skills/shared-references/cross-model-review.md` — reviewer independence principle
+- `wiki/papers/*.md` — 查找制品引用的论文，验证引用正确性
+- `wiki/concepts/*.md` — 理解制品涉及的技术概念
+- `wiki/claims/*.md` — 检查制品依赖的 claims 当前状态和 confidence
+- `wiki/experiments/*.md` — 查找相关实验结果
+- `wiki/ideas/*.md` — 如果审查的是 idea，检查其上下文
+- `wiki/graph/context_brief.md` — 获取全局上下文
+- `wiki/graph/open_questions.md` — 对照 gap map 检查完整性
+- `.claude/skills/shared-references/cross-model-review.md` — 审稿独立性原则
 
 ### Writes
-- **None**. Review is a read-only query operation.
-  - Review results are output to terminal; the user or caller (e.g. /refine) decides whether to apply them.
+- **无**。Review 是只读查询操作。
+  - 审查结果输出到终端，由用户或调用方（如 /refine）决定是否应用。
 
 ### Graph edges created
-- **None**.
+- **无**。
 
 ## Workflow
 
-**Precondition**: confirm working directory is the wiki project root (containing `wiki/`, `raw/`, `tools/`).
+**前置**：确认工作目录为 wiki 项目根（包含 `wiki/`、`raw/`、`tools/` 的目录）。
 
-### Step 1: Load Context
+### Step 1: 加载上下文
 
-1. **Parse artifact**:
-   - If slug: search sequentially in `wiki/ideas/`, `wiki/experiments/`, `wiki/claims/`, `wiki/papers/`, `wiki/outputs/` for `{slug}.md`
-   - If file path: read directly
-   - If free text: use directly
-2. **Determine artifact type**: idea / experiment / claim / paper-draft / proposal / other
-3. **Load relevant wiki context**:
-   - Read `wiki/graph/context_brief.md` for global perspective
-   - Read `wiki/graph/open_questions.md` for knowledge gap list
-   - Load relevant wiki pages by artifact type:
-     - idea → its origin_gaps claims, related papers
-     - experiment → its target_claim, related experiments
-     - claim → its evidence sources, related papers and experiments
-     - paper-draft → all wiki pages it cites
-4. **Read cross-model-review.md**: confirm Review LLM independence principle
-5. **Build reviewer system prompt** (based on --focus):
+1. **解析 artifact**：
+   - 若为 slug：按顺序在 `wiki/ideas/`、`wiki/experiments/`、`wiki/claims/`、`wiki/papers/`、`wiki/outputs/` 中查找 `{slug}.md`
+   - 若为文件路径：直接读取
+   - 若为自由文本：直接使用
+2. **确定 artifact 类型**：idea / experiment / claim / paper-draft / proposal / other
+3. **加载相关 wiki 上下文**：
+   - 读取 `wiki/graph/context_brief.md` 获取全局视角
+   - 读取 `wiki/graph/open_questions.md` 获取知识缺口列表
+   - 根据 artifact 类型，加载相关 wiki 页面：
+     - idea → 其 origin_gaps 对应的 claims，相关 papers
+     - experiment → 其 target_claim，相关 experiments
+     - claim → 其 evidence 来源，相关 papers 和 experiments
+     - paper-draft → 其引用的所有 wiki 页面
+4. **读取 cross-model-review.md**：确认 Review LLM 独立性原则
+5. **构建 reviewer system prompt**（根据 --focus）：
 
-   **Base prompt (all focuses):**
+   **Base prompt（所有 focus）：**
    ```
    You are a senior ML researcher reviewing a research artifact.
    Be thorough, specific, and constructive. For every weakness, suggest a concrete fix.
@@ -93,22 +93,22 @@ argument-hint: <artifact-path-or-slug> [--difficulty standard|hard|adversarial] 
    - 10: Exceptional, publication-ready
    ```
 
-   **Focus-specific additions:**
-   - `method`: additionally assess technical correctness, novelty of approach, feasibility, comparison to alternatives
-   - `evidence`: additionally assess experimental rigor, statistical significance, claim-evidence alignment, missing controls
-   - `writing`: additionally assess clarity, logical flow, notation consistency, figure quality, related work coverage
-   - `completeness`: additionally assess missing baselines, missing ablations, missing datasets, missing related work, reproducibility
+   **Focus-specific additions：**
+   - `method`：额外要求评估 technical correctness, novelty of approach, feasibility, comparison to alternatives
+   - `evidence`：额外要求评估 experimental rigor, statistical significance, claim-evidence alignment, missing controls
+   - `writing`：额外要求评估 clarity, logical flow, notation consistency, figure quality, related work coverage
+   - `completeness`：额外要求评估 missing baselines, missing ablations, missing datasets, missing related work, reproducibility
 
-   **Adversarial addition (adversarial mode only):**
+   **Adversarial addition（仅 adversarial 模式）：**
    ```
    Additionally: actively search for fatal flaws. A fatal flaw is anything that,
    if true, would make the entire contribution invalid (incorrect proof, data leakage,
    unfair comparison, published prior work). If you find one, flag it clearly.
    ```
 
-### Step 2: Review LLM Initial Review
+### Step 2: Review LLM 首轮审查
 
-**Follow cross-model-review.md**: do not send any of Claude's pre-judgments to Review LLM.
+**遵循 cross-model-review.md**：不向 Review LLM 发送任何 Claude 的预判。
 
 ```
 mcp__llm-review__chat:
@@ -131,22 +131,22 @@ mcp__llm-review__chat:
     7. **Knowledge gaps identified**: Any open questions or missing knowledge that would strengthen this work.
 ```
 
-Record the `threadId` returned by Review LLM (for multi-round dialogue in Step 3).
+记录 Review LLM 返回的 `threadId`（用于 Step 3 多轮对话）。
 
-### Step 3: Multi-Round Dialogue (hard / adversarial mode)
+### Step 3: 多轮对话（hard / adversarial 模式）
 
-Skip this step if `--difficulty` is `standard`.
+若 `--difficulty` 为 `standard`，跳过此步。
 
-**Respond to each of Review LLM's weaknesses** (up to 3 rounds):
+**对 Review LLM 的每个 weakness 进行回应**（最多 3 轮）：
 
-**Round N (N = 1, 2, 3):**
+**Round N（N = 1, 2, 3）：**
 
-1. Claude analyzes Review LLM's weaknesses and classifies each:
-   - **Rebuttal**: Claude has strong reasoning or wiki evidence to counter it → write a rebuttal
-   - **Acknowledge**: the weakness genuinely exists → acknowledge it and propose a fix
-   - **Clarify**: the weakness is based on a misunderstanding → provide clarification
+1. Claude 分析 Review LLM 的 weaknesses，对每个 weakness 分类：
+   - **可反驳（rebuttal）**：Claude 有充分理由或 wiki 证据反驳 → 写出 rebuttal
+   - **承认（acknowledge）**：weakness 确实存在 → 承认并提出修复方案
+   - **需要更多信息（clarify）**：weakness 基于误解 → 提供澄清
 
-2. Send Claude's response to Review LLM:
+2. 将 Claude 的回应发送给 Review LLM：
    ```
    mcp__llm-review__chat-reply:
      threadId: {from Step 2}
@@ -160,14 +160,14 @@ Skip this step if `--difficulty` is `standard`.
        fatal flaws I may have missed.
    ```
 
-3. Review LLM responds with a new assessment and revised score
+3. Review LLM 回应新的评估和修正后的评分
 
-4. If Review LLM's score change < 0.5 and no new weaknesses → stop dialogue (converged)
-5. If 3 rounds reached → stop dialogue
+4. 若 Review LLM 的评分变化 < 0.5 且无新 weakness → 停止对话（收敛）
+5. 若已达 3 轮 → 停止对话
 
-### Step 4: Structured Output
+### Step 4: 结构化输出
 
-Synthesize Step 2 + Step 3 results into a structured Review Report:
+综合 Step 2 + Step 3 结果，生成结构化 Review Report：
 
 ```markdown
 # Review Report: {artifact title}
@@ -175,18 +175,18 @@ Synthesize Step 2 + Step 3 results into a structured Review Report:
 ## Meta
 - **Artifact type**: {idea / experiment / claim / paper-draft / proposal}
 - **Difficulty**: {standard / hard / adversarial}
-- **Focus**: {method / evidence / writing / completeness / comprehensive}
-- **Reviewer**: Review LLM (configured in `.env`)
+- **Focus**: {method / evidence / writing / completeness / 全面}
+- **Reviewer**: Review LLM
 - **Rounds**: {1 for standard, N for hard/adversarial}
 
 ## Score: {final score}/10 — {verdict}
 
-| Verdict | Meaning |
-|---------|---------|
-| ready | Ready to use or submit directly |
-| needs-work | Clear improvement points; usable after fixes |
-| major-revision | Core sections need significant revision |
-| rethink | Fundamental direction may be flawed; reconsider |
+| Verdict | 含义 |
+|---------|------|
+| ready | 可直接使用或提交 |
+| needs-work | 有明确的改进点，修复后可用 |
+| major-revision | 核心部分需要重大修改 |
+| rethink | 基本方向可能有问题，需重新考虑 |
 
 ## Strengths
 1. {strength 1}
@@ -196,13 +196,13 @@ Synthesize Step 2 + Step 3 results into a structured Review Report:
 ## Weaknesses (by severity)
 
 ### Critical
-- {weakness}: {specific description} → **Fix**: {specific fix suggestion}
+- {weakness}: {具体描述} → **Fix**: {具体修复建议}
 
 ### Major
-- {weakness}: {specific description} → **Fix**: {specific fix suggestion}
+- {weakness}: {具体描述} → **Fix**: {具体修复建议}
 
 ### Minor
-- {weakness}: {specific description} → **Fix**: {specific fix suggestion}
+- {weakness}: {具体描述} → **Fix**: {具体修复建议}
 
 ## Questions
 1. {question}
@@ -218,7 +218,7 @@ Synthesize Step 2 + Step 3 results into a structured Review Report:
 ### Knowledge gaps identified
 | Gap | Related to | Suggested action |
 |-----|-----------|------------------|
-| {description} | [[slug]] | /ingest, /exp-run, or /query |
+| {描述} | [[slug]] | /ingest, /exp-run, or /query |
 
 ### Suggested wiki updates
 - `wiki/claims/{slug}.md`: update confidence, add evidence note
@@ -243,41 +243,41 @@ Synthesize Step 2 + Step 3 results into a structured Review Report:
 
 ## Constraints
 
-- **Reviewer independence**: strictly follow `shared-references/cross-model-review.md`; do not leak Claude's pre-judgments to Review LLM
-- **Do not modify wiki**: review only outputs suggestions; it does not directly modify any wiki pages. Wiki modifications are handled by the caller (e.g. /refine)
-- **Scores must have justification**: scores without a rationale are not accepted
-- **Weaknesses must have fixes**: every weakness must include a specific, actionable fix suggestion; vague criticism is not accepted
-- **Claim-level mapping is required**: output must include the Wiki Entity Mapping section, mapping review findings to specific wiki entities
-- **Adversarial mode must search for fatal flaws**: e.g. fully published identical work, incorrect proofs, data leakage
-- **Multi-round dialogue capped at 3 rounds**: prevents infinite loops; output current state if 3 rounds do not converge
-- **Use [[slug]] when referencing wiki pages**: all references to wiki pages use wikilink syntax
+- **审稿独立性**：严格遵循 `shared-references/cross-model-review.md`，不向 Review LLM 泄露 Claude 的预判
+- **不修改 wiki**：review 只输出建议，不直接修改任何 wiki 页面。wiki 修改由调用方（如 /refine）执行
+- **score 必须有 justification**：不接受没有理由的分数
+- **weakness 必须有 fix**：每个 weakness 必须附带具体的、可操作的修复建议，不接受空洞批评
+- **claim-level mapping 必须**：输出必须包含 Wiki Entity Mapping 部分，将 review 发现映射到具体 wiki 实体
+- **adversarial 模式必须搜索致命缺陷**：如已发表的完全相同工作、证明错误、数据泄露等
+- **多轮对话最多 3 轮**：防止无限循环，若 3 轮后仍未收敛则以当前状态输出
+- **引用 wiki 页面时使用 [[slug]]**：所有对 wiki 页面的引用使用 wikilink 语法
 
 ## Error Handling
 
-- **Artifact not found**: prompt user to check slug or path, list likely candidate pages
-- **Review LLM unavailable**: downgrade to Claude self-review mode; annotate report with "single-model review, cross-model verification unavailable"; recommend the user retry with Review LLM later
-- **Wiki empty**: proceed with review normally, but annotate Wiki Entity Mapping section with "wiki empty, no entity mapping available"
-- **Artifact too long**: if it exceeds Review LLM's context window, review section by section and merge at the end
-- **Review LLM returns invalid response**: retry once; if still invalid, use Claude self-review fallback
-- **Review LLM does not converge in multi-round dialogue**: force-stop after 3 rounds; output the last round's score and summary
+- **artifact 找不到**：提示用户检查 slug 或路径，列出可能的候选页面
+- **Review LLM 不可用**：降级为 Claude 自我审查模式，报告标注「single-model review, cross-model verification unavailable」，建议用户稍后用 Review LLM 重新审查
+- **wiki 为空**：正常执行审查，但 Wiki Entity Mapping 部分标注「wiki empty, no entity mapping available」
+- **artifact 太长**：若超过 Review LLM 上下文窗口，按 section 分段审查，最后合并
+- **Review LLM 返回无效响应**：重试一次，若仍无效则使用 Claude 自审降级方案
+- **多轮对话中 Review LLM 不收敛**：3 轮后强制结束，输出最后一轮的评分和总结
 
 ## Dependencies
 
 ### Tools（via Bash）
-- No direct tool calls (review does not require deterministic tools)
+- 无直接工具调用（review 不需要确定性工具）
 
 ### MCP Servers
-- `mcp__llm-review__chat` — Review LLM initial review (Step 2)
-- `mcp__llm-review__chat-reply` — Review LLM multi-round dialogue (Step 3)
+- `mcp__llm-review__chat` — Review LLM 首轮审查（Step 2）
+- `mcp__llm-review__chat-reply` — Review LLM 多轮对话（Step 3）
 
 ### Claude Code Native
-- `Read` — read artifact and wiki pages
-- `Glob` — find wiki page corresponding to artifact
+- `Read` — 读取 artifact 和 wiki 页面
+- `Glob` — 查找 artifact 对应的 wiki 页面
 
 ### Shared References
-- `.claude/skills/shared-references/cross-model-review.md` — reviewer independence principle (required reading)
+- `.claude/skills/shared-references/cross-model-review.md` — 审稿独立性原则（必读）
 
 ### Called by
-- `/ideate` Phase 4 (review top ideas)
-- `/refine` each iteration round (review current version)
-- `/exp-design --review` (review experiment plan)
+- `/ideate` Phase 4（审查 top ideas）
+- `/refine` 每轮迭代（审查当前版本）
+- `/exp-design --review`（审查实验计划）

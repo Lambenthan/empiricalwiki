@@ -1,99 +1,86 @@
-# /ingest Cross-References
+# /ingest 交叉引用
 
-Open this reference when you are writing a link on any wiki page. Every forward link has a reverse obligation (except to foundations). The table below is the contract.
+在任何 wiki 页面上写链接时，打开此参考。每一条正向链接都有反向义务（指向 foundation 的除外）。下表是合同。
 
-## Forward → reverse obligation
+## 正向 → 反向义务
 
-Mirrors the matrix in the root `CLAUDE.md` ("Cross-Reference Rules"), trimmed to the edges `/ingest` actually writes:
+对应根 `CLAUDE.md`（"Cross-Reference 规则"）中的矩阵，裁剪到 `/ingest` 实际写入的 edge：
 
-| Forward action (what you write on page A) | Required reverse action (what you also write on page B in the same turn) |
-|-------------------------------------------|--------------------------------------------------------------------------|
-| `papers/P` writes `Related: [[concept-K]]` | `concepts/K` appends `P` to `key_papers` |
-| `papers/P` writes `[[person-R]]` (in Key authors) | `people/R` appends `P` to `Key papers` |
-| `papers/P` writes `supports: [[claim-C]]` | `claims/C` appends `{source: P, type: supports}` to `evidence` |
-| `papers/P` writes `supports: [[claim-C]]` but paper contradicts claim | use `type: contradicts` in the evidence entry |
-| `claims/C` writes `source_papers: [[paper-P]]` | `papers/P` appends `C` to `## Related` |
-| `concepts/K` writes `key_papers: [[paper-P]]` | `papers/P` appends `K` to `## Related` |
-| any page writes `[[foundation-X]]` | **no reverse link** — foundations are terminal |
+| 正向操作（你在页面 A 上写什么） | 必须同步的反向操作（在同一 turn 里你在页面 B 上写什么） |
+|--------------------------------|--------------------------------------------------------|
+| `papers/P` 写 `Related: [[concept-K]]` | `concepts/K` 的 `key_papers` 追加 `P` |
+| `papers/P` 写 `[[person-R]]`（Key authors 段） | `people/R` 的 `Key papers` 追加 `P` |
+| `papers/P` 写 `supports: [[claim-C]]` | `claims/C` 的 `evidence` 追加 `{source: P, type: supports}` |
+| `papers/P` 写 `supports: [[claim-C]]` 但论文实际反驳该 claim | 在 evidence 条目里用 `type: contradicts` |
+| `claims/C` 写 `source_papers: [[paper-P]]` | `papers/P` 的 `## Related` 追加 `C` |
+| `concepts/K` 写 `key_papers: [[paper-P]]` | `papers/P` 的 `## Related` 追加 `K` |
+| 任意页面写 `[[foundation-X]]` | **不写反向链接** —— foundation 是终端节点 |
 
-Writing a forward link without its reverse is the most common way `/check` surfaces `missing-field` errors. Doing both together eliminates the class entirely.
+写了正向却没写反向，是 `/check` 报 `missing-field` 的最常见来源。把两边放在同一 turn 内做，整类错误就被消灭。
 
-## Foundations are terminal
+## Foundation 是终端节点
 
-Never modify a foundation page from `/ingest`. No `key_papers` field, no back-reference of any kind. A paper linking to a foundation leaves a trace only in two places:
+`/ingest` 不得修改 foundation 页面。没有 `key_papers` 字段，也没有任何形式的反向引用。一篇论文链到 foundation，只留下两处痕迹：
 
-- the paper page's `## Related` contains `[[foundation-slug]]`
-- `wiki/graph/edges.jsonl` contains the `paper → foundation` edge with type `derived_from`
+- 论文页面 `## Related` 中的 `[[foundation-slug]]`
+- `wiki/graph/edges.jsonl` 中一条 `paper → foundation`、type 为 `derived_from` 的 edge
 
-Foundations are created only by `/prefill`. `/ingest` never creates foundations, even when a concept candidate looks foundational and has no match. In that case, route the candidate through the ordinary concept path (possibly creating a new concept page), and let the user seed a foundation later if they want to.
+foundation 仅由 `/prefill` 创建。`/ingest` 永远不新建 foundation —— 即便某个 concept 候选看起来像是 foundational 却没有匹配。这种情况下，走普通 concept 路径（必要时新建 concept 页面），让用户日后需要时自行 seed foundation。
 
-## Paper-to-concept semantic edges
+## paper-to-concept 语义 edge
 
-Papers relate to concepts by using, introducing, extending, or critiquing
-them. Every paper-to-concept semantic edge must include `--confidence high|medium|low`.
+paper 与 concept 的关系是使用、引入、扩展或批评。每条 paper-to-concept 语义 edge 都必须带 `--confidence high|medium|low`。
 
-Edge-type selection:
+edge 类型选择：
 
-- **`introduces_concept`** — strict novelty only: the paper explicitly proposes, coins, defines, or names the concept as a contribution.
-- **`uses_concept`** — default for an existing concept that the paper relies on without materially changing it.
-- **`extends_concept`** — the paper modifies, generalizes, specializes, or formalizes an existing concept.
-- **`critiques_concept`** — the paper argues that a concept has limitations, failure modes, or invalid assumptions.
+- **`introduces_concept`** —— 严格的新颖性：论文明确把该 concept 作为贡献来提出、命名或定义。
+- **`uses_concept`** —— 默认选项：论文依赖已有 concept，但没有实质修改它。
+- **`extends_concept`** —— 论文修改、泛化、特化或形式化已有 concept。
+- **`critiques_concept`** —— 论文指出某个 concept 的限制、失败模式或错误假设。
 
-When uncertain between `introduces_concept` and `uses_concept`, choose
-`uses_concept`. When uncertain between `uses_concept` and `extends_concept`,
-choose `uses_concept`. Do not emit `paper → concept` edges of type `supports` or
-plain `extends`.
-The tool rejects missing confidence/evidence and legacy paper-to-concept edge
-types on new writes.
+在 `introduces_concept` 与 `uses_concept` 之间不确定时，选 `uses_concept`。在 `uses_concept` 与 `extends_concept` 之间不确定时，也选 `uses_concept`。不要再写 `paper → concept` 的 `supports` 或普通 `extends`。
+该工具会拒绝缺少 confidence/evidence 的新写入，也会拒绝 legacy paper-to-concept edge 类型。
 
-## Paper-to-paper edges
+## paper-to-paper edge
 
-The bibliographic layer is separate from the semantic layer:
+bibliographic 层与 semantic 层分开：
 
-- always write `graph/citations.jsonl` with `type: cites` when a reference resolves to an existing `wiki/papers/{slug}.md`
-- write `graph/edges.jsonl` only when the paper text gives a clear semantic cue
-- do not force every citation into a semantic edge
+- 当 reference 能解析到已有 `wiki/papers/{slug}.md` 时，总是写 `graph/citations.jsonl`，`type: cites`
+- 只有论文文本给出清晰语义信号时，才写 `graph/edges.jsonl`
+- 不要把每条 citation 都强行解释成 semantic edge
 
-Paper-to-paper semantic edges are intentionally sparse. They require a concrete
-relationship between the papers' contributions, not just shared topic,
-modality, architecture family, benchmark family, or high-level method words. If
-the same statement would be true for dozens of papers in the wiki, skip the
-paper-to-paper edge and rely on topic/concept links plus citations instead.
+paper-to-paper semantic edge 应该保持稀疏。它要求两篇论文的贡献之间有具体关系，而不是仅仅共享主题、模态、架构族、benchmark 族或高层方法词。如果同一句描述可以同时套到 wiki 里几十篇论文上，就不要写 paper-to-paper edge；交给 topic/concept 链接和 citation 层表达。
 
-Semantic edge-type selection:
+semantic edge 类型选择：
 
-- **`same_problem_as`** — symmetric; both papers attack the same concrete task, research question, or problem formulation, so their proposed answers are directly comparable. Do not use this for broad areas like "attention", "video generation", or "LLM evaluation".
-- **`similar_method_to`** — symmetric; both papers share a distinctive mechanism, formulation, training strategy, or algorithmic design. Do not use this for generic families like "uses transformers", "uses diffusion", or "uses RL".
-- **`complementary_to`** — symmetric; the approaches or components can be combined in a technically specific way, and the paper text or method details give evidence for that compatibility. Do not use this merely because both could belong to the same future system.
-- **`builds_on`** — directional; this paper directly depends on, adapts, or extends the other paper's specific method, formulation, dataset, result, or system. Do not use this for vague inspiration.
-- **`compares_against`** — directional; this paper uses the other paper as an explicit baseline, comparator, or ablation reference.
-- **`improves_on`** — directional; this paper explicitly claims better quality, efficiency, robustness, simplicity, or scope than the other paper in a comparable setting.
-- **`challenges`** — directional; this paper disputes, weakens, or presents counter-evidence against the other paper's result, assumption, or framing.
-- **`surveys`** — directional; this paper is a survey, benchmark, taxonomy, or position work that summarizes the other paper or its line of work.
+- **`same_problem_as`** —— 对称；两篇论文处理同一个具体任务、研究问题或问题形式化，因此它们的答案可以直接比较。不要因为都属于 “attention”、“video generation” 或 “LLM evaluation” 这类宽泛方向就使用它。
+- **`similar_method_to`** —— 对称；两篇论文共享有辨识度的机制、形式化、训练策略或算法设计。不要因为都“使用 transformer”、“使用 diffusion” 或 “使用 RL” 就使用它。
+- **`complementary_to`** —— 对称；两篇论文的方法或组件可以以技术上具体的方式组合，且论文文本或方法细节给出了兼容性依据。不要仅因为二者可能同属某个未来系统就使用它。
+- **`builds_on`** —— 有方向；当前论文直接依赖、改造或扩展另一篇论文的具体方法、形式化、数据集、结果或系统。不要用于模糊的 inspiration。
+- **`compares_against`** —— 有方向；当前论文把另一篇论文作为显式 baseline、比较对象或 ablation 参照。
+- **`improves_on`** —— 有方向；当前论文在可比较设置中明确声称相对另一篇论文有质量、效率、鲁棒性、简洁性或适用范围上的改进。
+- **`challenges`** —— 有方向；当前论文削弱、质疑或给出反证，挑战另一篇论文的结果、假设或 framing。
+- **`surveys`** —— 有方向；当前论文是 survey、benchmark、taxonomy 或 position work，概述另一篇论文或其研究线。
 
-All paper-to-paper semantic edges must include `--confidence high|medium|low`.
-For symmetric types, `tools/research_wiki.py add-edge` canonicalizes the
-endpoint order and writes `symmetric: true`.
-The tool rejects missing confidence/evidence and legacy paper-paper edge types
-on new writes.
+所有 paper-to-paper semantic edges 都必须带 `--confidence high|medium|low`。对称类型由 `tools/research_wiki.py add-edge` 自动规范 endpoint 顺序并写入 `symmetric: true`。
+该工具会拒绝缺少 confidence/evidence 的新写入，也会拒绝 legacy paper-paper edge 类型。
 
-- **none / skip** — if none of the above cleanly fits, skip the edge. Graph noise is worse than a missing edge.
+- **无 / 跳过** —— 以上都不能干净对应时，跳过 semantic edge。graph 噪声比缺一条 edge 更糟。
 
-When in doubt, skip. Paper-paper semantic edges are for high-signal local
-relationships, not clustering by field.
+不确定时，跳过。paper-to-paper semantic edge 用于高信号的局部关系，不用于按领域聚类。
 
-## Writing both sides atomically
+## 正反两侧原子写入
 
-For every link `/ingest` writes, the reverse should land in the same turn. In practice that means:
+`/ingest` 写的每一条链接，反向都应在同一 turn 内落地。具体做法：
 
-1. Decide on the link.
-2. Write the forward entry on the originating page.
-3. Write the reverse entry on the target page.
-4. If the link also corresponds to a semantic graph edge (paper↔concept, paper↔claim, paper↔paper, paper→foundation), emit it via `tools/research_wiki.py add-edge`.
-5. If a paper reference resolves to an existing paper page, emit the bibliographic row via `tools/research_wiki.py add-citation`.
+1. 决定建立此链接。
+2. 在源页面写正向条目。
+3. 在目标页面写反向条目。
+4. 若该链接对应一条 semantic graph edge（paper↔concept、paper↔claim、paper↔paper、paper→foundation），通过 `tools/research_wiki.py add-edge` 写出。
+5. 若一条 paper reference 能解析到已有 paper 页面，通过 `tools/research_wiki.py add-citation` 写出 bibliographic 记录。
 
-This pattern keeps `/check` from flagging half-written links in its next run. It also makes rollbacks straightforward: if a paper ingest is aborted, you can undo both sides together by reverting the paper's edits.
+这种做法让 `/check` 下一轮不会报半吊子链接。也让回滚变简单：若某篇论文 ingest 被中止，直接撤销该论文的编辑就能把两侧同时撤销。
 
-## What `/ingest` does not check here
+## `/ingest` 在此处不做的检查
 
-`/ingest` writes forward and reverse links as it goes, but it does not verify that every pre-existing link in the wiki still has its reverse. That is a full-graph audit and belongs to `/check`. Do not read the entire `wiki/` to look for broken back-references during ingest — the time and token cost is large and the work is redundant with `/check`.
+`/ingest` 边写边写反向链接，但不会审计 wiki 中既有链接是否仍有反向。那是全图审计，属于 `/check`。不要在 ingest 过程中全量读 `wiki/` 去查已有的反向缺失 —— 时间与 token 成本都不小，而且与 `/check` 做重复工作。

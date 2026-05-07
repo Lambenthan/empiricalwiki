@@ -1,82 +1,82 @@
 ---
-description: Reset wiki state to a clean scaffold by scope (wiki / raw / log / checkpoints / all). Useful during development or carefree restarts after a botched setup.
+description: 按 scope 重置 wiki 到干净 scaffold（wiki / raw / log / checkpoints / all）。适用于开发迭代或 setup 失败后的无痛重启。
 argument-hint: "--scope wiki|raw|log|checkpoints|all"
 ---
 
 # /reset
 
-> Resets the wiki to a clean scaffold by scope. Designed for development iteration and recovery after a failed setup — not a routine operation.
+> 按 scope 重置 wiki 到干净 scaffold。设计目的是开发迭代和 setup 失败恢复 — 不是日常操作。
 
 ## Trigger
 
-Manual: `/reset --scope wiki` / `--scope raw` / `--scope log` / `--scope checkpoints` / `--scope all`. Multiple scopes may be combined comma-separated: `--scope wiki,log`.
+手动：`/reset --scope wiki` / `--scope raw` / `--scope log` / `--scope checkpoints` / `--scope all`。可用逗号组合多个 scope：`--scope wiki,log`。
 
 ## Inputs
 
-- `--scope` *(required)*: one of
-  - `wiki` — delete every `*.md` under `wiki/<entity>/` and `wiki/outputs/`, plus `wiki/index.md`, `wiki/log.md`, and `wiki/graph/` files. Preserves `.gitkeep` and `wiki/CLAUDE.md`.
-  - `raw` — delete every entry under `raw/papers/`, `raw/discovered/`, `raw/tmp/`, `raw/notes/`, `raw/web/` (except `.gitkeep`).
-  - `log` — reset `wiki/log.md` to the empty header.
-  - `checkpoints` — clear batch state via `research_wiki.py checkpoint-clear`.
-  - `all` — every scope above.
+- `--scope`（必填）：取值
+  - `wiki` — 删除 `wiki/<entity>/` 与 `wiki/outputs/` 下所有 `*.md`，同时删除 `wiki/index.md`、`wiki/log.md` 和 `wiki/graph/` 下的文件。保留 `.gitkeep` 和 `wiki/CLAUDE.md`。
+  - `raw` — 删除 `raw/papers/`、`raw/discovered/`、`raw/tmp/`、`raw/notes/`、`raw/web/` 下所有条目（保留 `.gitkeep`）。
+  - `log` — 重置 `wiki/log.md` 为空模板。
+  - `checkpoints` — 通过 `research_wiki.py checkpoint-clear` 清除批处理状态。
+  - `all` — 以上全部。
 
 ## Outputs
 
-- Cleared / reset files on disk.
-- Console summary of deleted files and reset files.
+- 磁盘上清空 / 重置后的文件。
+- 控制台摘要：已删除文件数、已重置文件数。
 
 ## Wiki Interaction
 
-### Reads
-- All `wiki/<entity>/*.md` (to enumerate the deletion plan).
-- `raw/<sub>/*` (to enumerate raw deletions).
+### 读取
+- 所有 `wiki/<entity>/*.md`（用于枚举删除清单）。
+- `raw/<sub>/*`（用于枚举 raw 删除清单）。
 
-### Writes
-- Deletes `wiki/<entity>/*.md` (preserves `.gitkeep`).
-- Rewrites `wiki/index.md`, `wiki/graph/*`, optionally `wiki/log.md`.
-- Deletes `raw/<sub>/*` (except `.gitkeep`).
+### 写入
+- 删除 `wiki/<entity>/*.md`（保留 `.gitkeep`）。
+- 重写 `wiki/index.md`、`wiki/graph/*`，可选地重写 `wiki/log.md`。
+- 删除 `raw/<sub>/*`（保留 `.gitkeep`）。
 
 ## Workflow
 
-**Pre-conditions**: working directory contains `wiki/`, `tools/`. Set `WIKI_ROOT=wiki/`.
+**前置条件**：当前目录包含 `wiki/`、`tools/`。`WIKI_ROOT=wiki/`。
 
-### Step 1: Build the deletion plan (dry-run)
+### Step 1: 构造删除计划（dry-run）
 
 ```bash
 python3 tools/reset_wiki.py --scope <scope>
 ```
 
-This prints a JSON plan listing every file that would be deleted or reset, **without modifying anything**. Display the plan to the user grouped by scope (wiki entity dirs, raw subdirs, log, checkpoints).
+该命令打印 JSON 计划，列出将要删除或重置的全部文件，**不修改任何东西**。按 scope 分组展示给用户（wiki entity 目录、raw 子目录、log、checkpoints）。
 
-### Step 2: Confirm with the user
+### Step 2: 与用户确认
 
-Print the plan summary and ask for explicit confirmation:
+打印计划摘要并请求显式确认：
 
 ```
 About to delete N files and reset M files. Continue? [y/N]
 ```
 
-If the user says no, exit. **Never proceed without explicit approval** — `/reset` is destructive and `raw/` deletions are not tracked by git.
+用户拒绝则退出。**未经明确许可不得执行** — `/reset` 是破坏性操作，`raw/` 的删除不可恢复。
 
-### Step 3: Execute
+### Step 3: 执行
 
 ```bash
 python3 tools/reset_wiki.py --scope <scope> --yes
 ```
 
-The tool prints a JSON status report (`{deleted_files, reset_files}`).
+工具打印 JSON 状态报告（`{deleted_files, reset_files}`）。
 
-### Step 4: Log (unless `log` scope was reset)
+### Step 4: 记录日志（除非已重置 log）
 
-If the executed scope did not include `log`, append a log entry so future sessions can see the reset happened:
+若执行的 scope 不包含 `log`，追加一条日志：
 
 ```bash
 python3 tools/research_wiki.py log wiki/ "reset | scope: <scope>"
 ```
 
-### Step 5: Report
+### Step 5: 报告
 
-Print the result and suggest next steps:
+打印结果并建议下一步：
 
 ```
 ## Reset complete — scope: <scope>
@@ -85,28 +85,28 @@ Deleted: N files
 Reset:   M files
 
 Next steps:
-- /init       — bootstrap wiki from raw/
-- /prefill    — seed foundational background
-- /ingest     — add a single source manually
+- /init       — 从 raw/ 引导 wiki
+- /prefill    — 沉淀基础背景知识
+- /ingest     — 手动添加单个来源
 ```
 
 ## Constraints
 
-- **Confirm before destructive action**: never call `--yes` without showing the plan and asking the user.
-- **Preserves**: `.gitkeep` placeholders, `wiki/CLAUDE.md`, `.claude/` (skills are never touched).
-- **`raw/` deletes are irreversible**: PDFs are not in git history. Warn the user before executing `raw` or `all` scopes.
-- **`/reset` does not touch `tools/`, `mcp-servers/`, `i18n/`, `.env`, or git state.**
-- **Scope is required**: no default action (`/reset` with no flag prompts for scope rather than guessing).
+- **破坏性操作前必须确认**：禁止在未展示计划并征得用户同意前调用 `--yes`。
+- **保留**：`.gitkeep` 占位、`wiki/CLAUDE.md`、`.claude/`（skill 永不被触碰）。
+- **`raw/` 删除不可逆**：PDF 不在 git 中。执行 `raw` 或 `all` scope 前必须警告用户。
+- **`/reset` 不触碰** `tools/`、`mcp-servers/`、`i18n/`、`.env` 或 git 状态。
+- **scope 必填**：无默认行为（`/reset` 不带参数时提示用户选择 scope，而非猜测）。
 
 ## Error Handling
 
-- **Unknown scope**: print valid scopes and exit nonzero.
-- **Missing wiki directory**: report and suggest running `/init`.
-- **`checkpoint-clear` failure**: log a warning but do not fail other scopes.
+- **未知 scope**：列出有效 scope 并以非零退出码退出。
+- **wiki 目录缺失**：报错并建议运行 `/init`。
+- **`checkpoint-clear` 失败**：记录警告但不影响其他 scope。
 
 ## Dependencies
 
-### Tools (via Bash)
-- `python3 tools/reset_wiki.py --scope <scope> [--yes] [--project-root .]` — deterministic destructive helper
-- `python3 tools/research_wiki.py log wiki/ "<message>"` — append log
-- `reset_wiki.py` clears `wiki/.checkpoints/*.json` directly for `checkpoints` scope (no CLI dispatch — the `checkpoint-clear` subcommand requires a specific `task_id`, while `/reset --scope checkpoints` semantics is "clear everything")
+### 工具（通过 Bash）
+- `python3 tools/reset_wiki.py --scope <scope> [--yes] [--project-root .]` — 确定性破坏性辅助工具
+- `python3 tools/research_wiki.py log wiki/ "<message>"` — 追加日志
+- `reset_wiki.py` 在 `checkpoints` scope 下直接删除 `wiki/.checkpoints/*.json`(不走 CLI — `checkpoint-clear` 子命令需指定具体的 `task_id`,而 `/reset --scope checkpoints` 的语义是"全部清除")

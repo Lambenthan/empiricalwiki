@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# ΩmegaWiki — One-Click Setup
+# EmpiricalWiki — One-Click Setup
 # ============================================================================
 # Usage:
 #   chmod +x setup.sh && ./setup.sh            # English (default)
@@ -56,7 +56,7 @@ cd "$PROJECT_ROOT"
 
 echo ""
 echo "============================================"
-echo "  ΩmegaWiki — Setup"
+echo "  EmpiricalWiki — Setup"
 echo "============================================"
 echo ""
 

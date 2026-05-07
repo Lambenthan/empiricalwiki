@@ -2,7 +2,7 @@
 
 > On-demand reference for full wiki page templates only. See `docs/runtime-support-files.en.md` for graph-derived files plus `index.md` and `log.md`.
 
-## 9 Page Types
+## Page Types
 
 ### papers/{slug}.md
 
@@ -19,13 +19,179 @@ date_added: YYYY-MM-DD
 source_type: tex         # tex | pdf
 s2_id: ""
 keywords: []
-domain: ""               # NLP / CV / ML Systems / Robotics
+domain: ""               # empirical accounting / finance / management / economics
 code_url: ""
 cited_by: []
+empirical:
+  sample_period: ""
+  sample_scope: ""
+  data_sources: []
+  dependent_variables: []
+  core_explanatory_variables: []
+  mechanisms: []
+  identification: ""
 ---
 ```
 
-Body sections: `## Problem` / `## Key idea` / `## Method` / `## Results` / `## Limitations` / `## Open questions` / `## My take` / `## Related`
+Body sections: `## Research Question` / `## Theory Mechanism` / `## Hypotheses` / `## Data and Sample` / `## Variable Design` / `## Model Specification` / `## Main Results` / `## Mechanism Tests` / `## Heterogeneity Tests` / `## Robustness Checks` / `## Endogeneity Handling` / `## Reproduction Notes` / `## Implications for My Project` / `## Related`
+
+### variables/{slug}.md
+
+```yaml
+---
+title: ""
+slug: ""
+construct: ""
+role: other              # dependent | core_explanatory | mediator | moderator | control | instrument | fixed_effect | sample_filter | other
+measurement: ""
+data_sources: []
+database_tables: []
+frequency: ""
+source_papers: []
+available_in_project: false
+project_paths: []
+date_updated: YYYY-MM-DD
+---
+```
+
+Body sections: `## Definition` / `## Measurement` / `## Data Source` / `## Literature Variants` / `## Construction Steps` / `## Stata Notes` / `## Caveats` / `## Related`
+
+### datasets/{slug}.md
+
+```yaml
+---
+title: ""
+slug: ""
+provider: ""
+coverage: ""
+unit: ""
+fields: []
+project_paths: []
+source_papers: []
+date_updated: YYYY-MM-DD
+---
+```
+
+Body sections: `## Scope` / `## Fields` / `## Merge Keys` / `## Cleaning Rules` / `## Missingness` / `## Project Files` / `## Related Variables`
+
+### models/{slug}.md
+
+```yaml
+---
+title: ""
+slug: ""
+model_type: ""
+dependent_variable: ""
+core_variables: []
+controls: []
+fixed_effects: []
+standard_errors: ""
+sample: ""
+source_papers: []
+stata_template: ""
+date_updated: YYYY-MM-DD
+---
+```
+
+Body sections: `## Equation` / `## Identification Logic` / `## Variable Roles` / `## Fixed Effects and Standard Errors` / `## Expected Signs` / `## Stata Skeleton` / `## Interpretation Rules` / `## Related`
+
+### mechanisms/{slug}.md
+
+```yaml
+---
+title: ""
+slug: ""
+mechanism_type: ""
+source_papers: []
+variables: []
+evidence: []
+date_updated: YYYY-MM-DD
+---
+```
+
+Body sections: `## Mechanism Statement` / `## Theoretical Logic` / `## Empirical Proxy` / `## Evidence Across Papers` / `## Boundary Conditions` / `## Open Questions`
+
+### hypotheses/{slug}.md
+
+```yaml
+---
+title: ""
+slug: ""
+status: proposed          # proposed | literature_supported | tested | rejected
+mechanism: ""
+expected_sign: ""
+source_papers: []
+date_updated: YYYY-MM-DD
+---
+```
+
+Body sections: `## Hypothesis` / `## Literature Basis` / `## Testable Model` / `## Evidence` / `## Risks`
+
+### identification/{slug}.md
+
+```yaml
+---
+title: ""
+slug: ""
+strategy_type: other
+source_papers: []
+assumptions: []
+threats: []
+implementation_notes: ""
+date_updated: YYYY-MM-DD
+---
+```
+
+Body sections: `## Identification Problem` / `## Strategy` / `## Key Assumptions` / `## Implementation` / `## Diagnostics` / `## Limitations`
+
+### robustness/{slug}.md
+
+```yaml
+---
+title: ""
+slug: ""
+check_type: other
+purpose: ""
+source_papers: []
+implementation_notes: ""
+date_updated: YYYY-MM-DD
+---
+```
+
+Body sections: `## Purpose` / `## When To Use` / `## Implementation` / `## Expected Table Pattern` / `## Interpretation` / `## Caveats`
+
+### heterogeneity/{slug}.md
+
+```yaml
+---
+title: ""
+slug: ""
+grouping_variable: ""
+grouping_rule: ""
+rationale: ""
+source_papers: []
+date_updated: YYYY-MM-DD
+---
+```
+
+Body sections: `## Grouping Logic` / `## Theoretical Rationale` / `## Sample Split` / `## Model` / `## Interpretation` / `## Related`
+
+### tables/{slug}.md
+
+```yaml
+---
+title: ""
+slug: ""
+table_type: ""
+source_paper: ""
+variables: []
+model: ""
+interpretation: ""
+date_updated: YYYY-MM-DD
+---
+```
+
+Body sections: `## Table Purpose` / `## Columns` / `## Key Coefficients` / `## Interpretation` / `## Reproduction Notes` / `## Caveats`
 
 ### concepts/{concept-name}.md
 

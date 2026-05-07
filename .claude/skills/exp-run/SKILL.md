@@ -1,103 +1,103 @@
 ---
-description: Full experiment execution pipeline — prepare code → deploy → monitor → collect results, supporting three run modes
+description: 实验执行全流程：准备代码 → 部署运行 → 监控状态 → 收集结果，支持三种运行模式
 argument-hint: <experiment-slug> [--review] [--collect] [--full] [--env local|remote]
 ---
 
 # /exp-run
 
-> Execute an experiment that has been planned in wiki/experiments/.
-> **Three run modes** for different scenarios:
-> - **Default (deploy)**: Phase 1-2 only — deploy and return immediately. Best for experiments that take hours or days.
-> - **`--collect`**: Phase 3-4 only — check whether a deployed experiment has finished; collect results if so (`--check` is an alias).
-> - **`--full`**: All four phases end-to-end. Best for short local experiments that finish in minutes.
+> 执行 wiki/experiments/ 中已规划的实验。
+> **三种运行模式**，适应不同场景：
+> - **默认（deploy）**：仅 Phase 1-2，部署后立即返回，适合需要数小时/天的实验。
+> - **`--collect`**：仅 Phase 3-4，检查已部署实验是否完成，完成则收集结果（`--check` 为 alias）。
+> - **`--full`**：完整 Phase 1-4，适合几分钟内即可完成的本地快速实验。
 >
-> Recommended flow: `/exp-run <slug>` to deploy → `/exp-status` to monitor → `/exp-run <slug> --collect` to collect.
+> 推荐流程：`/exp-run <slug>` 部署 → `/exp-status` 监控 → `/exp-run <slug> --collect` 收集。
 
 ## Inputs
 
-- `experiment`: slug from wiki/experiments/
-  - deploy mode: status must be `planned`
-  - --collect mode: status must be `running`
-  - --full mode: status must be `planned`
-- `--review` (optional): enable Review LLM code review for experiment code in Phase 1 (valid in deploy / full mode)
-- `--collect` (optional): collect mode — check if the experiment has finished and collect results; `--check` is an alias
-- `--full` (optional): full mode — execute all 4 phases (best for quick local experiments)
-- `--env local|remote` (optional, default `local`): deployment environment
-  - `local`: run directly on local GPU
-  - `remote`: deploy to remote machine via SSH (requires `config/server.yaml`)
+- `experiment`：wiki/experiments/ 中的 slug
+  - deploy 模式：status 必须为 `planned`
+  - --collect 模式：status 必须为 `running`
+  - --full 模式：status 必须为 `planned`
+- `--review`（可选）：Phase 1 中启用 Review LLM code review 审查实验代码（deploy / full 模式有效）
+- `--collect`（可选）：collect 模式——检查实验是否完成，完成则收集结果；`--check` 是 alias
+- `--full`（可选）：完整模式——执行全部 4 个 Phase（适合快速本地实验）
+- `--env local|remote`（可选，默认 `local`）：部署环境
+  - `local`：本机 GPU 直接运行
+  - `remote`：通过 SSH 部署到远程机器（需 `config/server.yaml`）
 
 ## Outputs
 
-- **deploy mode**:
-  - Experiment code: `experiments/code/{slug}/` (generated in Phase 1)
+- **deploy 模式**：
+  - 实验代码：`experiments/code/{slug}/`（Phase 1 生成）
   - `wiki/experiments/{slug}.md` — status: planned → running
-  - **DEPLOY_REPORT** (printed to terminal) — deployment confirmation, session info, next steps
-  - `wiki/log.md` — appended deploy log
-- **collect mode** (experiment has finished):
-  - `wiki/experiments/{slug}.md` — status: running → completed; outcome/key_result/date_completed filled in
-  - **RUN_REPORT** (printed to terminal) — result summary, metrics comparison, next step suggestions
-  - `wiki/log.md` — appended collect log
-- **collect mode** (experiment still running):
-  - Progress report printed to terminal only; wiki is not modified
-- **full mode**: all outputs from both deploy and collect
+  - **DEPLOY_REPORT**（输出到终端）— 部署确认、session 信息、下一步指引
+  - `wiki/log.md` — 追加部署日志
+- **collect 模式**（实验已完成时）：
+  - `wiki/experiments/{slug}.md` — status: running → completed，填充 outcome/key_result/date_completed
+  - **RUN_REPORT**（输出到终端）— 结果摘要、metrics 对比、下一步建议
+  - `wiki/log.md` — 追加收集日志
+- **collect 模式**（实验仍在运行时）：
+  - 仅输出进度报告到终端，不修改 wiki
+- **full 模式**：同 deploy + collect 的全部输出
 
 ## Wiki Interaction
 
 ### Reads
-- `wiki/experiments/{slug}.md` — experiment config: setup, metrics, baseline, hypothesis, target_claim
-- `wiki/claims/{target-claim}.md` — target claim context (understand experiment purpose)
-- `wiki/ideas/{linked-idea}.md` — linked idea's approach sketch (guide code implementation)
-- `wiki/papers/*.md` — related papers' method details and hyperparameters (implementation reference)
-- `wiki/experiments/*.md` — other experiments on the same claim (reference setup, avoid known mistakes)
+- `wiki/experiments/{slug}.md` — 实验配置：setup、metrics、baseline、hypothesis、target_claim
+- `wiki/claims/{target-claim}.md` — 目标 claim 的上下文（理解实验目的）
+- `wiki/ideas/{linked-idea}.md` — 关联 idea 的 approach sketch（指导代码实现）
+- `wiki/papers/*.md` — 相关论文的方法细节和超参数（参考实现）
+- `wiki/experiments/*.md` — 同一 claim 的其他实验（参考 setup、避免重复错误）
 
 ### Writes
-- `experiments/code/{slug}/` — experiment code directory (Phase 1, deploy / full mode)
-  - `experiments/code/{slug}/train.py` — main training/inference script
-  - `experiments/code/{slug}/config.yaml` — hyperparameter config file
-  - `experiments/code/{slug}/run.sh` — launch wrapper script (includes CUDA_VISIBLE_DEVICES etc.)
-  - `experiments/code/{slug}/requirements.txt` — dependencies (if different from main project)
-- `wiki/experiments/{slug}.md` — update status, outcome, key_result, date_completed, run_log, remote block
-- `wiki/log.md` — append operation log
+- `experiments/code/{slug}/` — 实验代码目录（Phase 1 生成，deploy / full 模式）
+  - `experiments/code/{slug}/train.py` — 主训练/推理脚本
+  - `experiments/code/{slug}/config.yaml` — 超参数配置文件
+  - `experiments/code/{slug}/run.sh` — 启动封装脚本（含 CUDA_VISIBLE_DEVICES 等）
+  - `experiments/code/{slug}/requirements.txt` — 依赖（若与主项目不同）
+- `wiki/experiments/{slug}.md` — 更新 status、outcome、key_result、date_completed、run_log、remote 块
+- `wiki/log.md` — 追加操作日志
 
 ### Graph edges created
-- **None**. The tested_by edges between experiments and claims are created by /exp-design.
+- **无**。实验与 claim 的 tested_by 边已在 /exp-design 中创建。
 
 ## Workflow
 
-**Precondition**: confirm working directory is the wiki project root (directory containing `wiki/`, `raw/`, `tools/`).
+**前置**：确认工作目录为 wiki 项目根（包含 `wiki/`、`raw/`、`tools/` 的目录）。
 
 ---
 
-### Deploy Mode (default, status == planned)
+### Deploy 模式（默认，status == planned）
 
-**Phase 1: Prepare**
+**Phase 1: 准备（Prepare）**
 
-1. **Read experiment page**:
-   - `wiki/experiments/{slug}.md`: extract setup (model, dataset, hardware, framework), metrics, baseline, hypothesis
-   - Verify status == `planned`
-   - If status is `running`, prompt user to use `--collect` mode
-   - If status is `completed`/`abandoned`, refuse to execute
+1. **读取实验页面**：
+   - `wiki/experiments/{slug}.md`：提取 setup（model, dataset, hardware, framework）、metrics、baseline、hypothesis
+   - 验证 status == `planned`
+   - 若 status 为 `running`，提示用户使用 `--collect` 模式
+   - 若 status 为 `completed`/`abandoned`，拒绝执行
 
-2. **Load implementation context**:
-   - Read linked idea's approach sketch (implementation guide)
-   - Read related papers' method descriptions (algorithm details)
-   - Read other experiments on the same claim (reference code structure)
+2. **加载实现上下文**：
+   - 读取关联 idea 的 approach sketch（实现指南）
+   - 读取相关论文的方法描述（算法细节）
+   - 读取同一 claim 的其他实验（参考代码结构）
 
-3. **Write experiment code** to `experiments/code/{slug}/`:
-   - `train.py`: generate training/evaluation script based on setup config, including:
-     - Argument parsing (argparse, all hyperparameters configurable)
-     - Data loading (support setup.dataset)
-     - Model initialization (support setup.model and baseline model)
-     - Training/inference loop
-     - Metric computation (matching metrics list)
-     - Result saving (JSON format, path: `results/{slug}/seed_{N}.json`)
-     - Random seed control (multi-seed runs)
-     - Checkpoint save/restore (`checkpoints/{slug}/`)
-   - `config.yaml`: all hyperparameters (learning_rate, batch_size, epochs, seeds, etc.)
-   - `run.sh`: complete launch command wrapper (includes CUDA_VISIBLE_DEVICES, logging, conda activation)
-   - `requirements.txt`: experiment-specific dependencies (if different from main project requirements)
+3. **编写实验代码**，统一写入 `experiments/code/{slug}/`：
+   - `train.py`：根据 setup 配置生成训练/评估脚本，包含：
+     - 参数解析（argparse，所有超参数可配置）
+     - 数据加载（支持 setup.dataset）
+     - 模型初始化（支持 setup.model 和 baseline 模型）
+     - 训练/推理循环
+     - 指标计算（对应 metrics 列表）
+     - 结果保存（JSON 格式，路径：`results/{slug}/seed_{N}.json`）
+     - 随机种子控制（多 seed 运行）
+     - Checkpoint 保存/恢复（`checkpoints/{slug}/`）
+   - `config.yaml`：所有超参数（learning_rate, batch_size, epochs, seeds 等）
+   - `run.sh`：封装完整启动命令（含 CUDA_VISIBLE_DEVICES、logging、conda 激活）
+   - `requirements.txt`：实验专属依赖（若与主项目 requirements 不同）
 
-4. **Optional Review LLM code review** (`--review`):
+4. **可选 Review LLM code review**（`--review`）：
    ```
    mcp__llm-review__chat:
      system: "You are a senior ML engineer reviewing experiment code.
@@ -117,34 +117,34 @@ argument-hint: <experiment-slug> [--review] [--collect] [--full] [--env local|re
 
        Review for correctness and potential issues.
    ```
-   Fix code based on Review LLM feedback.
+   根据 Review LLM 反馈修正代码。
 
-5. **Sanity check (small-scale validation)**:
-   - Run at minimal scale (1 epoch / 100 steps / small subset)
-   - Verify: no code crash, data loads correctly, GPU available, loss decreases
-   - If sanity fails → fix code, retry once; if still failing, report error and stop
+5. **Sanity check（小规模验证）**：
+   - 用极小规模运行（1 epoch / 100 steps / 小 subset）
+   - 验证：代码无 crash、数据加载正确、GPU 可用、loss 下降
+   - 若 sanity 失败 → 修复代码，重试一次；仍然失败则报告错误并停止
 
-**Phase 2: Deploy**
+**Phase 2: 部署（Deploy）**
 
-#### Local mode (`--env local` or default)
+#### Local 模式（`--env local` 或默认）
 
-1. **Check GPU**: `nvidia-smi` to confirm GPU available and sufficient VRAM
-2. **Launch**:
+1. **检查 GPU**：`nvidia-smi` 确认 GPU 可用、显存足够
+2. **启动**：
    ```bash
    screen -dmS exp-{slug} bash -c \
      "cd $(pwd) && bash experiments/code/{slug}/run.sh 2>&1 | tee logs/exp-{slug}.log"
    ```
-3. Update `wiki/experiments/{slug}.md`:
+3. 更新 `wiki/experiments/{slug}.md`：
    - status: `running`
    - run_log: `logs/exp-{slug}.log`
-4. **Estimate runtime** and write to frontmatter:
-   Estimate based on `setup.hardware` (GPU model/count), `setup.model` (parameter count), `setup.dataset` (scale):
+4. **估算运行时长**，写入 frontmatter：
+   根据 `setup.hardware`（GPU 型号/数量）、`setup.model`（参数量）、`setup.dataset`（规模）合理估算：
 
-   | Typical scenario | Estimated range |
-   |-----------------|-----------------|
-   | Single GPU + small dataset (CIFAR / small NLP benchmark) | 0.5 – 3h |
-   | Single A100 + medium dataset (ImageNet / GLUE) | 4 – 12h |
-   | Multi-GPU or large model fine-tuning (≥7B) | 8 – 48h |
+   | 典型场景 | 估算范围 |
+   |----------|----------|
+   | 单 GPU + 小数据集（CIFAR / 小 NLP benchmark） | 0.5 – 3h |
+   | 单 A100 + 中等数据集（ImageNet / GLUE） | 4 – 12h |
+   | 多 GPU 或大模型 fine-tuning（≥7B） | 8 – 48h |
 
    ```bash
    python3 tools/research_wiki.py set-meta \
@@ -152,37 +152,37 @@ argument-hint: <experiment-slug> [--review] [--collect] [--full] [--env local|re
    python3 tools/research_wiki.py set-meta \
      wiki/experiments/{slug}.md estimated_hours {N}
    ```
-5. Append log:
+5. 追加日志：
    ```bash
    python3 tools/research_wiki.py log wiki/ \
      "exp-run | deployed {slug} | env: local | session: exp-{slug} | eta: {N}h"
    ```
 
-#### Remote mode (`--env remote`)
+#### Remote 模式（`--env remote`）
 
-**Prerequisite**: user has configured `config/server.yaml`.
+**前提**：用户已配置 `config/server.yaml`。
 
-1. **Confirm connectivity**: `python3 tools/remote.py status`
-   - If unreachable → report error and suggest checking config/server.yaml
-2. **Find free GPU**: `python3 tools/remote.py gpu-status`
-   - If no free GPU → report each GPU's usage, suggest waiting
-3. **Sync code**: `python3 tools/remote.py sync-code`
-4. **Install dependencies** (first time or if requirements changed): `python3 tools/remote.py setup-env`
-5. **Launch remote experiment**:
+1. **确认连通**：`python3 tools/remote.py status`
+   - 若不可达 → 报错并建议检查 config/server.yaml
+2. **查找空闲 GPU**：`python3 tools/remote.py gpu-status`
+   - 若无空闲 GPU → 报告各 GPU 占用情况，建议等待
+3. **同步代码**：`python3 tools/remote.py sync-code`
+4. **安装依赖**（首次或 requirements 有变化）：`python3 tools/remote.py setup-env`
+5. **启动远程实验**：
    ```bash
    python3 tools/remote.py launch \
      --name "exp-{slug}" \
      --cmd "bash experiments/code/{slug}/run.sh" \
      --gpu {gpu_index}
    ```
-6. Update `wiki/experiments/{slug}.md` frontmatter — all of these fields already exist (empty) because `/exp-design` wrote the full CLAUDE.md template:
+6. 更新 `wiki/experiments/{slug}.md` frontmatter —— 以下字段已由 /exp-design 写入完整 CLAUDE.md 模板,都是空值:
    ```bash
-   # Top-level scalar fields — use set-meta
+   # 顶层 scalar 字段 —— 用 set-meta
    python3 tools/research_wiki.py set-meta wiki/experiments/{slug}.md status running
    python3 tools/research_wiki.py set-meta wiki/experiments/{slug}.md run_log "logs/exp-{slug}.log"
    ```
 
-   The nested `remote:` block cannot be updated via `set-meta` (it only handles top-level scalar fields). Use the `Edit` tool directly to replace the five empty sub-field values in place. The pre-existing block in the file looks like:
+   嵌套 `remote:` 块无法通过 `set-meta` 更新（set-meta 只处理顶层 scalar 字段）。直接用 `Edit` 工具就地替换这五个空的子字段值。文件里已有的 block 形如：
    ```yaml
    remote:
      server: ""
@@ -191,22 +191,21 @@ argument-hint: <experiment-slug> [--review] [--collect] [--full] [--env local|re
      started: ""
      completed: ""
    ```
-   Use five Edit calls (one per sub-field) to set `server`, `gpu`, `session`, `started`. Leave `completed: ""` — Phase 4 fills that. If you find the `remote:` block missing from the file, that means `/exp-design` did not write the full CLAUDE.md template; stop and report the bug rather than trying to append the block here (appending would drift the file away from the canonical order and break future edits).
-
-7. **Estimate runtime** and write to frontmatter (same estimation logic as local mode):
+   用 5 次 Edit 调用（每个子字段一次）设置 `server`、`gpu`、`session`、`started`。`completed: ""` 留空由 Phase 4 填写。如果发现文件里没有 `remote:` block,说明 /exp-design 没写完整的 CLAUDE.md 模板;停下来报 bug,不要在这里追加 block（追加会让字段顺序偏离 canonical 模板,破坏后续 edit 的匹配）。
+7. **估算运行时长**，写入 frontmatter（同 local 模式估算逻辑）：
    ```bash
    python3 tools/research_wiki.py set-meta \
      wiki/experiments/{slug}.md started "{YYYY-MM-DDTHH:MM}"
    python3 tools/research_wiki.py set-meta \
      wiki/experiments/{slug}.md estimated_hours {N}
    ```
-8. Append log:
+8. 追加日志：
    ```bash
    python3 tools/research_wiki.py log wiki/ \
      "exp-run | deployed {slug} | env: remote | server: {host} | gpu: {gpu} | eta: {N}h"
    ```
 
-**Print DEPLOY_REPORT to terminal**:
+**输出 DEPLOY_REPORT 到终端**：
 
 ```markdown
 # Deploy Report: {experiment title}
@@ -217,7 +216,7 @@ argument-hint: <experiment-slug> [--review] [--collect] [--full] [--env local|re
 - Environment: local | remote ({host} GPU {gpu})
 - Log file: logs/exp-{slug}.log
 - Code: experiments/code/{slug}/
-- Estimated: ~{N}h (expected completion: {YYYY-MM-DD HH:MM})
+- Estimated: ~{N}h（预计完成于 {YYYY-MM-DD HH:MM}）
 
 ### Next Steps
 
@@ -237,29 +236,29 @@ tail -f logs/exp-{slug}.log
 
 ---
 
-### Collect Mode (`--collect` or `--check`, status == running)
+### Collect 模式（`--collect` 或 `--check`，status == running）
 
-**Phase 3: Monitor / Check Run Status**
+**Phase 3: 监控/检查运行状态（Monitor）**
 
-1. **Read deployment info**: from `wiki/experiments/{slug}.md` frontmatter, get environment (local or remote) and session name.
+1. **读取部署信息**：从 `wiki/experiments/{slug}.md` frontmatter 获取环境（local 或 remote）和 session 名。
 
-2. **Check whether the process is still alive**:
-   - **Local**: `screen -ls | grep exp-{slug}`
-   - **Remote**: `python3 tools/remote.py check --name "exp-{slug}"`, parse `alive` field
+2. **检查进程是否还活着**：
+   - **Local**：`screen -ls | grep exp-{slug}`
+   - **Remote**：`python3 tools/remote.py check --name "exp-{slug}"`，解析 `alive` 字段
 
-3. **If experiment is still running (alive == true)**:
-   - Fetch recent logs:
-     - Local: `tail -30 logs/exp-{slug}.log`
-     - Remote: `python3 tools/remote.py tail-log --name "exp-{slug}" --lines 30`
-   - **Anomaly detection**:
-     - NaN loss: detect `loss: nan`
-     - OOM: `CUDA out of memory`
-     - Traceback: Python exception stacktrace
-     - Inf loss: `loss: inf`
-   - **Automatic fix attempt** (if anomaly detected, at most 1 attempt):
-     - NaN/exploding → resume from latest checkpoint, reduce learning rate
-     - OOM → reduce batch size, restart
-   - **Print progress report** (do not modify wiki, report only):
+3. **若实验仍在运行（alive == true）**：
+   - 获取最近日志：
+     - Local：`tail -30 logs/exp-{slug}.log`
+     - Remote：`python3 tools/remote.py tail-log --name "exp-{slug}" --lines 30`
+   - **异常检测**：
+     - NaN loss：检测 `loss: nan`
+     - OOM：`CUDA out of memory`
+     - Traceback：Python 异常堆栈
+     - Inf loss：`loss: inf`
+   - **自动修复尝试**（若检测到异常，最多 1 次）：
+     - NaN/爆炸 → 从最近 checkpoint 恢复，降低学习率
+     - OOM → 减小 batch size，重启
+   - **输出进度报告**（不修改 wiki，仅报告）：
      ```
      Experiment {slug}: RUNNING
      Progress: step {N} / epoch {E}
@@ -268,14 +267,14 @@ tail -f logs/exp-{slug}.log
      Estimated remaining: ~{N} hours
      Run `/exp-status` to monitor all running experiments.
      ```
-   - **Return** (do not execute Phase 4)
+   - **返回**（不执行 Phase 4）
 
-4. **If experiment has finished (alive == false / session gone)**:
-   - Continue to Phase 4
+4. **若实验已完成（alive == false / session gone）**：
+   - 继续执行 Phase 4
 
-**Phase 4: Collect Results**
+**Phase 4: 收集结果（Collect Results）**
 
-1. **Pull remote results** (remote mode only):
+1. **拉取远程结果**（仅 remote 模式）：
    ```bash
    python3 tools/remote.py pull-results \
      --remote-path "results/{slug}/" \
@@ -286,32 +285,32 @@ tail -f logs/exp-{slug}.log
      --local-path "./logs/"
    ```
 
-2. **Check result files exist**: `results/{slug}/seed_*.json`
+2. **检查结果文件存在**：`results/{slug}/seed_*.json`
 
-3. **Parse results**:
-   - Read result files (JSON)
-   - Compute mean ± std per metric (across seeds)
-   - Compare with baseline, compute improvement delta
+3. **解析结果**：
+   - 读取结果文件（JSON）
+   - 计算每个 metric 的 mean ± std（跨 seeds）
+   - 与 baseline 对比，计算提升幅度
 
-4. **Update experiment page** `wiki/experiments/{slug}.md`:
+4. **更新实验页面** `wiki/experiments/{slug}.md`：
    - status: `completed`
    - outcome: `succeeded` / `failed` / `inconclusive`
-     - succeeded: all success criteria met
-     - failed: core metrics did not reach target
-     - inconclusive: mixed results or excessive variance
-   - key_result: one-sentence summary of the core finding
-   - date_completed: today's date
-   - Fill `## Results` section: complete results table
-   - Fill `## Analysis` section: preliminary analysis
-   - If remote mode: update `remote.completed` timestamp
+     - succeeded：所有 success criteria 满足
+     - failed：核心指标未达标
+     - inconclusive：结果混合或方差过大
+   - key_result: 一句话总结核心发现
+   - date_completed: 今天日期
+   - 填充 `## Results` section：完整结果表格
+   - 填充 `## Analysis` section：初步分析
+   - 若 remote 模式：更新 `remote.completed` 时间戳
 
-5. **Append log**:
+5. **追加日志**：
    ```bash
    python3 tools/research_wiki.py log wiki/ \
      "exp-run | completed {slug} | outcome: {outcome} | key: {key_result}"
    ```
 
-6. **Print RUN_REPORT to terminal**:
+6. **输出 RUN_REPORT 到终端**：
    ```markdown
    # Run Report: {experiment title}
 
@@ -333,72 +332,72 @@ tail -f logs/exp-{slug}.log
 
 ---
 
-### Full Mode (`--full`, status == planned)
+### Full 模式（`--full`，status == planned）
 
-Execute all 4 phases in sequence (Phase 1 → Phase 2 → Phase 3 → Phase 4) without returning.
+依次执行全部 4 个 Phase（Phase 1 → Phase 2 → Phase 3 → Phase 4），中间不返回。
 
-Use case: quick local CPU/GPU experiments that finish in minutes (sanity checks, toy dataset validation, etc.).
+适用场景：本地 CPU/GPU 几分钟内可完成的快速实验（sanity check、toy dataset 验证等）。
 
-In Phase 3, instead of checking "is it still running", wait for the screen session to actually exit before executing Phase 4:
+Phase 3 中不需要先检查 "是否还在运行"，而是等待 screen session 真正结束后再执行 Phase 4：
 ```bash
-# Wait for session to end (polling)
+# 等待 session 结束（轮询）
 while screen -ls | grep -q "exp-{slug}"; do
   sleep 30
 done
-# Session gone, proceed to Phase 4
+# session 消失，进入 Phase 4
 ```
 
 ---
 
 ## Constraints
 
-- **Deploy mode only accepts planned experiments**: if status is running, prompt to use --collect; if completed, refuse
-- **Collect mode only accepts running experiments**: if status is planned, prompt to deploy first; if completed, note it is already done
-- **Collect mode: do not write wiki when alive**: only report progress, do not modify any wiki files
-- **Code goes in experiments/code/{slug}/**: do not write to project root or any other location
-- **Do not update claims**: experiment results are written only to experiments/ pages; claim updates are handled by /exp-eval
-- **Sanity check must pass**: Phase 1 sanity failure blocks deployment (unless user explicitly overrides)
-- **Results must be saved**: all experiment results saved as JSON in `results/{slug}/seed_{N}.json`
-- **Multi-seed results use mean**: report mean ± std, not single-run results
-- **Graph edges are not created here**: tested_by edges were created by /exp-design
-- **Automatic fix attempts are limited to 1**: prevents infinite restart loops
+- **deploy 模式只接受 planned 实验**：若 status 为 running，提示使用 --collect；若为 completed，拒绝执行
+- **collect 模式只接受 running 实验**：若 status 为 planned，提示先 deploy；若为 completed，提示已完成
+- **collect 模式：alive 时不写 wiki**：仅报告进度，不修改任何 wiki 文件
+- **代码统一写入 experiments/code/{slug}/**：不写到项目根目录或其他位置
+- **不修改 claims**：实验结果只写入 experiments/ 页面，claims 的更新由 /exp-eval 负责
+- **sanity check 必须通过**：Phase 1 sanity 失败则不部署（除非用户明确 override）
+- **结果文件必须保存**：所有实验结果以 JSON 格式保存在 `results/{slug}/seed_{N}.json`
+- **多 seed 结果取均值**：报告 mean ± std，不报告单次运行
+- **graph edges 不在此 skill 创建**：tested_by 边已在 /exp-design 中创建
+- **自动修复最多尝试 1 次**：防止无限重启循环
 
 ## Error Handling
 
-- **Experiment not found**: prompt user to check slug, list candidates in wiki/experiments/ (status=planned or running)
-- **Deploy mode but status == running**: prompt "already running — use `/exp-run {slug} --collect` to check status"
-- **Collect mode but status == completed**: prompt "already completed — run `/exp-eval {slug}` directly"
-- **GPU unavailable**: report error, suggest using --env remote or waiting for GPU to free up
-- **Review LLM unavailable** (--review mode): skip code review, note "unreviewed" in DEPLOY_REPORT
-- **Sanity check fails**: report detailed error, attempt one automatic fix, if still failing stop and suggest manual debugging
-- **Remote connection fails**: report SSH error, suggest checking connection config and config/server.yaml
-- **Result files missing** (collect mode): report which seeds are missing results; summarize available results normally; if successful seeds < 2, mark inconclusive
-- **Experiment crashed** (traceback detected in collect mode): include crash info and suggested fix directions in report
-- **--full mode wait timeout**: if screen session persists beyond 2× the estimated time, warn user but do not force-terminate
+- **experiment 找不到**：提示用户检查 slug，列出 wiki/experiments/ 中的候选（status=planned 或 running）
+- **deploy 模式但 status == running**：提示 "已在运行中，使用 `/exp-run {slug} --collect` 检查状态"
+- **collect 模式但 status == completed**：提示 "已完成，直接运行 `/exp-eval {slug}`"
+- **GPU 不可用**：报告错误，建议用 --env remote 或等待 GPU 释放
+- **Review LLM 不可用**（--review 模式）：跳过 code review，在 DEPLOY_REPORT 中标注「unreviewed」
+- **sanity check 失败**：详细报告错误信息，尝试自动修复一次，仍失败则停止并建议手动调试
+- **远程连接失败**：报告 SSH 错误，建议检查连接配置和 config/server.yaml
+- **结果文件缺失**（collect 模式）：报告哪些 seeds 缺失结果，对已有结果正常汇总；若成功 seeds < 2 则标记 inconclusive
+- **实验 crash**（collect 模式检测到 traceback）：在报告中附上 crash 信息和建议修复方向
+- **--full 模式等待超时**：若 screen session 超过预期时间的 2x 仍存在，警告用户但不强制终止
 
 ## Dependencies
 
 ### Skills（via Skill tool）
-- No direct sub-skill calls
+- 无直接调用子 skill
 
 ### Tools（via Bash）
-- `python3 tools/research_wiki.py log wiki/ "<message>"` — append log
-- `python3 tools/remote.py <command>` — remote operations (status, gpu-status, sync-code, setup-env, launch, check, tail-log, pull-results)
-- `nvidia-smi` — local GPU status
-- `screen` — local background process management
+- `python3 tools/research_wiki.py log wiki/ "<message>"` — 追加日志
+- `python3 tools/remote.py <command>` — 远程操作（status, gpu-status, sync-code, setup-env, launch, check, tail-log, pull-results）
+- `nvidia-smi` — 本地 GPU 状态
+- `screen` — 本地后台运行管理
 
 ### Configuration
-- `config/server.yaml` — remote server config (required only with `--env remote`)
+- `config/server.yaml` — 远程服务器配置（仅 `--env remote` 时需要）
 
 ### MCP Servers
-- `mcp__llm-review__chat` — Phase 1 code review (optional, when `--review` is used)
+- `mcp__llm-review__chat` — Phase 1 代码审查（可选，`--review` 时使用）
 
 ### Claude Code Native
-- `Read` — read wiki pages and log files
-- `Write` — write experiment code to `experiments/code/{slug}/`
-- `Bash` — execute deployment commands, monitor processes
+- `Read` — 读取 wiki 页面和日志文件
+- `Write` — 写入 `experiments/code/{slug}/` 下的实验代码
+- `Bash` — 执行部署命令、监控进程
 
 ### Called by
-- `/research` Stage 3a (deploy mode) and Stage 3c (collect mode)
-- `/exp-status --collect-ready` (collect mode)
-- User directly
+- `/research` Stage 3a（deploy 模式）和 Stage 3c（collect 模式）
+- `/exp-status --collect-ready`（collect 模式）
+- 用户手动调用

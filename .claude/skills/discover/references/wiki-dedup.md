@@ -1,28 +1,28 @@
 # /discover wiki dedup
 
-`tools/discover.py` deduplicates candidates against the existing wiki when `--wiki-root wiki` is passed. This document explains what the dedup does and does not catch, so the user-facing report is accurate.
+传入 `--wiki-root wiki` 时，`tools/discover.py` 会对已存在于 wiki 的论文做 dedup。本文说明这一层能抓到什么、抓不到什么，方便 user-facing report 准确反映情况。
 
-## What it catches
+## 能抓到的情况
 
-For each candidate, `tools/discover.py` extracts the `arxiv_id` from the candidate record (S2's `externalIds.ArXiv`, DeepXiv's `arxiv_id`, etc.) and checks whether any existing `wiki/papers/*.md` page has a matching `arxiv` (or legacy `arxiv_id`) in its frontmatter. Matches are dropped from the shortlist before scoring; the count is reported as `wiki_dedup_count`.
+对每条候选，`tools/discover.py` 从候选记录里抽出 `arxiv_id`（S2 的 `externalIds.ArXiv`、DeepXiv 的 `arxiv_id` 等），然后检查是否存在某个 `wiki/papers/*.md` 页面 frontmatter 中 `arxiv`（或旧版 `arxiv_id`）与之匹配。命中的候选在打分前被剔除，数量以 `wiki_dedup_count` 字段汇报。
 
-This catches the typical case: an already-ingested paper bubbles up as a recommendation again. Surfacing such a paper would waste the user's review attention; dropping it is correct.
+这覆盖典型场景：某篇已 ingest 的论文又被当推荐冒上来。把它继续展示给用户是浪费 review 时间，剔掉是对的。
 
-## What it does not catch
+## 抓不到的情况
 
-- **Title-only matches**: a paper in the wiki without `arxiv` or `arxiv_id` (e.g., a journal article ingested via `/edit`) will not match a candidate by title alone. This is intentional — fuzzy title matching produces false positives that hide legitimate candidates.
-- **arXiv version skew**: `2106.09685` and `2106.09685v3` should both be treated as the same paper. The frontmatter scanner strips `arxiv:`/`ARXIV:` prefixes but does not currently strip `vN` suffixes. If you find duplicates leaking through, normalise the version suffix in the candidate's `arxiv_id` before comparison.
-- **Cross-source duplicates within the candidate set**: the dedup pass before wiki filtering uses `_candidate_key` (arxiv → S2 paperId → title-slug) which catches most cross-source duplicates from S2 and DeepXiv. Fully missing IDs and titles are dropped silently.
+- **仅标题匹配**：wiki 里一篇没有 `arxiv` 或 `arxiv_id` 的论文（如通过 `/edit` ingest 的期刊文章）不会与同标题候选匹配。这是有意为之 —— 模糊标题匹配会引入假阳，反而遮蔽合法候选。
+- **arXiv 版本号差异**：`2106.09685` 与 `2106.09685v3` 应视为同一篇。frontmatter 解析器会剥 `arxiv:`/`ARXIV:` 前缀，但目前不剥 `vN` 后缀。如果发现重复漏过，需要在候选的 `arxiv_id` 比对前先规范化掉版本后缀。
+- **候选集内部的跨源重复**：wiki 过滤前的 dedup pass 使用 `_candidate_key`（arxiv → S2 paperId → title-slug 顺序），能抓住 S2 与 DeepXiv 之间的大多数跨源重复。完全缺失 ID 与 title 的记录会被静默丢弃。
 
-## What to do with a "high dedup" report
+## 遇到 "高 dedup" 如何处理
 
-If `wiki_dedup_count` is high relative to `candidates_total` (e.g., 30 / 50), the wiki is already well-covered for these anchors. Two interpretations:
+若 `wiki_dedup_count` 相对 `candidates_total` 偏高（例如 50 里有 30），说明这个 anchor / topic 附近 wiki 已经覆盖得差不多了。两种解读：
 
-1. The user is looking for breadth and should switch to a different seed (different anchor, broader topic, or `--from-wiki` to explore adjacent papers).
-2. The recommendation channel is genuinely saturated — there is little new to recommend in this neighborhood.
+1. 用户是在找广度，应该换个 seed（另一个 anchor、更宽的 topic，或用 `--from-wiki` 去探索邻近论文）。
+2. 推荐通道本身已经饱和 —— 这个邻域确实没什么可新增的。
 
-The skill should mention high dedup in the user-facing report; do not hide it.
+skill 应该在给用户的 report 里提及高 dedup，不要隐藏。
 
-## What dedup does not do
+## dedup 不做的事
 
-`/discover` never modifies the wiki to "fix" a duplicate. If the candidate's metadata seems richer than what is currently in the wiki, that is a `/edit` or `/check` concern, not a `/discover` concern.
+`/discover` 从不为了 "修" 某个 duplicate 而修改 wiki。如果候选的 metadata 看起来比 wiki 现有版本更丰富，那属于 `/edit` 或 `/check` 的职责，不属于 `/discover`。

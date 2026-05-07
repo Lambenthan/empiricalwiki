@@ -1,47 +1,47 @@
 # /init Prepare And Discovery
 
-Use this reference when `/init` is preparing local inputs, selecting the final paper set, or writing `.checkpoints/init-sources.json`.
+当 `/init` 需要 prepare 本地输入、选择最终论文集、或写出 `.checkpoints/init-sources.json` 时，打开此参考文件。
 
-## Prepare Flow
+## Prepare 流程
 
-- Run `"$PYTHON_BIN" tools/init_discovery.py prepare --raw-root raw --pdf-titles-json .checkpoints/init-pdf-titles.json --output-manifest .checkpoints/init-prepare.json`.
-- Before preparing local PDFs, recover confident titles when possible and write `.checkpoints/init-pdf-titles.json` as either `{ "raw/papers/foo.pdf": "Recovered Paper Title" }` or `{ "raw/papers/foo.pdf": { "title": "Recovered Paper Title", "arxiv_id": "2401.00001" } }` when a confident arXiv ID is already known.
-- `tools/init_discovery.py prepare` must pass those recovered titles and IDs into `"$PYTHON_BIN" tools/prepare_paper_source.py --raw-root raw --source <local-path> [--title "<recovered-title>"] [--arxiv-id "<recovered-arxiv-id>"]`.
-- `tools/init_discovery.py prepare` must delegate local paper normalization to the same helper and reuse pre-staged `raw/tmp/` artifacts when they already exist.
-- For local PDFs, use this recovery order only: handed-off arXiv ID or filename/path arXiv ID -> title-based Semantic Scholar recovery when a confident title was supplied -> fetched arXiv source -> synthetic `.tex`.
-- When the agent supplied a confident PDF title, that title is authoritative for the prepared manifest. Sanitized titles from fetched TeX are fallback metadata only and must not overwrite the agent title.
-- Do not use PDF metadata or PDF body text as arXiv-ID hints during prepare.
-- When arXiv ID recovery succeeds, prefer fetched raw TeX source under `raw/tmp/papers/...-arxiv-src/` over synthetic `.tex`.
-- If no confident PDF title is available, omit `--title`; if no confident arXiv ID is available, omit `--arxiv-id`; then allow filename/path arXiv-ID recovery only and fall back directly to synthetic `.tex`. Metadata or filename titles remain display-only.
+- 执行 `"$PYTHON_BIN" tools/init_discovery.py prepare --raw-root raw --pdf-titles-json .checkpoints/init-pdf-titles.json --output-manifest .checkpoints/init-prepare.json`。
+- prepare 本地 PDF 前，先尽量恢复可信标题，并把结果写入 `.checkpoints/init-pdf-titles.json`。格式既可以是 `{ "raw/papers/foo.pdf": "Recovered Paper Title" }`，也可以是在已知可信 arXiv ID 时写成 `{ "raw/papers/foo.pdf": { "title": "Recovered Paper Title", "arxiv_id": "2401.00001" } }`。
+- `tools/init_discovery.py prepare` 必须把这些恢复出的标题和 ID 传给 `"$PYTHON_BIN" tools/prepare_paper_source.py --raw-root raw --source <local-path> [--title "<recovered-title>"] [--arxiv-id "<recovered-arxiv-id>"]`。
+- `tools/init_discovery.py prepare` 必须委托给同一个 helper 做本地论文规范化，并在已有预处理结果时复用现成的 `raw/tmp/` artifact。
+- 本地 PDF 只允许采用这一条恢复顺序：handoff 进来的 arXiv ID 或 filename/path 中的 arXiv ID -> 在提供可信标题时经 Semantic Scholar 按标题恢复 -> 抓取到的 arXiv 源码 -> synthetic `.tex`。
+- 如果 agent 已经提供了可信 PDF 标题，这个标题就是 prepared manifest 的 authoritative title。抓取到的 TeX 源码标题只能作为清洗后的 fallback metadata，不能覆盖 agent 标题。
+- prepare 阶段不得把 PDF metadata 或正文文本当作 arXiv-ID hint。
+- 恢复成功后，优先使用 `raw/tmp/papers/...-arxiv-src/` 下抓取到的原始 TeX 源码，而不是 synthetic `.tex`。
+- 如果拿不到可信 PDF 标题，就省略 `--title`；如果也拿不到可信 arXiv ID，就省略 `--arxiv-id`；随后只允许走 filename/path arXiv-ID 恢复，然后直接回退到 synthetic `.tex`。metadata 或 filename 标题只用于显示。
 
-## Source Preference Rules
+## 来源优先级
 
-- Prefer local sources in this order: original local `.tex` > archive-extracted source `.tex` or fetched arXiv source directory > PDF-derived synthetic `.tex` > raw `.pdf`.
-- Keep notes/web on their original source paths. `/init` reads them directly during planning.
-- If the handed-off source already lives under `raw/tmp/` or `raw/discovered/`, treat that path as canonical and do not duplicate it into `raw/papers/`.
-- Set each local paper's `canonical_ingest_path` to a prepared `raw/tmp/` path when available; otherwise fall back to the original `raw/papers/...` path.
+- 本地来源优先级：原始本地 `.tex` > archive 解出的源码 `.tex` 或抓取到的 arXiv 源码目录 > 由 PDF 生成的 synthetic `.tex` > 原始 `.pdf`。
+- notes/web 保持原始来源路径，`/init` 在 planning 阶段直接读取。
+- 如果 handoff 进来的来源已经在 `raw/tmp/` 或 `raw/discovered/` 下，就把它视为 canonical path，不要再复制进 `raw/papers/`。
+- 本地论文若存在 prepared 结果，其 `canonical_ingest_path` 必须指向 `raw/tmp/`；否则回退到原始 `raw/papers/...`。
 
-## Final Selection And Fetch
+## 最终选择与 Fetch
 
-- `plan` must read `.checkpoints/init-prepare.json` instead of rescanning `raw/`.
-- Over-pick a shortlist first, then explicitly trim it to the documented final target before `fetch`.
-- Keep all parseable user-owned papers by default, then use remaining slots for introduced papers.
-- If seeded discovery adds no external papers, proceed with the user-owned paper set instead of treating that as a fatal planner error.
-- If the user already provided more than 10 parseable papers, add no new papers.
-- If `--no-introduction` is active, final paper set = all parseable user papers, and `fetch` still runs with zero external IDs so it writes `.checkpoints/init-sources.json`.
+- `plan` 必须读取 `.checkpoints/init-prepare.json`，而不是重新扫描 `raw/`。
+- 先 over-pick 一个 shortlist，再在 `fetch` 前显式裁成文档规定的最终范围。
+- 默认保留所有可解析的用户论文，再用剩余名额选择 introduced 论文。
+- 如果 seeded discovery 最终没有新增外部论文，也要继续用用户自带论文集往下走，而不是把它当成 fatal planner error。
+- 如果用户已提供超过 10 篇可解析论文，则不再新增外部论文。
+- 如果 `--no-introduction` 开启，最终论文集 = 所有可解析本地论文；即便如此也仍要运行 `fetch`（不给外部 ID），以写出 `.checkpoints/init-sources.json`。
 
-Run:
+执行：
 
 ```bash
 "$PYTHON_BIN" tools/init_discovery.py fetch --raw-root raw --plan-json .checkpoints/init-plan.json --prepared-manifest .checkpoints/init-prepare.json --output-sources .checkpoints/init-sources.json --id <candidate-id> --id <candidate-id>
 ```
 
-- External papers downloaded by `/init` go to `raw/discovered/`, never `raw/papers/`.
-- Never fetch a paper that is already represented by a prepared local source from `raw/tmp/`.
+- `/init` 下载的论文只允许写入 `raw/discovered/`，绝不写入 `raw/papers/`。
+- 若某篇候选已经由 prepared local source 覆盖，则禁止重复抓取。
 
-## Source Manifest Contract
+## Source Manifest 合同
 
-- `.checkpoints/init-sources.json` is the single source of truth for Step 5 ingest order.
-- User-owned papers appear in `init-sources.json` with `origin=user_local` and their canonical prepared path when available.
-- Introduced papers appear in `init-sources.json` with `origin=introduced` and their canonical `raw/discovered/` path.
-- Step 5 must consume the handed-off `canonical_ingest_path` exactly as written.
+- `.checkpoints/init-sources.json` 是 Step 5 ingest 顺序的唯一真相源。
+- 用户本地论文在 `init-sources.json` 中以 `origin=user_local` 记录，并在可用时带上 canonical prepared path。
+- introduced 论文在 `init-sources.json` 中以 `origin=introduced` 记录，其 canonical path 位于 `raw/discovered/`。
+- Step 5 必须原样消费 handoff 过来的 `canonical_ingest_path`。
