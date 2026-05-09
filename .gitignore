@@ -31,3 +31,63 @@ Thumbs.db
 
 # Raw data (large files managed separately)
 raw/papers/*.pdf
+raw/papers/**/*.pdf
+raw/discovered/**/*.pdf
+raw/discovered/**/*.tex
+raw/web/**/*.html
+raw/web/**/*.md
+!raw/web/.gitkeep
+raw/tmp/
+!raw/tmp/.gitkeep
+
+# User-private literature collections / personal research notes
+01_文献/
+raw/papers/patient-capital-literature/
+raw/notes/research-intent.md
+
+# Local Obsidian vault state (per-user; may contain plugin API keys / paths)
+wiki/.obsidian/
+wiki/.obsidian.bak.*/
+wiki/.obsidian-*/
+wiki/.trash/
+
+# Local Claude Code state (per-user sessions, command history, plugin settings)
+wiki/.claude/
+
+# User wiki content (treat as private test data; users build their own wiki locally)
+wiki/papers/*.md
+wiki/variables/*.md
+wiki/datasets/*.md
+wiki/models/*.md
+wiki/mechanisms/*.md
+wiki/hypotheses/*.md
+wiki/identification/*.md
+wiki/robustness/*.md
+wiki/heterogeneity/*.md
+wiki/tables/*.md
+wiki/concepts/*.md
+wiki/topics/*.md
+wiki/people/*.md
+wiki/ideas/*.md
+wiki/experiments/*.md
+wiki/claims/*.md
+wiki/Summary/*.md
+wiki/foundations/*.md
+wiki/outputs/*
+!wiki/**/.gitkeep
+
+# Book project (《EmpiricalWiki 实战手册》)
+# manim 生产脚本与文献清单不公开；章节正文和 GIF 公开
+book/code/
+book/data/
+book/assets/_tmp/
+book/assets/_manim_temp/
+media/
+
+# 临时编辑器 / 系统文件
+*~
+*.bak
+.~lock.*
+
+# JetBrains / VS Code workspace files
+*.code-workspace
