@@ -1,0 +1,14 @@
+{
+  "promptDelete": false,
+  "showUnsupportedFiles": true,
+  "pdfExportSettings": {
+    "includeName": true,
+    "pageSize": "A4",
+    "landscape": false,
+    "margin": "1",
+    "downscalePercent": 100
+  },
+  "useMarkdownLinks": true,
+  "newLinkFormat": "relative",
+  "readableLineLength": true
+}

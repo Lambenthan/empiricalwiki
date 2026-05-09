@@ -1,0 +1,10 @@
+{
+  "cssTheme": "Cupertino",
+  "interfaceFontFamily": "LXGW Bright",
+  "textFontFamily": "LXGW Bright",
+  "monospaceFontFamily": "LXGW Bright",
+  "enabledCssSnippets": [
+    "line-space",
+    "sidenote-callout"
+  ]
+}
