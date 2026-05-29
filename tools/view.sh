@@ -57,9 +57,10 @@ if [ -f "$QZ/quartz.config.ts" ]; then
   perl -0pi -e 's/priority:\s*\["frontmatter",\s*"git",\s*"filesystem"\]/priority: ["frontmatter", "filesystem"]/' "$QZ/quartz.config.ts" || true
 fi
 if [ -f "$QZ/quartz.layout.ts" ]; then
-  # Local graph depth 2 so a page shows its 2-hop neighbourhood — e.g. a theory
-  # paper → propositions → hypotheses → empirical papers (the theory↔empirics bridge).
-  perl -0pi -e 's/Component\.Graph\(\)/Component.Graph({ localGraph: { depth: 2 } })/' "$QZ/quartz.layout.ts" || true
+  # Graph: local graph 2-hop (shows a theory paper → propositions → hypotheses →
+  # empirical papers, i.e. the bridge); global graph de-hairballed by dropping
+  # tag hub-nodes and spreading nodes apart (higher repel, longer links).
+  perl -0pi -e 's/Component\.Graph\(\)/Component.Graph({ localGraph: { depth: 2, showTags: false }, globalGraph: { showTags: false, repelForce: 0.8, linkDistance: 35, scale: 1.05 } })/' "$QZ/quartz.layout.ts" || true
 fi
 
 # Re-sync content: copy wiki/*.md preserving structure, excluding derived/config dirs.
