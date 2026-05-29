@@ -18,6 +18,7 @@ ENTITY_DIRS = [
     "papers",
     "variables", "datasets", "models", "mechanisms", "hypotheses",
     "identification", "robustness", "heterogeneity", "tables",
+    "assumptions", "propositions",
     "concepts", "topics", "people",
     "ideas", "experiments", "claims", "Summary",
     "foundations",
@@ -191,6 +192,41 @@ EDGE_TYPE_SPECS: dict[str, dict[str, str]] = {
         "workflow": "empirical_ingest",
     },
 
+    # /theory-ingest extraction edges. `assumes` and `proves` are definite
+    # structural facts (the paper literally states the assumption / proves the
+    # result), so no confidence is required. `formalizes_mechanism` and
+    # `predicts` are judgment calls (does this model really formalize that
+    # mechanism / does this result really map to that testable hypothesis?),
+    # so they require confidence, mirroring the empirical semantic edges.
+    "assumes": {
+        "from_kind": "papers",
+        "to_kind": "assumptions",
+        "direction": DIRECTION_DIRECTED,
+        "confidence": CONFIDENCE_NONE,
+        "workflow": "theory_ingest",
+    },
+    "proves": {
+        "from_kind": "papers",
+        "to_kind": "propositions",
+        "direction": DIRECTION_DIRECTED,
+        "confidence": CONFIDENCE_NONE,
+        "workflow": "theory_ingest",
+    },
+    "formalizes_mechanism": {
+        "from_kind": "papers",
+        "to_kind": "mechanisms",
+        "direction": DIRECTION_DIRECTED,
+        "confidence": CONFIDENCE_REQUIRED,
+        "workflow": "theory_ingest",
+    },
+    "predicts": {
+        "from_kind": "propositions",
+        "to_kind": "hypotheses",
+        "direction": DIRECTION_DIRECTED,
+        "confidence": CONFIDENCE_REQUIRED,
+        "workflow": "theory_ingest",
+    },
+
     # Other semantic/provenance workflows. Endpoint constraints stay broad here
     # because older skills use these across claims, ideas, experiments, papers,
     # concepts, outputs, and foundations.
@@ -358,6 +394,8 @@ REQUIRED_FIELDS = {
     "robustness": ["title", "slug", "check_type", "source_papers", "purpose"],
     "heterogeneity": ["title", "slug", "grouping_variable", "source_papers", "rationale"],
     "tables": ["title", "slug", "table_type", "source_paper", "variables", "interpretation"],
+    "assumptions": ["title", "slug", "assumption_type", "source_papers", "formal_statement"],
+    "propositions": ["title", "slug", "proposition_type", "source_papers", "formal_statement"],
     "concepts": ["title", "tags", "maturity", "key_papers"],
     "topics": ["title", "tags"],
     "people": ["name", "tags"],
@@ -371,6 +409,15 @@ REQUIRED_FIELDS = {
 # Valid enum values per entity-qualified field. Format: "{entity}.{field}".
 VALID_VALUES = {
     "papers.importance": {"1", "2", "3", "4", "5"},
+    "papers.paper_kind": {"empirical", "theory", "both"},
+    "assumptions.assumption_type": {
+        "information", "timing", "payoff", "agent_behavior",
+        "technology", "constraint", "other",
+    },
+    "propositions.proposition_type": {
+        "existence", "characterization", "comparative_statics",
+        "welfare", "uniqueness", "efficiency", "other",
+    },
     "variables.role": {
         "dependent", "core_explanatory", "mediator", "moderator",
         "control", "instrument", "fixed_effect", "sample_filter", "other",
@@ -410,6 +457,8 @@ FIELD_DEFAULTS = {
     "robustness": {"check_type": "other", "source_papers": "[]"},
     "heterogeneity": {"source_papers": "[]"},
     "tables": {"variables": "[]"},
+    "assumptions": {"assumption_type": "other", "source_papers": "[]"},
+    "propositions": {"proposition_type": "other", "source_papers": "[]"},
     "concepts": {"tags": "[]", "maturity": "active", "key_papers": "[]"},
     "topics": {"tags": "[]"},
     "people": {"tags": "[]"},

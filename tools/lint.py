@@ -224,7 +224,7 @@ def check_field_values(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIssue
             if valid_key.startswith(prefix):
                 enum_checks.append((valid_key.removeprefix(prefix), valid_key))
 
-        for field, valid_key in enum_checks.get(page_type, []):
+        for field, valid_key in enum_checks:
             val = extract_frontmatter_value(content, field)
             if val is not None and val not in VALID_VALUES[valid_key]:
                 issues.append(LintIssue("🔴", "invalid-value", rel,

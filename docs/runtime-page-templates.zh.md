@@ -15,6 +15,7 @@ venue: ""
 year:
 tags: []
 importance: 3           # 1-5
+paper_kind: empirical    # empirical | theory | both —— 决定 ingest 走 /empirical-ingest 还是 /theory-ingest；省略时默认按 empirical 处理
 date_added: YYYY-MM-DD
 source_type: tex         # tex | pdf
 s2_id: ""
@@ -22,7 +23,7 @@ keywords: []
 domain: ""
 code_url: ""
 cited_by: []
-empirical:
+empirical:               # paper_kind 含 empirical 时填
   sample_period: ""
   sample_scope: ""
   data_sources: []
@@ -30,10 +31,17 @@ empirical:
   core_explanatory_variables: []
   mechanisms: []
   identification: ""
+theory:                  # paper_kind 含 theory 时填，否则整块省略
+  model_class: ""        # 如 信号传递博弈 / 委托代理 / 一般均衡 / DSGE / 机制设计
+  solution_concept: ""   # 如 贝叶斯精炼均衡 + 直觉标准 / 子博弈精炼 / 竞争均衡
+  key_propositions: []   # propositions/ slug 列表
+  predictions: []        # hypotheses/ slug 列表（模型吐出的可检验推论）
 ---
 ```
 
-正文：`## 研究问题` / `## 理论机制` / `## 研究假设` / `## 数据与样本` / `## 变量设定` / `## 模型设定` / `## 主要结果` / `## 机制检验` / `## 异质性检验` / `## 稳健性检验` / `## 内生性处理` / `## 可复现线索` / `## 对我当前选题的启发` / `## Related`
+实证正文：`## 研究问题` / `## 理论机制` / `## 研究假设` / `## 数据与样本` / `## 变量设定` / `## 模型设定` / `## 主要结果` / `## 机制检验` / `## 异质性检验` / `## 稳健性检验` / `## 内生性处理` / `## 可复现线索` / `## 对我当前选题的启发` / `## Related`
+
+理论正文（`paper_kind: theory`）：`## 研究问题` / `## 模型环境` / `## 核心假设` / `## 解概念` / `## 命题与证明` / `## 比较静态` / `## 可检验推论` / `## 对实证的启发` / `## Related`
 
 ### variables/{slug}.md
 
@@ -192,6 +200,44 @@ date_updated: YYYY-MM-DD
 ```
 
 正文：`## Table Purpose` / `## Columns` / `## Key Coefficients` / `## Interpretation` / `## Reproduction Notes` / `## Caveats`
+
+### assumptions/{slug}.md
+
+理论建模的模型原语：参与人、偏好/支付、信息结构、时序、技术/约束。`formal_statement` 必须逐字引用原文设定，禁止释义改写成立条件。
+
+```yaml
+---
+title: ""
+slug: ""
+assumption_type: other   # information | timing | payoff | agent_behavior | technology | constraint | other
+formal_statement: ""     # 逐字引用原文设定
+source_papers: []
+relaxed_in: []           # 哪篇论文/哪一节放松或推广了这条假设
+date_updated: YYYY-MM-DD
+---
+```
+
+正文：`## Statement` / `## Role in Model` / `## Why It Matters` / `## Variants Across Papers` / `## Related`
+
+### propositions/{slug}.md
+
+理论建模的形式化结论：命题/定理/引理。`claims/` 装的是带置信度的实证断言；`propositions/` 装的是被证明的形式化结果，两者语义不同，不要混用。`formal_statement` 逐字引用，`conditions` 写清成立条件。
+
+```yaml
+---
+title: ""
+slug: ""
+proposition_type: other  # existence | characterization | comparative_statics | welfare | uniqueness | efficiency | other
+formal_statement: ""     # 逐字引用命题/定理原文
+conditions: ""           # 成立条件，如 "c ≤ c_s"
+proof_technique: ""      # 如 逆向归纳 / 不动点 / 直觉标准构造 / 反例；查不到写"未报告"
+source_papers: []
+predicts: []             # hypotheses/ slug 列表（本命题导出的可检验推论）
+date_updated: YYYY-MM-DD
+---
+```
+
+正文：`## Statement` / `## Conditions` / `## Proof Sketch` / `## Comparative Statics` / `## Testable Implications` / `## Related`
 
 ### concepts/{concept-name}.md
 
