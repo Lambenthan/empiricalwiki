@@ -19,11 +19,13 @@ Keep this mental map in immediate context:
 - `wiki/log.md` is the append-only activity log
 - `wiki/papers/` holds structured empirical paper cards
 - `wiki/variables/`, `wiki/datasets/`, `wiki/models/`, `wiki/mechanisms/`, `wiki/hypotheses/`, `wiki/identification/`, `wiki/robustness/`, `wiki/heterogeneity/`, and `wiki/tables/` hold the empirical research design layer
+- `wiki/assumptions/` and `wiki/propositions/` hold the theory-modeling layer (model primitives and formal results); together with `wiki/mechanisms/` and `wiki/hypotheses/` they bridge theory and empirics on one shared graph
 - `wiki/concepts/`, `wiki/topics/`, and `wiki/foundations/` hold reusable knowledge structure
 - `wiki/people/`, `wiki/ideas/`, `wiki/experiments/`, and `wiki/claims/` hold research actors, hypotheses, tests, and assertions
 - `wiki/Summary/` holds area-level syntheses
 - `wiki/outputs/` holds generated artifacts
 - `wiki/graph/` is derived state; do not edit it manually
+- to view the wiki as a local website with graph/search/backlinks: run `tools/view.sh` (see `docs/view-quartz.en.md`; Quartz-based, read-only render, never modifies content)
 
 ### Formatting guardrail
 
@@ -45,9 +47,11 @@ Keep this mental map in immediate context:
 
 Core empirical types: `papers`, `variables`, `datasets`, `models`, `mechanisms`, `hypotheses`, `identification`, `robustness`, `heterogeneity`, `tables`.
 
+Core theory-modeling types: `assumptions` (model primitives: players/preferences/information/timing/constraints), `propositions` (formal results: propositions/theorems/lemmas). `papers` carry `paper_kind: empirical|theory|both` to distinguish the paradigm and route ingest to `/empirical-ingest` vs `/theory-ingest`.
+
 General research-wiki types retained from OmegaWiki: `concepts`, `topics`, `people`, `ideas`, `experiments`, `claims`, `Summary`, `foundations`.
 
-Open `docs/runtime-page-templates.en.md` for page templates and `docs/runtime-support-files.en.md` for graph/index/log references.
+Open `docs/runtime-page-templates.en.md` for page templates, `docs/runtime-theory-skeleton.en.md` for the 6-slot theory-modeling skeleton, and `docs/runtime-support-files.en.md` for graph/index/log references.
 
 ---
 
@@ -82,6 +86,10 @@ When writing a forward link, **always write the reverse link simultaneously**:
 | papers/A writes `addresses_endogeneity_with: [[identification-I]]` | identification/I appends A to `source_papers` |
 | papers/A writes `uses_robustness_check: [[robustness-R]]` | robustness/R appends A to `source_papers` |
 | papers/A writes `uses_heterogeneity_split: [[heterogeneity-H]]` | heterogeneity/H appends A to `source_papers` |
+| papers/A writes `assumes: [[assumption-X]]` | assumptions/X appends A to `source_papers` |
+| papers/A writes `proves: [[proposition-P]]` | propositions/P appends A to `source_papers` |
+| papers/A writes `formalizes_mechanism: [[mechanism-M]]` | mechanisms/M appends A to `source_papers` or `evidence` (theory side) and notes the theory source in `## Theoretical Logic` |
+| propositions/P writes `predicts: [[hypothesis-H]]` | hypotheses/H appends P to `source_papers` and notes the theory source in `## Literature Basis` |
 | topics/T writes `key_people: [[person-D]]` | people/D appends T to `Research areas` |
 | concepts/K writes `key_papers: [[paper-E]]` | papers/E appends K to `Related` |
 | concepts/K writes part_of `[[topic-F]]` | topics/F appends K to overview paragraph |
@@ -96,8 +104,9 @@ When writing a forward link, **always write the reverse link simultaneously**:
 
 - `graph/` is auto-generated; do not edit it manually
 - core derived files are `edges.jsonl`, `citations.jsonl`, `context_brief.md`, and `open_questions.md`
-- semantic edge types include paper-paper (`same_problem_as`, `similar_method_to`, `complementary_to`, `builds_on`, `compares_against`, `improves_on`, `challenges`, `surveys`), paper-concept (`introduces_concept`, `uses_concept`, `extends_concept`, `critiques_concept`), empirical extraction (`operationalizes`, `uses_dataset`, `estimates_model`, `tests_mechanism`, `tests_hypothesis`, `addresses_endogeneity_with`, `uses_robustness_check`, `uses_heterogeneity_split`, `reports_table`), and claim/experiment/provenance types (`supports`, `contradicts`, `tested_by`, `invalidates`, `addresses_gap`, `derived_from`, `inspired_by`)
+- semantic edge types include paper-paper (`same_problem_as`, `similar_method_to`, `complementary_to`, `builds_on`, `compares_against`, `improves_on`, `challenges`, `surveys`), paper-concept (`introduces_concept`, `uses_concept`, `extends_concept`, `critiques_concept`), empirical extraction (`operationalizes`, `uses_dataset`, `estimates_model`, `tests_mechanism`, `tests_hypothesis`, `addresses_endogeneity_with`, `uses_robustness_check`, `uses_heterogeneity_split`, `reports_table`), theory extraction (`assumes`, `proves`, `formalizes_mechanism`, `predicts`), and claim/experiment/provenance types (`supports`, `contradicts`, `tested_by`, `invalidates`, `addresses_gap`, `derived_from`, `inspired_by`)
 - `/ingest` paper-paper and paper-concept semantic edges must include `confidence: high|medium|low`
+- `/theory-ingest` edges `assumes` and `proves` are structural facts (no confidence); `formalizes_mechanism` and `predicts` are judgments and must include `confidence: high|medium|low`
 - symmetric paper-paper edges are stored once with sorted endpoints and `symmetric: true`
 - bibliographic citations live in `citations.jsonl` as `type: cites`
 - use `tools/research_wiki.py add-edge`, `add-citation`, `rebuild-context-brief`, and `rebuild-open-questions`
@@ -128,6 +137,7 @@ Standard log line:
 - **INIT MODE handoff is manifest-driven**: when `/init` writes `.checkpoints/init-sources.json`, that manifest becomes the single source of truth for ingest order and canonical source paths. Prepared local inputs should point to `raw/tmp/`; introduced external papers should point to `raw/discovered/`.
 - **graph/ is auto-generated**: never manually edit files in `graph/` — only via `tools/research_wiki.py`.
 - **Empirical extraction is first-class**: when reading an empirical paper, extract variables, data sources, model specification, mechanisms, heterogeneity, robustness, and identification before writing generic concepts or ideas.
+- **Theory extraction is first-class**: when reading a theory-modeling paper (`paper_kind: theory`), follow the 6 slots in `docs/runtime-theory-skeleton.en.md` — extract assumptions/primitives, propositions/theorems, solution concept, and testable implications before writing generic concepts or ideas. Quote formal statements verbatim; never paraphrase the conditions of a result.
 - **Bidirectional links**: always write the reverse link when writing a forward link.
 - **tex priority**: .tex > .pdf; fallback chain: tex fails → PDF parse, PDF fails → vision API.
 - **index.md updated on every ingest**; log.md is append-only.
@@ -151,6 +161,7 @@ Standard log line:
 | `/prefill` | `skills/prefill/SKILL.md` | manual (`[domain] [--add concept]`) |
 | `/ingest` | `skills/ingest/SKILL.md` | manual |
 | `/empirical-ingest` | `skills/empirical-ingest/SKILL.md` | manual |
+| `/theory-ingest` | `skills/theory-ingest/SKILL.md` | manual |
 | `/variable-map` | `skills/variable-map/SKILL.md` | manual |
 | `/empirical-design` | `skills/empirical-design/SKILL.md` | manual |
 | `/stata-plan` | `skills/stata-plan/SKILL.md` | manual |

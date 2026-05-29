@@ -15,6 +15,7 @@ venue: ""
 year:
 tags: []
 importance: 3           # 1-5
+paper_kind: empirical    # empirical | theory | both — routes ingest to /empirical-ingest vs /theory-ingest; treated as empirical when omitted
 date_added: YYYY-MM-DD
 source_type: tex         # tex | pdf
 s2_id: ""
@@ -22,7 +23,7 @@ keywords: []
 domain: ""               # empirical accounting / finance / management / economics
 code_url: ""
 cited_by: []
-empirical:
+empirical:               # fill when paper_kind includes empirical
   sample_period: ""
   sample_scope: ""
   data_sources: []
@@ -30,10 +31,17 @@ empirical:
   core_explanatory_variables: []
   mechanisms: []
   identification: ""
+theory:                  # fill when paper_kind includes theory, otherwise omit the whole block
+  model_class: ""        # e.g. signaling game / principal-agent / general equilibrium / DSGE / mechanism design
+  solution_concept: ""   # e.g. perfect Bayesian equilibrium + intuitive criterion / subgame perfection / competitive equilibrium
+  key_propositions: []   # list of propositions/ slugs
+  predictions: []        # list of hypotheses/ slugs (testable implications the model yields)
 ---
 ```
 
-Body sections: `## Research Question` / `## Theory Mechanism` / `## Hypotheses` / `## Data and Sample` / `## Variable Design` / `## Model Specification` / `## Main Results` / `## Mechanism Tests` / `## Heterogeneity Tests` / `## Robustness Checks` / `## Endogeneity Handling` / `## Reproduction Notes` / `## Implications for My Project` / `## Related`
+Empirical body sections: `## Research Question` / `## Theory Mechanism` / `## Hypotheses` / `## Data and Sample` / `## Variable Design` / `## Model Specification` / `## Main Results` / `## Mechanism Tests` / `## Heterogeneity Tests` / `## Robustness Checks` / `## Endogeneity Handling` / `## Reproduction Notes` / `## Implications for My Project` / `## Related`
+
+Theory body sections (`paper_kind: theory`): `## Research Question` / `## Model Environment` / `## Core Assumptions` / `## Solution Concept` / `## Propositions and Proofs` / `## Comparative Statics` / `## Testable Implications` / `## Implications for Empirics` / `## Related`
 
 ### variables/{slug}.md
 
@@ -192,6 +200,44 @@ date_updated: YYYY-MM-DD
 ```
 
 Body sections: `## Table Purpose` / `## Columns` / `## Key Coefficients` / `## Interpretation` / `## Reproduction Notes` / `## Caveats`
+
+### assumptions/{slug}.md
+
+Model primitives of a theory paper: players, preferences/payoffs, information structure, timing, technology/constraints. `formal_statement` must quote the original setup verbatim — never paraphrase the conditions.
+
+```yaml
+---
+title: ""
+slug: ""
+assumption_type: other   # information | timing | payoff | agent_behavior | technology | constraint | other
+formal_statement: ""     # verbatim quote of the original setup
+source_papers: []
+relaxed_in: []           # which paper/section relaxes or generalizes this assumption
+date_updated: YYYY-MM-DD
+---
+```
+
+Body sections: `## Statement` / `## Role in Model` / `## Why It Matters` / `## Variants Across Papers` / `## Related`
+
+### propositions/{slug}.md
+
+Formal results of a theory paper: propositions/theorems/lemmas. `claims/` holds confidence-weighted empirical assertions; `propositions/` holds proven formal results — different semantics, do not mix. Quote `formal_statement` verbatim and state `conditions` explicitly.
+
+```yaml
+---
+title: ""
+slug: ""
+proposition_type: other  # existence | characterization | comparative_statics | welfare | uniqueness | efficiency | other
+formal_statement: ""     # verbatim quote of the proposition/theorem
+conditions: ""           # conditions for the result to hold, e.g. "c ≤ c_s"
+proof_technique: ""      # e.g. backward induction / fixed point / intuitive-criterion construction / counterexample; write "未报告" if not found
+source_papers: []
+predicts: []             # list of hypotheses/ slugs this result yields
+date_updated: YYYY-MM-DD
+---
+```
+
+Body sections: `## Statement` / `## Conditions` / `## Proof Sketch` / `## Comparative Statics` / `## Testable Implications` / `## Related`
 
 ### concepts/{concept-name}.md
 
