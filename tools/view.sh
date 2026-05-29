@@ -47,9 +47,19 @@ if [ ! -d "$QZ" ]; then
   ( cd "$QZ" && npm i )
 fi
 
-# Patch the site title in Quartz's own default config (idempotent, schema-safe).
+# Targeted, idempotent patches to Quartz's own default config (schema-safe:
+# each regex only matches the pristine default, so re-runs are no-ops).
 if [ -f "$QZ/quartz.config.ts" ]; then
+  # Site title.
   perl -0pi -e "s/pageTitle:\s*\"[^\"]*\"/pageTitle: \"$SITE_TITLE\"/" "$QZ/quartz.config.ts" || true
+  # Drop git from the date priority: wiki content is gitignored, so the git step
+  # only emits "untracked, dates inaccurate" warnings. Fall back to filesystem.
+  perl -0pi -e 's/priority:\s*\["frontmatter",\s*"git",\s*"filesystem"\]/priority: ["frontmatter", "filesystem"]/' "$QZ/quartz.config.ts" || true
+fi
+if [ -f "$QZ/quartz.layout.ts" ]; then
+  # Local graph depth 2 so a page shows its 2-hop neighbourhood — e.g. a theory
+  # paper → propositions → hypotheses → empirical papers (the theory↔empirics bridge).
+  perl -0pi -e 's/Component\.Graph\(\)/Component.Graph({ localGraph: { depth: 2 } })/' "$QZ/quartz.layout.ts" || true
 fi
 
 # Re-sync content: copy wiki/*.md preserving structure, excluding derived/config dirs.
@@ -69,6 +79,31 @@ mkdir -p "$CONTENT"
 
 n=$(find "$CONTENT" -name '*.md' | wc -l | tr -d ' ')
 echo "✓ 已同步 $n 个页面"
+
+# Friendlier homepage: prepend a short intro above the auto-generated catalog.
+# Operates on the copied content only (source wiki/index.md untouched). Also
+# gives the home page a real title instead of falling back to "index".
+if [ -f "$CONTENT/index.md" ]; then
+  tmp="$CONTENT/.index.intro.tmp"
+  cat > "$tmp" <<'INTRO'
+---
+title: EmpiricalWiki
+---
+
+# EmpiricalWiki — 实证 × 理论研究知识库
+
+左侧按类型浏览，顶部全文搜索，右下角图谱查看「理论 ↔ 实证」的连接。
+
+- 论文 `papers/` · 理论假设 `assumptions/` · 命题/定理 `propositions/`
+- 变量 `variables/` · 数据 `datasets/` · 模型 `models/` · 机制 `mechanisms/` · 识别 `identification/` · 稳健性 `robustness/` · 异质性 `heterogeneity/`
+- 提示：打开一篇论文，顺着 `[[链接]]` 与右侧反向链接，即可在理论与实证之间穿梭。
+
+---
+
+INTRO
+  cat "$CONTENT/index.md" >> "$tmp"
+  mv "$tmp" "$CONTENT/index.md"
+fi
 
 cd "$QZ"
 if [ "$mode" = "build" ]; then
