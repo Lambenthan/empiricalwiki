@@ -93,3 +93,6 @@ media/
 
 # JetBrains / VS Code workspace files
 *.code-workspace
+
+# Quartz local site build (clone + node_modules + output, all local)
+site/

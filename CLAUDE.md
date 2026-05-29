@@ -23,6 +23,7 @@
 - `wiki/Summary/` 存放领域级综述
 - `wiki/outputs/` 存放生成产物
 - `wiki/graph/` 是派生状态，禁止手动编辑
+- 想把 wiki 看成带图谱/搜索/反链的本地网站：跑 `tools/view.sh`，详见 `docs/view-quartz.zh.md`（基于 Quartz，只读渲染，不改内容）
 
 ### 格式护栏
 
