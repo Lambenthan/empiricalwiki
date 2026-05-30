@@ -28,8 +28,8 @@
 - **Local website view.** [`tools/view.sh`](tools/view.sh) renders the wiki as a polished local site — interactive graph, full-text search, backlinks — via [Quartz](https://quartz.jzhao.xyz/). One command, read-only, no Obsidian required. See [`docs/view-quartz.zh.md`](docs/view-quartz.zh.md).
 
 <div align="center">
-<img src="assets/screenshot-site.png" width="850" alt="EmpiricalWiki rendered as a local website: typed pages, sidebar, and graph view"><br>
-<em>A wiki page rendered locally — typed sections, backlinks, and a local graph (run <code>tools/view.sh</code>).</em>
+<img src="assets/demo.gif" width="850" alt="Demo: open a paper, read its typed sections, follow backlinks, and explore the graph"><br>
+<em>One command — <code>tools/view.sh</code> — and browse the wiki locally: typed pages, backlinks, search, interactive graph. (<a href="assets/demo.mp4">▶ crisper MP4</a>)</em>
 <br><br>
 <img src="assets/screenshot-graph.png" width="850" alt="The full knowledge graph linking papers, variables, mechanisms, and theory">
 <br>
@@ -471,8 +471,8 @@ Then run `claude` as usual. / 保存后正常运行 `claude` 即可。
 - **本地网站展示。** [`tools/view.sh`](tools/view.sh) 用 [Quartz](https://quartz.jzhao.xyz/) 把 wiki 渲染成一个本地网站 —— 交互式图谱、全文搜索、反向链接。一条命令、只读、不用装 Obsidian。详见 [`docs/view-quartz.zh.md`](docs/view-quartz.zh.md)。
 
 <div align="center">
-<img src="assets/screenshot-site.png" width="850" alt="EmpiricalWiki 本地网站：分类页面、侧栏与图谱"><br>
-<em>本地渲染的一篇 wiki 页面 —— 分节正文、反向链接、局部图谱（跑 <code>tools/view.sh</code>）。</em>
+<img src="assets/demo.gif" width="850" alt="演示：打开一篇论文、阅读分节正文、跟随反向链接、探索图谱"><br>
+<em>一条命令 <code>tools/view.sh</code> 即可本地浏览：分节页面、反向链接、全文搜索、交互式图谱。（<a href="assets/demo.mp4">▶ 更清晰的 MP4</a>）</em>
 </div>
 
 ### EmpiricalWiki 是什么？
