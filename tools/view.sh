@@ -62,6 +62,13 @@ if [ -f "$QZ/quartz.layout.ts" ]; then
   # tag hub-nodes and spreading nodes apart (higher repel, longer links).
   perl -0pi -e 's/Component\.Graph\(\)/Component.Graph({ localGraph: { depth: 2, showTags: false }, globalGraph: { showTags: false, repelForce: 0.8, linkDistance: 35, scale: 1.05 } })/' "$QZ/quartz.layout.ts" || true
 fi
+# Quartz traps the mouse wheel over the left sidebar (explorer sets
+# overscroll-behavior: contain). Override it so the page scrolls when the
+# explorer is at its boundary. Appended once (marker-guarded), compiled by build.
+CSS_FILE="$QZ/quartz/styles/custom.scss"
+if [ -f "$CSS_FILE" ] && ! grep -q 'EW-sidebar-scroll' "$CSS_FILE"; then
+  printf '\n/* EW-sidebar-scroll: stop the explorer from trapping the page scroll */\n.explorer-content, .explorer-content ul { overscroll-behavior: auto; }\n' >> "$CSS_FILE"
+fi
 
 # Re-sync content: copy wiki/*.md preserving structure, excluding derived/config dirs.
 echo "↻ 同步 wiki/ → Quartz content/ ..."
