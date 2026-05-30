@@ -96,8 +96,8 @@ Every skill reads from and writes back to the same wiki. Knowledge compounds —
 
 ```bash
 # 1. Get the project
-git clone https://github.com/Lambenthan/empericalwiki.git
-cd empericalwiki
+git clone https://github.com/Lambenthan/empiricalwiki.git
+cd empiricalwiki
 
 # 2. Install Claude Code
 npm install -g @anthropic-ai/claude-code
@@ -509,7 +509,7 @@ EmpiricalWiki 严格遵循 Karpathy 原始 gist 的三层结构：
 **前置条件：** Python 3.9+, Node.js 18+
 
 ```bash
-git clone https://github.com/Lambenthan/empericalwiki.git && cd empericalwiki
+git clone https://github.com/Lambenthan/empiricalwiki.git && cd empiricalwiki
 
 # 安装 Claude Code
 npm install -g @anthropic-ai/claude-code
