@@ -160,9 +160,22 @@ def _extract_arxiv_id(text: str) -> str:
     return ""
 
 
+_CJK_PATTERN = re.compile(r"[㐀-鿿豈-﫿]")
+
+
+def _has_cjk(text: str) -> bool:
+    """True if the text contains CJK characters (Chinese/Japanese/Korean han)."""
+    return bool(_CJK_PATTERN.search(text or ""))
+
+
 def _recover_arxiv_id_by_title(title: str) -> str:
     """Try to recover an arXiv ID by searching Semantic Scholar with a title."""
     if not title or len(title) < 8:
+        return ""
+    # arXiv papers have English titles; a CJK title is never on arXiv/S2, so the
+    # network round-trip is pure waste and, when S2 rate-limits, costs minutes of
+    # backoff per paper. Skip it. (CLAUDE.md: 中文论文没有 arXiv/S2 元数据不算失败。)
+    if _has_cjk(title):
         return ""
     try:
         results = s2_search(title, limit=5)
