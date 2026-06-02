@@ -244,39 +244,6 @@ def _extract_arxiv_id(text: str) -> str:
     return ""
 
 
-def _recover_arxiv_id_by_title(title: str) -> str:
-    """Try to recover an arXiv ID by searching Semantic Scholar with the paper title.
-
-    Returns the bare arXiv ID (e.g. '2106.09685') or an empty string on failure.
-    """
-    if not title or len(title) < 8:
-        return ""
-    try:
-        results = s2_search(title, limit=5)
-    except Exception:
-        return ""
-    normalized_title = _normalize_text(title)
-    title_tokens = set(_tokenize(normalized_title))
-    for result in results:
-        result_title = _normalize_text(str(result.get("title") or ""))
-        if not result_title:
-            continue
-        arxiv_id = (result.get("externalIds") or {}).get("ArXiv", "")
-        if not arxiv_id:
-            continue
-        # Exact normalized match
-        if result_title == normalized_title:
-            return _normalize_arxiv_id(str(arxiv_id))
-        # High token-overlap match (at least 80% of tokens in common)
-        result_tokens = set(_tokenize(result_title))
-        if result_tokens and title_tokens:
-            overlap = len(result_tokens & title_tokens)
-            min_len = min(len(result_tokens), len(title_tokens))
-            if min_len > 0 and overlap / min_len >= 0.8:
-                return _normalize_arxiv_id(str(arxiv_id))
-    return ""
-
-
 def _download_arxiv_source(arxiv_id: str, dest_dir: Path) -> dict[str, Any]:
     """Download arXiv TeX source tarball and extract to dest_dir.
 

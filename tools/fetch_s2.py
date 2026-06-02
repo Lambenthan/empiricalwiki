@@ -71,7 +71,16 @@ def _request(method: str, url: str, *, params: dict | None = None, json_body: di
             timeout=30,
         )
         if resp.status_code == 429:
-            wait = 60 * (attempt + 1)  # 60s, 120s, 180s
+            # Honor the server's Retry-After when present, else a gentle 5/10/20s
+            # backoff. The old 60/120/180s schedule let a single rate-limited call
+            # block up to ~6 minutes, hanging /discover, /init and /ingest sweeps;
+            # cap each wait at 30s so callers fail fast and fall back instead.
+            retry_after = resp.headers.get("Retry-After", "")
+            try:
+                wait = int(retry_after)
+            except (TypeError, ValueError):
+                wait = 5 * (2 ** attempt)  # 5s, 10s, 20s
+            wait = min(wait, 30)
             print(f"Rate limited, waiting {wait}s... (attempt {attempt+1}/{MAX_RETRIES})", file=sys.stderr)
             time.sleep(wait)
             continue
