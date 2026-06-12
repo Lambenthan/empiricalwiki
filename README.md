@@ -99,7 +99,7 @@ Every skill reads from and writes back to the same wiki. Knowledge compounds —
 
 ## Quick Start
 
-**Prerequisites:** Python 3.9+, Node.js 18+
+**Prerequisites:** Python 3.9+; Node.js 22+ (for Claude Code and the local website view)
 
 **The fastest way: don't follow these steps yourself — hand them to your agent.** Copy the block below into Claude Code (or Codex / Cursor) and let it do the setup:
 
@@ -128,7 +128,7 @@ claude login
 chmod +x setup.sh && ./setup.sh        # Linux / macOS
 # Windows (PowerShell):
 #   powershell -ExecutionPolicy Bypass -File .\setup.ps1
-# setup creates .venv for EmpiricalWiki and registers tools/_env.py
+# setup creates .venv and copies config templates (.env, settings.local.json)
 
 # 4. Drop your literature into raw/papers/
 #    .pdf is fine; .tex is preferred when available
@@ -210,7 +210,7 @@ Native Windows is supported for the local pipeline. Remote-GPU experiments via `
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`/empirical-design <topic>`** | **Empirical-specific** — generate research question, variable design, model setup, mechanism, heterogeneity, robustness, and data-gap report |
 | **`/stata-plan <design>`**      | **Empirical-specific** — turn a research design into a Stata execution plan; `--write-do` produces a `.do` skeleton                      |
-| `/daily-arxiv`                        | Auto-fetch & filter new arXiv papers (+ GitHub Actions cron)                                                                                        |
+| `/daily-arxiv`                        | Auto-fetch & filter new arXiv papers (cron-able)                                                                                        |
 | `/ideate`                             | Multi-phase idea generation from cross-topic connections                                                                                            |
 | `/novelty <idea>`                     | Multi-source novelty verification (web + S2 + wiki + review LLM)                                                                                    |
 | `/review <artifact>`                  | Cross-model adversarial review for any research artifact                                                                                            |
@@ -285,30 +285,23 @@ When you next read a paper using a construct you've seen before, you don't need 
 ```
 EmpiricalWiki/
 ├── CLAUDE.md                    # Runtime schema & rules (the schema layer)
+├── AGENTS.md                    # Entry point for any coding agent (Codex / Cursor / …)
 ├── README.md                    # This file
-├── README_EMPIRICAL.md          # Adaptation note (how this fork differs from upstream)
-├── llm_wiki_relationship.excalidraw            # Karpathy ↔ EmpiricalWiki 对应关系图
-├── llm_wiki_relationship_script.md             # 配套讲解稿
 ├── wiki/                        # Knowledge base (LLM-maintained — the wiki layer)
-│   ├── papers/                  #   Empirical paper cards (20 ingested)
-│   ├── variables/               #   Constructs + measurement variants (37)
-│   ├── datasets/                #   Database documentation (10)
-│   ├── models/                  #   Specification cards (5)
-│   ├── mechanisms/              #   Causal channels (24)
-│   ├── hypotheses/              #   Testable predictions (7)
-│   ├── identification/          #   Endogeneity strategies (16)
-│   ├── robustness/              #   Robustness check designs (9)
-│   ├── heterogeneity/           #   Sample splits & moderators (24)
-│   ├── tables/                  #   Table reproduction notes
-│   ├── concepts/                #   Generic concepts (when not empirical)
-│   ├── topics/                  #   Research direction maps
-│   ├── people/                  #   Researcher profiles
-│   ├── ideas/                   #   Your own research ideas
-│   ├── experiments/             #   For computational/simulation work
-│   ├── claims/                  #   Standalone claims with evidence
-│   ├── Summary/                 #   Domain surveys
-│   ├── foundations/             #   Textbook background
-│   ├── outputs/                 #   Generated artifacts (drafts, plots)
+│   ├── papers/                  #   Empirical & theory paper cards
+│   ├── variables/               #   Constructs + cross-paper measurement variants
+│   ├── datasets/                #   Database schema cards (9 preset cards ship with the repo)
+│   ├── models/                  #   Specification cards
+│   ├── mechanisms/              #   Causal channels
+│   ├── hypotheses/              #   Testable predictions
+│   ├── identification/          #   Endogeneity strategies (5 preset cards ship with the repo)
+│   ├── robustness/              #   Robustness check designs
+│   ├── heterogeneity/           #   Sample splits & moderators
+│   ├── assumptions/             #   Theory layer: model primitives
+│   ├── propositions/            #   Theory layer: formal results
+│   ├── tables/                  #   Table reproduction notes (on demand)
+│   ├── concepts/ topics/ people/ ideas/ experiments/ claims/ Summary/ foundations/
+│   ├── outputs/                 #   Generated artifacts (drafts, plans)
 │   ├── graph/                   #   Auto-generated: edges, citations, gaps
 │   ├── index.md                 #   Content catalog
 │   └── log.md                   #   Append-only chronological log
@@ -320,6 +313,10 @@ EmpiricalWiki/
 │   └── web/                     #   Saved HTML / Markdown
 ├── tools/                       # Deterministic Python helpers
 │   ├── research_wiki.py         #   Wiki engine (slug, add-edge, rebuild-index, ...)
+│   ├── stata-templates/         #   Preset .do skeletons (TWFE / DID / PSM / IV / RDD)
+│   ├── golden_check.py          #   Ingest-quality regression checker (tests/golden/)
+│   ├── update_demo.sh           #   Refresh the demo branch without switching branches
+│   ├── view.sh                  #   Local website view via Quartz
 │   ├── prepare_paper_source.py  #   PDF → tex preparation
 │   ├── init_discovery.py        #   /init download helper
 │   ├── discover.py              #   /discover candidate gathering & ranking
@@ -330,12 +327,14 @@ EmpiricalWiki/
 │   ├── fetch_deepxiv.py         #   DeepXiv semantic search
 │   ├── fetch_wikipedia.py       #   Wikipedia fetcher
 │   └── remote.py                #   SSH for remote experiments
+├── tests/golden/                # Benchmark papers + expected-extraction checklists
 ├── .claude/skills/              # 29 Claude Code skill definitions
 ├── docs/                        # Runtime page templates & graph format docs
 ├── i18n/                        # Bilingual: en/ + zh/
 ├── config/                      # Configuration templates
-├── mcp-servers/                 # Cross-model review server
-└── .github/workflows/           # Daily arXiv cron
+├── book/                        # Companion handbook chapters (《EmpiricalWiki 实战手册》)
+├── obsidian-config/             # Optional Obsidian setup for browsing the wiki
+└── mcp-servers/                 # Cross-model review server
 ```
 
 ## Bilingual Support
@@ -537,7 +536,7 @@ EmpiricalWiki 严格遵循 Karpathy 原始 gist 的三层结构：
 
 ### 快速开始
 
-**前置条件：** Python 3.9+, Node.js 18+
+**前置条件：** Python 3.9+；Node.js 22+（Claude Code 与本地网站视图需要）
 
 **最快的方式：这些步骤不用你自己做，交给你的 agent。** 把下面这段话整体粘贴给 Claude Code（或 Codex / Cursor），让它替你完成配置：
 

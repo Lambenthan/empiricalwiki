@@ -84,6 +84,10 @@ wiki/graph/edges.jsonl
 wiki/graph/citations.jsonl
 wiki/graph/context_brief.md
 wiki/graph/open_questions.md
+# index/log carry the user's private research catalog — same treatment as the
+# page content above. setup.sh seeds scaffold versions on first run.
+wiki/index.md
+wiki/log.md
 !wiki/**/.gitkeep
 
 # Preset schema cards — shipped with the repo as starter content
@@ -101,6 +105,15 @@ wiki/graph/open_questions.md
 !wiki/identification/instrumental-variables.md
 !wiki/identification/regression-discontinuity.md
 !wiki/identification/two-way-fixed-effects.md
+
+# User-owned literature sources (pdf rule exists below; tex was missing)
+raw/papers/**/*.tex
+# User notes may be symlinks into private local folders — never track
+raw/notes/*.md
+
+# Third-party personal skill manager state (not part of the product)
+.agents/
+skills-lock.json
 
 # Book project (《EmpiricalWiki 实战手册》)
 # manim 生产脚本与文献清单不公开；章节正文和 GIF 公开

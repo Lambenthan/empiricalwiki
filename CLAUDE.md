@@ -30,7 +30,7 @@
 - 在新建或修复 wiki 页面结构、YAML、正文章节前，先打开 `docs/runtime-page-templates.zh.md`
 - 需要 graph 派生文件细节或 `index.md` / `log.md` 格式时，打开 `docs/runtime-support-files.zh.md`
 - `SKILL.md` 是 skill 的即时入口；较大的 skill 也可以在各自目录下提供按需读取的本地参考文件
-- `/init` 是这一模式的第一个具体例子：先读 `skills/init/SKILL.md`，只有在需要时再打开 `skills/init/references/*`
+- `/init` 是这一模式的第一个具体例子：先读 `.claude/skills/init/SKILL.md`，只有在需要时再打开 `.claude/skills/init/references/*`
 
 ### `raw/` 与 `config/`
 
@@ -158,32 +158,32 @@
 
 | Skill | 文件 | 触发 |
 |-------|------|------|
-| `/setup` | `skills/setup/SKILL.md` | 手动（首次配置） |
-| `/reset` | `skills/reset/SKILL.md` | 手动（`--scope wiki\|raw\|log\|checkpoints\|all`） |
-| `/init` | `skills/init/SKILL.md` | 手动 |
-| `/prefill` | `skills/prefill/SKILL.md` | 手动（`[domain] [--add concept]`） |
-| `/ingest` | `skills/ingest/SKILL.md` | 手动 |
-| `/empirical-ingest` | `skills/empirical-ingest/SKILL.md` | 手动 |
-| `/theory-ingest` | `skills/theory-ingest/SKILL.md` | 手动 |
-| `/variable-map` | `skills/variable-map/SKILL.md` | 手动 |
-| `/empirical-design` | `skills/empirical-design/SKILL.md` | 手动 |
-| `/stata-plan` | `skills/stata-plan/SKILL.md` | 手动 |
-| `/discover` | `skills/discover/SKILL.md` | 手动 / 内部（`/ingest --discover` 时调用） |
-| `/ask` | `skills/ask/SKILL.md` | 手动 |
-| `/edit` | `skills/edit/SKILL.md` | 手动 |
-| `/check` | `skills/check/SKILL.md` | 每两周/手动 |
-| `/daily-arxiv` | `skills/daily-arxiv/SKILL.md` | cron 08:00 / 手动 |
-| `/novelty` | `skills/novelty/SKILL.md` | 手动 |
-| `/review` | `skills/review/SKILL.md` | 手动 |
-| `/ideate` | `skills/ideate/SKILL.md` | 手动 |
-| `/exp-design` | `skills/exp-design/SKILL.md` | 手动 |
-| `/exp-run` | `skills/exp-run/SKILL.md` | 手动（`<slug> [--collect] [--full] [--env local\|remote]`） |
-| `/exp-status` | `skills/exp-status/SKILL.md` | 手动（`[--pipeline <slug>] [--collect-ready] [--auto-advance]`） |
-| `/exp-eval` | `skills/exp-eval/SKILL.md` | 手动 |
-| `/refine` | `skills/refine/SKILL.md` | 手动 |
-| `/paper-plan` | `skills/paper-plan/SKILL.md` | 手动 |
-| `/paper-draft` | `skills/paper-draft/SKILL.md` | 手动 |
-| `/paper-compile` | `skills/paper-compile/SKILL.md` | 手动 |
-| `/survey` | `skills/survey/SKILL.md` | 手动 |
-| `/research` | `skills/research/SKILL.md` | 手动 |
-| `/rebuttal` | `skills/rebuttal/SKILL.md` | 手动 |
+| `/setup` | `.claude/skills/setup/SKILL.md` | 手动（首次配置） |
+| `/reset` | `.claude/skills/reset/SKILL.md` | 手动（`--scope wiki\|raw\|log\|checkpoints\|all`） |
+| `/init` | `.claude/skills/init/SKILL.md` | 手动 |
+| `/prefill` | `.claude/skills/prefill/SKILL.md` | 手动（`[domain] [--add concept]`） |
+| `/ingest` | `.claude/skills/ingest/SKILL.md` | 手动 |
+| `/empirical-ingest` | `.claude/skills/empirical-ingest/SKILL.md` | 手动 |
+| `/theory-ingest` | `.claude/skills/theory-ingest/SKILL.md` | 手动 |
+| `/variable-map` | `.claude/skills/variable-map/SKILL.md` | 手动 |
+| `/empirical-design` | `.claude/skills/empirical-design/SKILL.md` | 手动 |
+| `/stata-plan` | `.claude/skills/stata-plan/SKILL.md` | 手动 |
+| `/discover` | `.claude/skills/discover/SKILL.md` | 手动 / 内部（`/ingest --discover` 时调用） |
+| `/ask` | `.claude/skills/ask/SKILL.md` | 手动 |
+| `/edit` | `.claude/skills/edit/SKILL.md` | 手动 |
+| `/check` | `.claude/skills/check/SKILL.md` | 每两周/手动 |
+| `/daily-arxiv` | `.claude/skills/daily-arxiv/SKILL.md` | 手动（可自行配置 cron） |
+| `/novelty` | `.claude/skills/novelty/SKILL.md` | 手动 |
+| `/review` | `.claude/skills/review/SKILL.md` | 手动 |
+| `/ideate` | `.claude/skills/ideate/SKILL.md` | 手动 |
+| `/exp-design` | `.claude/skills/exp-design/SKILL.md` | 手动 |
+| `/exp-run` | `.claude/skills/exp-run/SKILL.md` | 手动（`<slug> [--collect] [--full] [--env local\|remote]`） |
+| `/exp-status` | `.claude/skills/exp-status/SKILL.md` | 手动（`[--pipeline <slug>] [--collect-ready] [--auto-advance]`） |
+| `/exp-eval` | `.claude/skills/exp-eval/SKILL.md` | 手动 |
+| `/refine` | `.claude/skills/refine/SKILL.md` | 手动 |
+| `/paper-plan` | `.claude/skills/paper-plan/SKILL.md` | 手动 |
+| `/paper-draft` | `.claude/skills/paper-draft/SKILL.md` | 手动 |
+| `/paper-compile` | `.claude/skills/paper-compile/SKILL.md` | 手动 |
+| `/survey` | `.claude/skills/survey/SKILL.md` | 手动 |
+| `/research` | `.claude/skills/research/SKILL.md` | 手动 |
+| `/rebuttal` | `.claude/skills/rebuttal/SKILL.md` | 手动 |

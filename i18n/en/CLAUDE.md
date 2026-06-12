@@ -32,7 +32,7 @@ Keep this mental map in immediate context:
 - Open `docs/runtime-page-templates.en.md` before drafting or repairing wiki page structure, YAML, or body sections
 - Open `docs/runtime-support-files.en.md` when you need graph-derived file details or `index.md` / `log.md` format
 - `SKILL.md` is the immediate entrypoint for a skill; some larger skills may also provide local on-demand reference files under their skill directory
-- `/init` is the first concrete example of this pattern: read `skills/init/SKILL.md` first, then open `skills/init/references/*` only when needed
+- `/init` is the first concrete example of this pattern: read `.claude/skills/init/SKILL.md` first, then open `.claude/skills/init/references/*` only when needed
 
 ### `raw/` and `config/`
 
@@ -155,32 +155,32 @@ Standard log line:
 
 | Skill | File | Trigger |
 |-------|------|---------|
-| `/setup` | `skills/setup/SKILL.md` | manual (first-time config) |
-| `/reset` | `skills/reset/SKILL.md` | manual (`--scope wiki\|raw\|log\|checkpoints\|all`) |
-| `/init` | `skills/init/SKILL.md` | manual |
-| `/prefill` | `skills/prefill/SKILL.md` | manual (`[domain] [--add concept]`) |
-| `/ingest` | `skills/ingest/SKILL.md` | manual |
-| `/empirical-ingest` | `skills/empirical-ingest/SKILL.md` | manual |
-| `/theory-ingest` | `skills/theory-ingest/SKILL.md` | manual |
-| `/variable-map` | `skills/variable-map/SKILL.md` | manual |
-| `/empirical-design` | `skills/empirical-design/SKILL.md` | manual |
-| `/stata-plan` | `skills/stata-plan/SKILL.md` | manual |
-| `/discover` | `skills/discover/SKILL.md` | manual / internal (called by `/ingest --discover`) |
-| `/ask` | `skills/ask/SKILL.md` | manual |
-| `/edit` | `skills/edit/SKILL.md` | manual |
-| `/check` | `skills/check/SKILL.md` | biweekly/manual |
-| `/daily-arxiv` | `skills/daily-arxiv/SKILL.md` | cron 08:00 / manual |
-| `/novelty` | `skills/novelty/SKILL.md` | manual |
-| `/review` | `skills/review/SKILL.md` | manual |
-| `/ideate` | `skills/ideate/SKILL.md` | manual |
-| `/exp-design` | `skills/exp-design/SKILL.md` | manual |
-| `/exp-run` | `skills/exp-run/SKILL.md` | manual (`<slug> [--collect] [--full] [--env local\|remote]`) |
-| `/exp-status` | `skills/exp-status/SKILL.md` | manual (`[--pipeline <slug>] [--collect-ready] [--auto-advance]`) |
-| `/exp-eval` | `skills/exp-eval/SKILL.md` | manual |
-| `/refine` | `skills/refine/SKILL.md` | manual |
-| `/paper-plan` | `skills/paper-plan/SKILL.md` | manual |
-| `/paper-draft` | `skills/paper-draft/SKILL.md` | manual |
-| `/paper-compile` | `skills/paper-compile/SKILL.md` | manual |
-| `/survey` | `skills/survey/SKILL.md` | manual |
-| `/research` | `skills/research/SKILL.md` | manual |
-| `/rebuttal` | `skills/rebuttal/SKILL.md` | manual |
+| `/setup` | `.claude/skills/setup/SKILL.md` | manual (first-time config) |
+| `/reset` | `.claude/skills/reset/SKILL.md` | manual (`--scope wiki\|raw\|log\|checkpoints\|all`) |
+| `/init` | `.claude/skills/init/SKILL.md` | manual |
+| `/prefill` | `.claude/skills/prefill/SKILL.md` | manual (`[domain] [--add concept]`) |
+| `/ingest` | `.claude/skills/ingest/SKILL.md` | manual |
+| `/empirical-ingest` | `.claude/skills/empirical-ingest/SKILL.md` | manual |
+| `/theory-ingest` | `.claude/skills/theory-ingest/SKILL.md` | manual |
+| `/variable-map` | `.claude/skills/variable-map/SKILL.md` | manual |
+| `/empirical-design` | `.claude/skills/empirical-design/SKILL.md` | manual |
+| `/stata-plan` | `.claude/skills/stata-plan/SKILL.md` | manual |
+| `/discover` | `.claude/skills/discover/SKILL.md` | manual / internal (called by `/ingest --discover`) |
+| `/ask` | `.claude/skills/ask/SKILL.md` | manual |
+| `/edit` | `.claude/skills/edit/SKILL.md` | manual |
+| `/check` | `.claude/skills/check/SKILL.md` | biweekly/manual |
+| `/daily-arxiv` | `.claude/skills/daily-arxiv/SKILL.md` | manual (cron-able) |
+| `/novelty` | `.claude/skills/novelty/SKILL.md` | manual |
+| `/review` | `.claude/skills/review/SKILL.md` | manual |
+| `/ideate` | `.claude/skills/ideate/SKILL.md` | manual |
+| `/exp-design` | `.claude/skills/exp-design/SKILL.md` | manual |
+| `/exp-run` | `.claude/skills/exp-run/SKILL.md` | manual (`<slug> [--collect] [--full] [--env local\|remote]`) |
+| `/exp-status` | `.claude/skills/exp-status/SKILL.md` | manual (`[--pipeline <slug>] [--collect-ready] [--auto-advance]`) |
+| `/exp-eval` | `.claude/skills/exp-eval/SKILL.md` | manual |
+| `/refine` | `.claude/skills/refine/SKILL.md` | manual |
+| `/paper-plan` | `.claude/skills/paper-plan/SKILL.md` | manual |
+| `/paper-draft` | `.claude/skills/paper-draft/SKILL.md` | manual |
+| `/paper-compile` | `.claude/skills/paper-compile/SKILL.md` | manual |
+| `/survey` | `.claude/skills/survey/SKILL.md` | manual |
+| `/research` | `.claude/skills/research/SKILL.md` | manual |
+| `/rebuttal` | `.claude/skills/rebuttal/SKILL.md` | manual |
