@@ -14,13 +14,13 @@ date_updated: 2026-06-12
 
 同花顺 iFinD 是与 [[wind]] 同类的本土金融数据终端，多数模块覆盖重叠。第三方评测的普遍口径是：功能覆盖约为 Wind 的九成、价格约为一半，API 支持 Python/C++/MATLAB 多语言；另类数据（如 ESG 评级转售）不如 Wind 全。对预算有限的课题组，iFinD 常作为 Wind 的平替或交叉验证源——尤其在机构投资者持股变动明细、基金重仓股变化、公告事件级数据上，两库互为校验。
 
-[[周绍妮-2017-机构投资者-国企-并购绩效]] 同时使用 Wind 与同花顺抓取 2010–2014 年机构投资者半年度持股明细，构造换手率三分组（A1 框架）。
+周绍妮-2017-机构投资者-国企-并购绩效 同时使用 Wind 与同花顺抓取 2010–2014 年机构投资者半年度持股明细，构造换手率三分组（A1 框架）。
 
 ## Fields
 
 周绍妮 (2017) 主要使用：
 
-- 机构投资者持股：每期机构投资者编码 × 公司 × 持股股数，计算 CR_buy / CR_Sell 与换手率 CR_{k,t}（详见 [[stable-institutional-investors-turnover]]、[[transactional-institutional-investors-turnover]]）。
+- 机构投资者持股：每期机构投资者编码 × 公司 × 持股股数，计算 CR_buy / CR_Sell 与换手率 CR_{k,t}（详见 stable-institutional-investors-turnover、transactional-institutional-investors-turnover）。
 - 基金类型分类：混合 / 债券 / 指数 / 其他，验证 A1 三分组与基金类型的对应。
 - 行情数据：股价 P_{i,t}（换手率分母市值标准化），与 [[csmar]] 行情库交叉验证。
 
@@ -52,8 +52,8 @@ date_updated: 2026-06-12
 
 ## Related Variables
 
-- [[stable-institutional-investors-turnover]] · [[transactional-institutional-investors-turnover]]：A1 换手率三分组的交易明细来源。
-- [[institutional-investor-holding]]：与 [[wind]]、[[csmar]] 交叉验证全口径机构持股。
+- stable-institutional-investors-turnover · transactional-institutional-investors-turnover：A1 换手率三分组的交易明细来源。
+- institutional-investor-holding：与 [[wind]]、[[csmar]] 交叉验证全口径机构持股。
 
 ## Sources
 

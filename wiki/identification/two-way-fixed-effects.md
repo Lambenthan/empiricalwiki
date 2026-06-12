@@ -38,7 +38,7 @@ date_updated: 2026-06-12
 
 - FE 逐层加入的系数轨迹表（pooled → 年度 FE → +个体 FE → +行业×年度 FE）：系数大幅漂移说明遗漏变量敏感。
 - Oster (2019) δ 界：用可观测选择推断不可观测选择的威胁程度。
-- 动态面板嫌疑（Y 自相关高、T 短）转 [[gmm-dynamic-panel]]。
+- 动态面板嫌疑（Y 自相关高、T 短）转 gmm-dynamic-panel。
 
 ## Limitations
 

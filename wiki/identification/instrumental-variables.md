@@ -46,5 +46,5 @@ date_updated: 2026-06-12
 
 - LATE 不等于 ATE：政策含义部分只对 complier 成立。
 - 第一阶段很强、排他性叙事很弱的 IV 比没有 IV 更危险——给了错误结论一个"已处理内生性"的外衣。
-- 与 [[difference-in-differences]]、[[heckman-treatment-effects]] 等互补使用时，明确各自针对哪一种内生性来源，不要堆砌。
+- 与 [[difference-in-differences]]、heckman-treatment-effects 等互补使用时，明确各自针对哪一种内生性来源，不要堆砌。
 - 模糊断点（[[regression-discontinuity]] 的 fuzzy 形态）本质是"越线"作 IV 的特例，弱第一阶段的诊断逻辑与本卡相同。

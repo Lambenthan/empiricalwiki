@@ -21,7 +21,7 @@ date_updated: 2026-06-12
 
 ## Fields
 
-[[徐灿宇-2023-异质机构投资者-实地调研-财务重述]] 使用：
+徐灿宇-2023-异质机构投资者-实地调研-财务重述 使用：
 
 - 内部控制指数（IC）：中介变量，刻画稳定型机构投资者改善内部治理的路径。
 - 财务重述记录：被解释变量构造（Restate=1 if 当年发生重述）。
@@ -54,8 +54,8 @@ date_updated: 2026-06-12
 
 ## Related Variables
 
-- [[financial-restatement]] — 由 DIB 财务重述明细生成。
-- [[internal-control-channel]] — 内部控制中介路径以 DIB 指数刻画。
+- financial-restatement — 由 DIB 财务重述明细生成。
+- internal-control-channel — 内部控制中介路径以 DIB 指数刻画。
 
 ## Sources
 
