@@ -39,7 +39,7 @@ Write-Host ""
 # -- Step 1: Check prerequisites -------------------------------------------
 Write-Info "Checking prerequisites..."
 
-# Python: prefer `python`, fall back to `py -3`
+# Python: prefer `python`, fall back to `python3`
 $PythonCmd = $null
 foreach ($candidate in @("python", "python3", "py")) {
     if (Get-Command $candidate -ErrorAction SilentlyContinue) {
@@ -52,6 +52,11 @@ if (-not $PythonCmd) {
     exit 1
 }
 
+# Windows PowerShell 5.1 turns native stderr into NativeCommandError when
+# $ErrorActionPreference=Stop — wrap native probes so failures reach the
+# friendly Write-Fail paths instead of a red exception dump.
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 $pyVersionRaw = & $PythonCmd --version 2>&1
 if ($pyVersionRaw -match "(\d+)\.(\d+)\.(\d+)") {
     $pyMajor = [int]$Matches[1]
@@ -73,6 +78,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 Write-Ok "pip available"
+$ErrorActionPreference = $prevEAP
 
 # Claude Code
 if (Get-Command claude -ErrorAction SilentlyContinue) {
@@ -80,14 +86,20 @@ if (Get-Command claude -ErrorAction SilentlyContinue) {
 } else {
     Write-Warn2 "Claude Code not found."
     Write-Host ""
-    Write-Host "  Claude Code is required to use OmegaWiki skills."
+    Write-Host "  Claude Code is required to use EmpiricalWiki skills."
     Write-Host "  Install with:"
     Write-Host "    npm install -g @anthropic-ai/claude-code"
     Write-Host ""
-    $reply = Read-Host "  Continue setup without Claude Code? [y/N]"
-    if ($reply -notmatch '^[Yy]$') {
-        Write-Host "  Install Claude Code first, then re-run setup.ps1"
-        exit 1
+    # Prompt only when a human is attached; agent shells have no interactive
+    # host and Read-Host would hang or throw.
+    if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+        $reply = Read-Host "  Continue setup without Claude Code? [y/N]"
+        if ($reply -notmatch '^[Yy]$') {
+            Write-Host "  Install Claude Code first, then re-run setup.ps1"
+            exit 1
+        }
+    } else {
+        Write-Warn2 "Non-interactive shell: continuing without Claude Code (install it later)."
     }
 }
 
@@ -98,7 +110,7 @@ Write-Info "Setting up Python environment..."
 Push-Location $ProjectRoot
 try {
     if ($env:VIRTUAL_ENV -or ($env:CONDA_DEFAULT_ENV -and $env:CONDA_DEFAULT_ENV -ne "base")) {
-        Write-Warn2 "Active environment detected; setup always installs OmegaWiki into .venv"
+        Write-Warn2 "Active environment detected; setup always installs EmpiricalWiki into .venv"
     }
 
     if (Test-Path ".venv") {
@@ -139,6 +151,11 @@ try {
         Copy-Item "config\settings.local.json.example" ".claude\settings.local.json"
         Write-Ok "Created .claude\settings.local.json"
     }
+
+    # Seed the wiki scaffold (index.md / log.md / graph). These are gitignored
+    # working-tree files, so a fresh clone lacks them; init is write-if-missing.
+    & $VenvPython "tools\research_wiki.py" init wiki | Out-Null
+    Write-Ok "Wiki scaffold ready (index.md / log.md / graph)"
 
     # -- Step 3b: Activate language files ----------------------------------
     Write-Host ""

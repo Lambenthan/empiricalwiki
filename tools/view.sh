@@ -32,11 +32,18 @@ esac
 
 command -v node >/dev/null 2>&1 || { echo "✗ 需要先安装 Node.js: https://nodejs.org"; exit 1; }
 command -v git  >/dev/null 2>&1 || { echo "✗ 需要 git"; exit 1; }
+# Quartz v4.5.2 requires node >= 22 (its package.json engines field).
+NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]')
+if [ "$NODE_MAJOR" -lt 22 ]; then
+  echo "✗ Quartz $QUARTZ_REF 需要 Node.js >= 22,当前为 $(node --version)"
+  exit 1
+fi
 
 if [ "$mode" = "update" ] && [ -d "$QZ" ]; then
-  echo "↻ 更新 Quartz ..."
-  git -C "$QZ" pull --ff-only || true
-  ( cd "$QZ" && npm i )
+  # The clone is a shallow checkout of a tag (detached HEAD) — `git pull`
+  # can never advance it. Updating means re-cloning the pinned ref.
+  echo "↻ 更新 Quartz(重新克隆 $QUARTZ_REF)..."
+  rm -rf "$QZ"
 fi
 
 if [ ! -d "$QZ" ]; then

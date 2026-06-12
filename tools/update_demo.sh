@@ -20,9 +20,11 @@ trap 'rm -f "$TMP_INDEX"' EXIT
 export GIT_INDEX_FILE="$TMP_INDEX"
 
 # Start from main's tree (README, tools, presets …), overlay the full wiki.
+# Anchored to main explicitly: running this from another branch (e.g.
+# feat/*) must not silently fold that branch's files into demo.
 # Editor/plugin state stays out: .obsidian holds plugin configs that can
 # contain API keys (GitHub secret scanning once blocked exactly this).
-git read-tree HEAD
+git read-tree 'main^{tree}'
 git add -f -- wiki/ \
   ':!wiki/.obsidian*' ':!wiki/.trash' ':!wiki/.claude'
 TREE=$(git write-tree)
