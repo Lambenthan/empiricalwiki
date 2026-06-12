@@ -10,3 +10,4 @@
 ## [2026-06-03] empirical-design | 生成 耐心资本→绿色化转型 研究设计
 ## [2026-06-03] stata-plan | 耐心资本→绿色化转型 | output: outputs/stata-plan-pc-green-transformation-2026-06-03.md
 ## [2026-06-12] edit | datasets 预置卡升级：csmar、hua-zheng-esg 重写为 schema 参考卡（web 核实：华证九档评级修正七档笔误、1.0/2.0/2022-11 版本断点、学术支持计划；CSMAR 19 系列 200+ 子库口径、行业代码两版、合并键陷阱），附来源 URL
+## [2026-06-12] edit | 方向一内容资产：9 张 datasets 预置卡（cnrds/dib/wind/tonghuashun/wingo/ccer/cpdp 升级，机构事实 web 核实：CNRDS 运营方上海经禾、DIB 分项指数 2013 起、CPDP 标准定义 He et al. 2018）+ 5 张 identification 通用策略卡（DID/PSM/IV/RDD/TWFE）+ tools/stata-templates 五套 do 模板接入 /stata-plan

@@ -19,6 +19,8 @@ argument-hint: "<empirical-design-path-or-topic> [--write-do]"
 - `wiki/models/*.md`
 - `wiki/robustness/*.md`
 - `wiki/heterogeneity/*.md`
+- `wiki/identification/*.md`（设计涉及 DID / PSM / IV / RDD / TWFE 时优先读对应预置策略卡）
+- `tools/stata-templates/*.do`（预置模板：twfe / did_staggered / psm / iv_2sls / rdd；`--write-do` 时以匹配的模板为骨架起点，按设计文档改写变量与参数）
 - 项目中的 `.do`、`.dta`、`.xlsx`、变量字典和 README
 
 ### Step 2: Produce Stata Execution Plan

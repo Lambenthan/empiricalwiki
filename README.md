@@ -351,8 +351,9 @@ EmpiricalWiki ships in English and Chinese. The Chinese version is recommended f
 - [X] End-to-end pipeline validated on a real empirical research project
 - [X] Bidirectional wikilink + graph layer for empirical edges
 - [X] Bilingual i18n (EN + ZH)
-- [ ] Pre-built Stata template library (PSM / DID / IV / 双向 FE)
-- [ ] CSMAR / WRDS / 华证 ESG schema cards in `datasets/`
+- [X] Pre-built Stata template library — `tools/stata-templates/` (TWFE / staggered DID / PSM / IV / RDD), wired into `/stata-plan --write-do`
+- [X] Preset schema cards shipped with the repo — 9 `datasets/` cards (CSMAR, Wind, CNRDS, 华证 ESG, DIB, iFinD, WinGo, CCER, patent sources) + 5 `identification/` strategy cards (DID, PSM, IV, RDD, TWFE), every institutional fact web-verified with sources
+- [ ] WRDS / international dataset schema cards
 - [ ] Demo wiki for non-PC topics (managerial myopia, ESG performance, ...)
 - [ ] Cross-project memory consolidation — when a research project wraps up, `/refine` distills what worked (variable variants, identification choices, dead ends) back into the wiki so the next project starts warmer
 - [ ] Query layer exposed as an MCP server, so any agent — not just the one in this repo — can search the wiki

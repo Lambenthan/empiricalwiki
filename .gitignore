@@ -83,6 +83,18 @@ wiki/outputs/*
 # Preset schema cards — shipped with the repo as starter content
 !wiki/datasets/csmar.md
 !wiki/datasets/hua-zheng-esg.md
+!wiki/datasets/wind.md
+!wiki/datasets/cnrds.md
+!wiki/datasets/dib.md
+!wiki/datasets/tonghuashun.md
+!wiki/datasets/wingo-financial-text-platform.md
+!wiki/datasets/ccer-ownership-database.md
+!wiki/datasets/cpdp-patent-database.md
+!wiki/identification/difference-in-differences.md
+!wiki/identification/propensity-score-matching.md
+!wiki/identification/instrumental-variables.md
+!wiki/identification/regression-discontinuity.md
+!wiki/identification/two-way-fixed-effects.md
 
 # Book project (《EmpiricalWiki 实战手册》)
 # manim 生产脚本与文献清单不公开；章节正文和 GIF 公开
