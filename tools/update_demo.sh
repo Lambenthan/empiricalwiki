@@ -20,8 +20,11 @@ trap 'rm -f "$TMP_INDEX"' EXIT
 export GIT_INDEX_FILE="$TMP_INDEX"
 
 # Start from main's tree (README, tools, presets …), overlay the full wiki.
+# Editor/plugin state stays out: .obsidian holds plugin configs that can
+# contain API keys (GitHub secret scanning once blocked exactly this).
 git read-tree HEAD
-git add -f wiki/
+git add -f -- wiki/ \
+  ':!wiki/.obsidian*' ':!wiki/.trash' ':!wiki/.claude'
 TREE=$(git write-tree)
 unset GIT_INDEX_FILE
 
