@@ -1712,7 +1712,7 @@ def transition(path: str, new_status: str, reason: str = "") -> None:
     tmp = p.with_suffix(".tmp")
     try:
         tmp.write_text(content, encoding="utf-8")
-        tmp.rename(p)
+        tmp.replace(p)  # replace: atomic and works when target exists (Windows-safe)
     finally:
         if tmp.exists():
             tmp.unlink()
@@ -2121,9 +2121,13 @@ def _parse_scalar(val: str):
     """Parse a YAML scalar value to Python type."""
     if not val:
         return ""
-    # Strip quotes
+    # Strip quotes; double-quoted strings unescape \" and \\ written by
+    # _serialize_frontmatter so values round-trip unchanged.
     if len(val) >= 2 and val[0] in ('"', "'") and val[-1] == val[0]:
-        return val[1:-1]
+        inner = val[1:-1]
+        if val[0] == '"':
+            inner = inner.replace('\\"', '"').replace("\\\\", "\\")
+        return inner
     # Inline list: [a, b, c]
     if val.startswith("[") and val.endswith("]"):
         inner = val[1:-1]
@@ -2305,9 +2309,12 @@ def _serialize_frontmatter(fm: dict) -> str:
         elif isinstance(val, (int, float)):
             lines.append(f"{key}: {val}")
         elif isinstance(val, str):
-            # Quote strings that contain special chars
+            # Quote strings that contain special chars; escape embedded double
+            # quotes, otherwise `title: "He said "x""` corrupts the YAML and
+            # the value is truncated on the next parse.
             if any(c in val for c in ":#{}[]&*!|>',\""):
-                lines.append(f'{key}: "{val}"')
+                escaped = val.replace("\\", "\\\\").replace('"', '\\"')
+                lines.append(f'{key}: "{escaped}"')
             else:
                 lines.append(f"{key}: {val}")
         elif isinstance(val, list):
@@ -2448,7 +2455,7 @@ def set_meta(path: str, field: str, value: str, append: bool = False) -> None:
     tmp = p.with_suffix(".tmp")
     try:
         tmp.write_text(new_content, encoding="utf-8")
-        tmp.rename(p)
+        tmp.replace(p)  # replace: atomic and works when target exists (Windows-safe)
     finally:
         if tmp.exists():
             tmp.unlink()
@@ -2670,6 +2677,10 @@ def main():
     p = sub.add_parser("find", help="Search entities by frontmatter fields")
     p.add_argument("wiki_root")
     p.add_argument("entity_type", choices=ENTITY_DIRS)
+    # Capture trailing "--field value" filter pairs. Without REMAINDER,
+    # argparse rejects them as unrecognized before the manual parsing below
+    # ever runs — the documented filter syntax was dead on arrival.
+    p.add_argument("filters", nargs=argparse.REMAINDER)
 
     # find-similar-concept
     p = sub.add_parser("find-similar-concept",
@@ -2803,10 +2814,10 @@ def main():
     elif args.command == "set-meta":
         set_meta(args.path, args.field, args.value, args.append)
     elif args.command == "find":
-        # Parse remaining args as --field value pairs
+        # args.filters holds the trailing "--field value" pairs via REMAINDER
+        # (indexing sys.argv broke when the command appeared elsewhere in argv).
         filters: list[tuple[str, str]] = []
-        remaining = sys.argv[sys.argv.index("find") + 3:]  # skip find, wiki_root, entity_type
-        it = iter(remaining)
+        it = iter(args.filters)
         for arg in it:
             if arg.startswith("--"):
                 field_name = arg[2:]

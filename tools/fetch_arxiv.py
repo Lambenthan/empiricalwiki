@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import socket
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -47,6 +48,10 @@ def fetch_recent(
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     papers: list[dict] = []
 
+    # feedparser opens the URL with urllib and no timeout — a slow/blackholed
+    # arXiv endpoint would hang /daily-arxiv forever. Cap every socket op.
+    socket.setdefaulttimeout(30)
+
     for cat in cats:
         try:
             feed = feedparser.parse(f"https://arxiv.org/rss/{cat}")
@@ -65,16 +70,17 @@ def fetch_recent(
 
         for entry in feed.entries:
             # --- time filter ---
-            published_str = entry.get("published", "")
-            if published_str:
+            # arXiv RSS dates are RFC822 ("Fri, 12 Jun 2026 00:00:00 -0400"),
+            # which fromisoformat() can never parse — use feedparser's own
+            # parsed struct_time so the --hours filter actually works.
+            parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+            if parsed:
                 try:
-                    pub_dt = datetime.fromisoformat(
-                        published_str.replace("Z", "+00:00")
-                    )
+                    pub_dt = datetime(*parsed[:6], tzinfo=timezone.utc)
                     if pub_dt < cutoff:
                         continue
                 except (ValueError, TypeError):
-                    # Unparseable date — keep the entry, warn once per feed
+                    # Unparseable date — keep the entry
                     pass
 
             papers.append(

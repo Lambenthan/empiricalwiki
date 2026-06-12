@@ -28,7 +28,7 @@ import json as json_module
 import os
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # Schema constants — single source of truth shared with research_wiki.py.
 # See tools/_schemas.py for the spec; do not duplicate the definitions here.
@@ -135,15 +135,21 @@ def extract_frontmatter_value(content: str, field: str) -> str | None:
 
 
 def find_all_pages(wiki_dir: Path) -> dict[str, Path]:
-    """Map slug -> file path for all wiki pages."""
+    """Map "subdir/slug" -> file path for all wiki pages.
+
+    Keyed by the type-qualified name, not the bare slug: the schema allows
+    the same slug in different directories (variables/patient-capital.md and
+    concepts/patient-capital.md), and a bare-slug dict would let the later
+    directory shadow the earlier one — the shadowed page would silently skip
+    every lint check.
+    """
     pages = {}
     for subdir in ENTITY_DIRS:
         dir_path = wiki_dir / subdir
         if not dir_path.exists():
             continue
         for f in dir_path.glob("*.md"):
-            slug = f.stem
-            pages[slug] = f
+            pages[f"{subdir}/{f.stem}"] = f
     return pages
 
 
@@ -152,7 +158,7 @@ def check_missing_fields(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIss
     issues = []
     for slug, fpath in pages.items():
         content = fpath.read_text(encoding="utf-8")
-        rel = str(fpath.relative_to(wiki_dir))
+        rel = fpath.relative_to(wiki_dir).as_posix()
         page_type = fpath.parent.name
         fm = extract_frontmatter(content)
 
@@ -173,16 +179,27 @@ def check_missing_fields(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIss
 def check_broken_links(wiki_dir: Path, pages: dict[str, Path]) -> tuple[list[LintIssue], dict[str, set]]:
     """Check wikilinks and track incoming links."""
     issues = []
-    incoming: dict[str, set[str]] = {slug: set() for slug in pages}
+    incoming: dict[str, set[str]] = {key: set() for key in pages}
 
-    for slug, fpath in pages.items():
+    # Wikilinks use bare slugs; pages are keyed "subdir/slug". A bare slug may
+    # legitimately resolve to several pages — credit the link to all of them.
+    by_slug: dict[str, list[str]] = {}
+    for key in pages:
+        by_slug.setdefault(key.split("/", 1)[1], []).append(key)
+
+    for key, fpath in pages.items():
         content = fpath.read_text(encoding="utf-8")
-        rel = str(fpath.relative_to(wiki_dir))
+        rel = fpath.relative_to(wiki_dir).as_posix()
 
         for match in WIKILINK_RE.finditer(content):
             target = match.group(1).strip()
-            if target in pages:
-                incoming.setdefault(target, set()).add(slug)
+            if target in pages:  # type-qualified link, e.g. [[variables/x]]
+                incoming[target].add(key)
+                continue
+            tkeys = by_slug.get(target)
+            if tkeys:
+                for tkey in tkeys:
+                    incoming[tkey].add(key)
             else:
                 issues.append(LintIssue("🟡", "broken-link", rel,
                                         f"[[{target}]] → file not found",
@@ -204,7 +221,7 @@ def check_orphan_pages(wiki_dir: Path, pages: dict[str, Path],
     issues = []
     for slug, fpath in pages.items():
         if not incoming.get(slug):
-            rel = str(fpath.relative_to(wiki_dir))
+            rel = fpath.relative_to(wiki_dir).as_posix()
             issues.append(LintIssue("🔵", "orphan", rel, "No incoming links"))
     return issues
 
@@ -214,7 +231,7 @@ def check_field_values(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIssue
     issues = []
     for slug, fpath in pages.items():
         content = fpath.read_text(encoding="utf-8")
-        rel = str(fpath.relative_to(wiki_dir))
+        rel = fpath.relative_to(wiki_dir).as_posix()
         page_type = fpath.parent.name
 
         # Check enum fields from the shared schema registry.
@@ -253,7 +270,7 @@ def check_idea_failure_reason(wiki_dir: Path, pages: dict[str, Path]) -> list[Li
         if fpath.parent.name != "ideas":
             continue
         content = fpath.read_text(encoding="utf-8")
-        rel = str(fpath.relative_to(wiki_dir))
+        rel = fpath.relative_to(wiki_dir).as_posix()
         status = extract_frontmatter_value(content, "status")
         if status == "failed":
             reason = extract_frontmatter_value(content, "failure_reason")
@@ -271,7 +288,7 @@ def check_experiment_claim_link(wiki_dir: Path, pages: dict[str, Path]) -> list[
         if fpath.parent.name != "experiments":
             continue
         content = fpath.read_text(encoding="utf-8")
-        rel = str(fpath.relative_to(wiki_dir))
+        rel = fpath.relative_to(wiki_dir).as_posix()
         target = extract_frontmatter_value(content, "target_claim")
         if target:
             claim_path = wiki_dir / "claims" / f"{target}.md"
@@ -293,7 +310,7 @@ def check_xref_asymmetry(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIss
 
     for slug, fpath in pages.items():
         content = fpath.read_text(encoding="utf-8")
-        rel = str(fpath.relative_to(wiki_dir))
+        rel = fpath.relative_to(wiki_dir).as_posix()
         page_type = fpath.parent.name
 
         # concepts key_papers ↔ papers Related
@@ -566,7 +583,7 @@ def check_content_quality(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIs
     issues = []
     for slug, fpath in pages.items():
         content = fpath.read_text(encoding="utf-8")
-        rel = str(fpath.relative_to(wiki_dir))
+        rel = fpath.relative_to(wiki_dir).as_posix()
         page_type = fpath.parent.name
 
         # importance=5 paper should be referenced by at least one concept
@@ -577,7 +594,7 @@ def check_content_quality(wiki_dir: Path, pages: dict[str, Path]) -> list[LintIs
                 for cslug, cpath in pages.items():
                     if cpath.parent.name == "concepts":
                         cc = cpath.read_text(encoding="utf-8")
-                        if slug in cc:
+                        if fpath.stem in cc:
                             referenced = True
                             break
                 if not referenced:
@@ -782,7 +799,7 @@ def _fix_missing_field(wiki_dir: Path, issue: LintIssue, dry_run: bool) -> FixRe
         return None
     field = m.group(1)
 
-    page_type = issue.file.split("/")[0]
+    page_type = PurePosixPath(issue.file).parts[0]
     defaults = FIELD_DEFAULTS.get(page_type, {})
     if field not in defaults:
         return None

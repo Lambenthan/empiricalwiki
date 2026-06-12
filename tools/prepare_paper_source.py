@@ -14,6 +14,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import tarfile
 import zipfile
 from pathlib import Path
@@ -762,6 +763,18 @@ def main() -> None:
     source = Path(args.source)
     if not source.is_absolute():
         source = _resolve_project_path(raw_root, args.source)
+
+    # A source outside the project root would crash later with a bare
+    # relative_to ValueError; fail fast with a structured error instead.
+    try:
+        source.resolve().relative_to(_project_root(raw_root))
+    except ValueError:
+        print(json.dumps({
+            "usable": False,
+            "error": f"source must live inside the project root "
+                     f"({_project_root(raw_root)}); got: {source}",
+        }, ensure_ascii=False, indent=2))
+        sys.exit(1)
 
     result = prepare_paper_source(source, raw_root, title=args.title, arxiv_id=args.arxiv_id)
     print(json.dumps(result, ensure_ascii=False, indent=2))

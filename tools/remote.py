@@ -530,7 +530,12 @@ def cmd_setup_env(cfg: dict, args: argparse.Namespace) -> None:
     transport_parts += ["-o", "BatchMode=yes"]
     transport_parts += [req_file, f"{cfg['user']}@{cfg['host']}:{work_dir}/"]
 
-    proc = subprocess.run(transport_parts, capture_output=True, text=True, timeout=30)
+    try:
+        proc = subprocess.run(transport_parts, capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        _error("scp timed out after 30s")
+    except FileNotFoundError:
+        _error("scp not found on PATH")
     if proc.returncode != 0:
         _error(f"scp failed: {proc.stderr.strip()}")
 
@@ -558,6 +563,17 @@ def _validate_name(name: str) -> str:
     return name
 
 
+def _session_listed(screen_ls_output: str, name: str) -> bool:
+    """Exact-match a session in `screen -ls` output.
+
+    Substring matching is wrong: an existing session "exp-2" would make a
+    lookup for "exp" report a false positive. screen lists sessions as
+    "\t<pid>.<name>\t(Detached)", so anchor on the "<pid>.<name>" token.
+    """
+    return bool(re.search(r'(?m)^\s*\d+\.' + re.escape(name) + r'(?=\s|$)',
+                          screen_ls_output or ""))
+
+
 def cmd_launch(cfg: dict, args: argparse.Namespace) -> None:
     """Launch a screen session on the remote server."""
     session_name = _validate_name(args.name)
@@ -567,7 +583,7 @@ def cmd_launch(cfg: dict, args: argparse.Namespace) -> None:
 
     # Check if session already exists
     rc, stdout, _ = run_ssh(cfg, "screen -ls", timeout=10)
-    if session_name in (stdout or ""):
+    if _session_listed(stdout, session_name):
         _error(f"Screen session '{session_name}' already exists on {cfg['host']}")
 
     # Build log file path
@@ -591,7 +607,12 @@ def cmd_launch(cfg: dict, args: argparse.Namespace) -> None:
     inner_cmd = f"cd {q_work_dir}"
     if prefix:
         inner_cmd += f" && {prefix}"
-    inner_cmd += f" && {gpu_part}{shlex.quote(user_cmd)} 2>&1 | tee {q_log_file}"
+    # user_cmd is a complete shell command line (e.g. "python train.py --epochs 5").
+    # Do NOT shlex.quote it: quoting collapses it into a single token and bash
+    # would look for an executable literally named "python train.py --epochs 5".
+    # Quote-safety for the surrounding screen invocation is handled by the
+    # single-quote escaping below.
+    inner_cmd += f" && {gpu_part}{user_cmd} 2>&1 | tee {q_log_file}"
 
     # Escape for SSH + screen
     escaped_inner = inner_cmd.replace("'", "'\\''")
@@ -602,7 +623,7 @@ def cmd_launch(cfg: dict, args: argparse.Namespace) -> None:
 
     # Verify launch
     rc, stdout, _ = run_ssh(cfg, "screen -ls", timeout=10)
-    verified = session_name in (stdout or "")
+    verified = _session_listed(stdout, session_name)
 
     _ok({
         "host": cfg["host"],
@@ -622,7 +643,7 @@ def cmd_check(cfg: dict, args: argparse.Namespace) -> None:
 
     # Check screen session
     rc, stdout, _ = run_ssh(cfg, "screen -ls", timeout=10)
-    alive = session_name in (stdout or "")
+    alive = _session_listed(stdout, session_name)
 
     # Try to get last lines from log file
     log_file = f"logs/{session_name}.log"
