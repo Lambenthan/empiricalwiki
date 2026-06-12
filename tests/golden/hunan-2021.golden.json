@@ -1,0 +1,22 @@
+{
+  "description": "胡楠等 (2021) 管理者短视主义文本法——文本类实证 ingest 基准。校验值取自 demo 分支已人工核对的抽取结果（13 条边）。",
+  "ingest_skill": "/empirical-ingest",
+  "paper_title_keywords": ["管理者短视", "文本分析"],
+  "min_edge_counts": {
+    "operationalizes": 2,
+    "uses_dataset": 2,
+    "estimates_model": 1,
+    "tests_mechanism": 1,
+    "uses_heterogeneity_split": 3,
+    "uses_robustness_check": 1,
+    "addresses_endogeneity_with": 3
+  },
+  "required_pages": [
+    { "type": "variables", "keyword": "管理者短视" },
+    { "type": "variables", "keyword": "长期投资" },
+    { "type": "datasets", "keyword": "文本" },
+    { "type": "heterogeneity", "keyword": "机构投资者" },
+    { "type": "heterogeneity", "keyword": "分析师" },
+    { "type": "identification", "keyword": "文本分析" }
+  ]
+}

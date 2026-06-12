@@ -248,7 +248,7 @@ The 10 entities below replace the generic `entity / concept / synthesis` taxonom
 | **Identification** | `identification/` | One strategy per page (IV / Heckman / PSM / DID …)，assumptions, threats, implementation, diagnostics                                                                                                               |
 | **Robustness**     | `robustness/`     | One check per page (Sasabuchi U-shape / placebo / sub-period / alternative DV …)，purpose, when to use, expected table pattern                                                                                      |
 | **Heterogeneity**  | `heterogeneity/`  | One split per page (产权 / 行业 / 地区 / 规模 …)，grouping rule, theoretical rationale, sample split                                                                                                                |
-| **Table**          | `tables/`         | One reproduction target per page; columns, key coefficients, interpretation, reproduction notes                                                                                                                      |
+| **Table**          | `tables/`         | One reproduction target per page; columns, key coefficients, interpretation, reproduction notes. **Created on demand** — ingest summarizes key tables on the paper card; ask explicitly when you want a table-level reproduction page |
 
 The general LLM-wiki types (`concepts/` / `topics/` / `claims/` / `ideas/` / `experiments/` / `people/` / `Summary/` / `foundations/`) remain available for non-empirical content (theory papers, methodology surveys, your own research ideas).
 

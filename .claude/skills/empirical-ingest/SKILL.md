@@ -24,7 +24,7 @@ argument-hint: "<local-pdf-or-tex-path> [--topic <research-topic>]"
   - `wiki/identification/*.md`
   - `wiki/robustness/*.md`
   - `wiki/heterogeneity/*.md`
-  - `wiki/tables/*.md`
+  - `wiki/tables/*.md`（仅当用户明确要求逐表复现时创建；默认把关键表格及结论写进论文卡，不单独建页）
 - `wiki/index.md`、`wiki/log.md`
 - `wiki/graph/edges.jsonl`
 

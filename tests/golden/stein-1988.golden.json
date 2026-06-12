@@ -1,0 +1,19 @@
+{
+  "description": "Stein (1988) Takeover Threats and Managerial Myopia——理论建模 ingest 基准。校验值取自 demo 分支已人工核对的抽取结果（15 条边）。",
+  "ingest_skill": "/theory-ingest",
+  "paper_title_keywords": ["Takeover", "Myopia"],
+  "min_edge_counts": {
+    "assumes": 5,
+    "proves": 6,
+    "formalizes_mechanism": 1,
+    "derived_from": 2
+  },
+  "required_pages": [
+    { "type": "assumptions", "keyword": "信息不对称" },
+    { "type": "assumptions", "keyword": "收购" },
+    { "type": "propositions", "keyword": "均衡" },
+    { "type": "propositions", "keyword": "福利" },
+    { "type": "mechanisms", "keyword": "管理者短视" },
+    { "type": "foundations", "keyword": "信号" }
+  ]
+}
