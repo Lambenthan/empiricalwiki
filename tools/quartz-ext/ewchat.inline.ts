@@ -112,21 +112,46 @@ function mdToHtml(src: string): string {
   return out.join("")
 }
 
-const TOOL_ICONS: Record<string, string> = {
-  Read: "📄", Write: "✎", Edit: "✎", MultiEdit: "✎", Bash: "❯", Glob: "⌕", Grep: "⌕",
-  WebSearch: "🌐", WebFetch: "🌐", Task: "✦", Skill: "✦", TodoWrite: "☑", AskUserQuestion: "?",
+// ---------- tool registry ----------
+// Every tool the Agent SDK can emit gets a glyph (text, no emoji), a Chinese
+// label, and a purpose-built one-line summary. Unknown tools and MCP tools
+// degrade gracefully instead of showing raw internals.
+const shortPath = (p: any) => String(p || "").split("/").filter(Boolean).slice(-2).join("/")
+const shortUrl = (u: any) => { try { const x = new URL(String(u)); return x.host + (x.pathname.length > 1 ? x.pathname.slice(0, 40) : "") } catch { return String(u || "").slice(0, 60) } }
+type ToolMeta = { glyph: string; label: string; arg: (input: any) => string }
+const TOOL_META: Record<string, ToolMeta> = {
+  Read:        { glyph: "▤", label: "读取",     arg: (i) => shortPath(i?.file_path) + (i?.offset ? ` :${i.offset}` : "") },
+  Write:       { glyph: "✎", label: "写入",     arg: (i) => shortPath(i?.file_path) },
+  Edit:        { glyph: "✎", label: "编辑",     arg: (i) => shortPath(i?.file_path) },
+  MultiEdit:   { glyph: "✎", label: "批量编辑", arg: (i) => shortPath(i?.file_path) + (Array.isArray(i?.edits) ? `（${i.edits.length} 处）` : "") },
+  NotebookEdit:{ glyph: "✎", label: "编辑笔记本", arg: (i) => shortPath(i?.notebook_path) },
+  Bash:        { glyph: "❯", label: "终端",     arg: (i) => String(i?.description || i?.command || "").slice(0, 120) },
+  BashOutput:  { glyph: "❯", label: "终端输出", arg: () => "查看后台任务输出" },
+  KillShell:   { glyph: "❯", label: "终止任务", arg: () => "" },
+  Glob:        { glyph: "⌕", label: "找文件",   arg: (i) => String(i?.pattern || "") },
+  Grep:        { glyph: "⌕", label: "搜代码",   arg: (i) => String(i?.pattern || "") + (i?.path ? `  ${shortPath(i.path)}` : "") },
+  WebSearch:   { glyph: "◎", label: "联网搜索", arg: (i) => String(i?.query || "").slice(0, 80) },
+  WebFetch:    { glyph: "◎", label: "抓取网页", arg: (i) => shortUrl(i?.url) },
+  Task:        { glyph: "✦", label: "子代理",   arg: (i) => String(i?.description || "").slice(0, 80) },
+  Agent:       { glyph: "✦", label: "子代理",   arg: (i) => String(i?.description || "").slice(0, 80) },
+  Skill:       { glyph: "✦", label: "技能",     arg: (i) => "/" + String(i?.skill || "") + (i?.args ? " " + String(i.args).slice(0, 60) : "") },
+  SlashCommand:{ glyph: "✦", label: "命令",     arg: (i) => String(i?.command || "").slice(0, 80) },
+  TodoWrite:   { glyph: "▣", label: "任务清单", arg: (i) => { const ts = Array.isArray(i?.todos) ? i.todos : []; const doing = ts.find((t: any) => t.status === "in_progress"); return `${ts.filter((t: any) => t.status === "completed").length}/${ts.length}${doing ? " · " + String(doing.content).slice(0, 40) : ""}` } },
+  AskUserQuestion: { glyph: "?", label: "提问", arg: () => "" },
+  ExitPlanMode:    { glyph: "▷", label: "提交计划", arg: () => "" },
+  ToolSearch:  { glyph: "⌕", label: "找工具",   arg: (i) => String(i?.query || "").slice(0, 60) },
+  WebView:     { glyph: "◎", label: "查看页面", arg: (i) => shortUrl(i?.url) },
 }
-function toolArg(name: string, input: any): string {
-  if (!input) return ""
-  if (name === "Bash") return String(input.command || "").slice(0, 120)
-  if (input.file_path) return String(input.file_path).split("/").slice(-2).join("/")
-  if (input.path) return String(input.path)
-  if (input.pattern) return String(input.pattern)
-  if (input.query) return String(input.query)
-  if (input.url) return String(input.url)
-  if (input.skill) return String(input.skill)
-  if (input.description) return String(input.description)
-  return ""
+function toolMeta(name: string): ToolMeta {
+  if (TOOL_META[name]) return TOOL_META[name]
+  // MCP tools arrive as mcp__<server>__<tool>
+  const m = /^mcp__([^_]+(?:_[^_]+)*?)__(.+)$/.exec(name)
+  if (m) return { glyph: "◇", label: "MCP·" + m[1], arg: (i) => m[2] + (i && (i.query || i.q) ? `  ${String(i.query || i.q).slice(0, 50)}` : "") }
+  return { glyph: "›", label: name, arg: (i) => {
+    if (!i) return ""
+    for (const k of ["file_path", "path", "pattern", "query", "url", "description"]) if (i[k]) return String(i[k]).slice(0, 80)
+    return ""
+  } }
 }
 
 function setup() {
@@ -437,22 +462,35 @@ function setup() {
     }
     return wrap
   }
+  function buildTodoList(t: Tool): HTMLElement | null {
+    if (t.name !== "TodoWrite" || !Array.isArray(t.input?.todos)) return null
+    const wrap = document.createElement("div"); wrap.className = "ew-todo"
+    for (const td of t.input.todos) {
+      const li = document.createElement("div"); li.className = "ew-todo-item ew-todo-" + (td.status || "pending")
+      const mk = td.status === "completed" ? "✓" : td.status === "in_progress" ? "▸" : "·"
+      li.textContent = `${mk} ${String(td.content || "").slice(0, 90)}`
+      wrap.appendChild(li)
+    }
+    return wrap
+  }
   function renderTool(msg: Msg, row: HTMLElement) {
     const t = msg.tool!
+    const meta = toolMeta(t.name)
     const head = document.createElement("button")
     head.className = "ew-tool-head"
-    const ic = document.createElement("span"); ic.className = "ew-tool-icon"; ic.textContent = TOOL_ICONS[t.name] || "›"
-    const nm = document.createElement("span"); nm.className = "ew-tool-name"; nm.textContent = t.name
-    const sm = document.createElement("span"); sm.className = "ew-tool-summary"; sm.textContent = toolArg(t.name, t.input)
+    head.title = t.name // 原始工具名悬浮可见
+    const ic = document.createElement("span"); ic.className = "ew-tool-icon"; ic.textContent = meta.glyph
+    const nm = document.createElement("span"); nm.className = "ew-tool-name"; nm.textContent = meta.label
+    const sm = document.createElement("span"); sm.className = "ew-tool-summary"; sm.textContent = meta.arg(t.input)
     const st = document.createElement("span"); st.className = "ew-tool-status " + (t.isError ? "st-error" : t.done ? "st-done" : "st-run"); st.textContent = t.isError ? "✕" : t.done ? "✓" : "◍"
     head.append(ic, nm, sm, st)
     row.appendChild(head)
-    const diff = buildDiff(t)
-    if (diff || t.result) {
+    const rich = buildDiff(t) || buildTodoList(t)
+    if (rich || t.result) {
       const body = document.createElement("div"); body.className = "ew-tool-content"
-      if (diff) body.appendChild(diff)
-      if (t.result && !diff) { const pre = document.createElement("div"); pre.className = "ew-tool-lines"; pre.textContent = t.result.length > 1800 ? t.result.slice(0, 1800) + "\n… 已截断" : t.result; body.appendChild(pre) }
-      body.style.display = diff ? "block" : "none"
+      if (rich) body.appendChild(rich)
+      if (t.result && !rich) { const pre = document.createElement("div"); pre.className = "ew-tool-lines"; pre.textContent = t.result.length > 1800 ? t.result.slice(0, 1800) + "\n… 已截断" : t.result; body.appendChild(pre) }
+      body.style.display = rich ? "block" : "none"
       head.classList.add("ew-clickable")
       head.addEventListener("click", () => { body.style.display = body.style.display === "none" ? "block" : "none" })
       row.appendChild(body)
@@ -585,10 +623,13 @@ function setup() {
           body.style.display = busy && isStreamConv && idx === thinkIdx ? "block" : "none"
           head.addEventListener("click", () => { body.style.display = body.style.display === "none" ? "block" : "none" })
           row.append(head, body)
+          if (isStreamConv && idx === typeTarget && typeKind === "txt") liveBody = body
         } else { head.textContent = busy && isStreamConv && idx === thinkIdx ? "深度思考中…" : "已深度思考"; head.classList.add("ew-think-empty"); row.append(head) }
       } else {
         const body = document.createElement("div"); body.className = "ew-assistant"; body.innerHTML = mdToHtml(m.text || "")
-        if (busy && isStreamConv && idx === assistantIdx) { const caret = document.createElement("span"); caret.className = "ew-caret"; body.appendChild(caret) }
+        const isTyping = isStreamConv && idx === typeTarget && typeKind === "md"
+        if (isTyping || (busy && isStreamConv && idx === assistantIdx)) { const caret = document.createElement("span"); caret.className = "ew-caret"; body.appendChild(caret) }
+        if (isTyping) liveBody = body
         if (m.text) {
           const cp = document.createElement("button"); cp.className = "ew-copy"; cp.textContent = "复制"
           cp.addEventListener("click", () => { navigator.clipboard?.writeText(m.text || ""); cp.textContent = "已复制"; setTimeout(() => (cp.textContent = "复制"), 1200) })
@@ -633,6 +674,77 @@ function setup() {
     const c = streamConv!
     if (thinkIdx >= 0 && c.msgs[thinkIdx]?.role === "think") return thinkIdx
     c.msgs.push({ role: "think", text: "" }); thinkIdx = c.msgs.length - 1; return thinkIdx
+  }
+
+  // ---------- typewriter pacer ----------
+  // SSE deltas arrive in sentence-sized bursts; dumping them straight into the
+  // DOM reads as text "jumping". Instead, deltas land in a queue and an rAF
+  // loop releases characters at a steady pace — char-by-char when the backlog
+  // is small, speeding up smoothly as it grows so we never fall behind.
+  // While typing, only the live message's element repaints (not the whole log).
+  let typeQ = ""
+  let typeTarget = -1
+  let typeKind: "md" | "txt" = "md"
+  let typeRAF = 0
+  let liveBody: HTMLElement | null = null // captured by render() for the streaming msg
+  function typeStep(): number {
+    // 节奏标定：60fps 下 1字/帧=60字/秒（经典打字机），3字/帧=180字/秒。
+    // 积压越多越快（不让显示落后生成太远），但上限收着，保持"在打字"的观感。
+    const n = typeQ.length
+    if (n > 2400) return 32
+    if (n > 800) return 8
+    if (n > 240) return 3
+    return n > 0 ? 1 : 0
+  }
+  function paintLive() {
+    const c = streamConv
+    if (!c || typeTarget < 0) return
+    if (!liveBody || !liveBody.isConnected) { render(); return } // render() recaptures liveBody
+    const text = c.msgs[typeTarget]?.text || ""
+    if (typeKind === "txt") liveBody.textContent = text
+    else {
+      liveBody.innerHTML = mdToHtml(text)
+      const caret = document.createElement("span"); caret.className = "ew-caret"; liveBody.appendChild(caret)
+    }
+    if (log) log.scrollTop = log.scrollHeight
+  }
+  function typeTick() {
+    typeRAF = 0
+    if (typeTarget < 0 || !streamConv) { typeQ = ""; return }
+    const n = typeStep()
+    if (n > 0) {
+      streamConv.msgs[typeTarget].text = (streamConv.msgs[typeTarget].text || "") + typeQ.slice(0, n)
+      typeQ = typeQ.slice(n)
+      paintLive()
+    }
+    if (typeQ.length) typeRAF = requestAnimationFrame(typeTick)
+    else {
+      // 自然流完：落盘；若整轮已结束，撤掉光标。
+      saveState(state)
+      if (!busy) { typeTarget = -1; liveBody = null; render() }
+    }
+  }
+  function enqueueType(k: number, kind: "md" | "txt", s: string) {
+    if (typeTarget !== k || typeKind !== kind) flushType(false)
+    typeTarget = k; typeKind = kind
+    // 页签在后台时 rAF 会被浏览器节流甚至停摆——此时没有动画可言，直接落字，
+    // 用户切回来看到的就是完整进度而不是积压的队列。
+    if (document.hidden) {
+      streamConv!.msgs[k].text = (streamConv!.msgs[k].text || "") + typeQ + s
+      typeQ = ""
+      paintLive()
+      return
+    }
+    typeQ += s
+    if (!typeRAF) typeRAF = requestAnimationFrame(typeTick)
+  }
+  // Drain instantly (tool call / turn end / error): the remaining queue lands
+  // at once so later messages never appear before earlier text finishes.
+  function flushType(repaint = true) {
+    if (typeRAF) { cancelAnimationFrame(typeRAF); typeRAF = 0 }
+    if (typeTarget >= 0 && typeQ && streamConv) streamConv.msgs[typeTarget].text = (streamConv.msgs[typeTarget].text || "") + typeQ
+    typeQ = ""; typeTarget = -1; liveBody = null
+    if (repaint) render()
   }
 
   async function send() {
@@ -687,23 +799,25 @@ function setup() {
           if (ev.type === "session") { conv.sessionId = ev.sessionId; conv.forkFrom = null }
           else if (ev.type === "model") setActualModel(ev.model)
           else if (ev.type === "think_start") { ensureThink(); render() }
-          else if (ev.type === "think_delta") { const k = ensureThink(); streamConv!.msgs[k].text = (streamConv!.msgs[k].text || "") + ev.content; render() }
-          else if (ev.type === "delta") { const k = ensureAssistant(); streamConv!.msgs[k].text = (streamConv!.msgs[k].text || "") + ev.content; render() }
+          else if (ev.type === "think_delta") { const k = ensureThink(); enqueueType(k, "txt", ev.content) }
+          else if (ev.type === "delta") { const k = ensureAssistant(); enqueueType(k, "md", ev.content) }
           else if (ev.type === "result") {
+            // 不 flush：让结尾段照常逐字流完，否则最后一大块会瞬间砸出来。
             updateCtx(ev.usedTokens, ev.contextWindow)
             for (let i = streamConv!.msgs.length - 1; i >= 0; i--) if (streamConv!.msgs[i].role === "assistant") { streamConv!.msgs[i].meta = { durationMs: ev.durationMs, cost: ev.cost }; break }
             render(); saveState(state)
-          } else if (ev.type === "tool") { streamConv!.msgs.push({ role: "tool", tool: { id: ev.id, name: ev.name, input: ev.input } }); assistantIdx = -1; render(); saveState(state) }
+          } else if (ev.type === "tool") { flushType(false); streamConv!.msgs.push({ role: "tool", tool: { id: ev.id, name: ev.name, input: ev.input } }); assistantIdx = -1; render(); saveState(state) }
           else if (ev.type === "tool_result") { const tm = findTool(streamConv!, ev.id); if (tm?.tool) { tm.tool.result = ev.content; tm.tool.isError = ev.isError; tm.tool.done = true; render(); saveState(state) } }
-          else if (ev.type === "ask") { streamConv!.msgs.push({ role: "ask", ask: { askId: ev.askId, kind: ev.kind, questions: ev.questions, plan: ev.plan, tool: ev.tool, summary: ev.summary } }); assistantIdx = -1; render(); saveState(state) }
+          else if (ev.type === "ask") { flushType(false); streamConv!.msgs.push({ role: "ask", ask: { askId: ev.askId, kind: ev.kind, questions: ev.questions, plan: ev.plan, tool: ev.tool, summary: ev.summary } }); assistantIdx = -1; render(); saveState(state) }
           else if (ev.type === "turn_end") { assistantIdx = -1; thinkIdx = -1 }
           else if (ev.type === "wiki_synced") {
             // 本回合改写了 wiki 页面：已同步进站点，Quartz 热重建后浏览器会自动刷新。
+            flushType(false)
             const names = (ev.files || []).map((f: string) => f.replace(/\.md$/, "")).join("、")
             streamConv!.msgs.push({ role: "tool", tool: { id: "sync-" + Date.now(), name: "站点已同步", input: {}, result: `更新了 ${ev.count} 个页面${names ? "：" + names : ""}${ev.count > 8 ? " …" : ""}。站点正在热重建，稍候自动刷新即可看到。`, done: true } })
             render(); saveState(state)
           }
-          else if (ev.type === "error") { streamConv!.msgs.push({ role: "error", text: ev.message }); render(); saveState(state) }
+          else if (ev.type === "error") { flushType(false); streamConv!.msgs.push({ role: "error", text: ev.message }); render(); saveState(state) }
         }
       }
     } catch (e: any) {
