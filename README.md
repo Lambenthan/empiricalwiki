@@ -108,6 +108,8 @@ Set up EmpiricalWiki for me:
 4. Then tell me: where to drop my PDFs, and the exact command to ingest my first paper.
 ```
 
+Want to see a finished wiki before installing? The [`demo` branch](../../tree/demo) ships the full patient-capital example — 23 papers compiled into variables, mechanisms, identification strategies, and one cross-linked graph. Browse it on GitHub, or `git switch demo` locally and run `tools/view.sh`.
+
 Prefer to do it by hand? Same steps below.
 
 ```bash
@@ -540,6 +542,8 @@ EmpiricalWiki 严格遵循 Karpathy 原始 gist 的三层结构：
 3. 检查配置结果：.venv/ 已创建、.env 已生成、.claude/settings.local.json 存在。
 4. 完成后告诉我：论文 PDF 该放进哪个目录，以及消化第一篇论文的确切命令。
 ```
+
+想先看看建成后长什么样？[`demo` 分支](../../tree/demo)封存了完整的耐心资本示例库——23 篇文献编译成变量、机制、识别策略与一张互链图谱。可直接在 GitHub 上浏览，或本地 `git switch demo` 后跑 `tools/view.sh`。
 
 想手动安装？下面是同样的步骤。
 
