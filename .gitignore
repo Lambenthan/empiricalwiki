@@ -114,11 +114,11 @@ raw/notes/*.md
 # Third-party personal skill manager state (not part of the product)
 .agents/
 skills-lock.json
-
-# Book project (《EmpiricalWiki 实战手册》)
-# manim 生产脚本与文献清单不公开；章节正文和 GIF 公开
-book/code/
-book/data/
+# Symlinks into .agents/ created by the skill manager
+.claude/skills/gpt-image-2
+.claude/skills/kb-retriever
+.claude/skills/web-design-engineer
+.claude/skills/web-video-presentation
 book/assets/_tmp/
 book/assets/_manim_temp/
 media/

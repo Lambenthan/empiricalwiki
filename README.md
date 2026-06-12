@@ -332,7 +332,6 @@ EmpiricalWiki/
 ├── docs/                        # Runtime page templates & graph format docs
 ├── i18n/                        # Bilingual: en/ + zh/
 ├── config/                      # Configuration templates
-├── book/                        # Companion handbook chapters (《EmpiricalWiki 实战手册》)
 ├── obsidian-config/             # Optional Obsidian setup for browsing the wiki
 └── mcp-servers/                 # Cross-model review server
 ```
