@@ -367,7 +367,8 @@ def _gather_from_topic(topic: str, limit: int) -> list[dict[str, Any]]:
     if fetch_deepxiv is not None:
         try:
             dx_results = fetch_deepxiv.search(topic, limit=limit)
-        except Exception:
+        except Exception as exc:
+            print(f"warn: deepxiv search failed: {exc}", file=sys.stderr)
             dx_results = []
         for raw in dx_results or []:
             norm = _normalize_candidate(raw, source="deepxiv_search")

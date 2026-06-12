@@ -617,6 +617,15 @@ def prepare_inputs(
         for entry in sorted(papers_root.iterdir()):
             if entry.name == ".gitkeep":
                 continue
+            # Stray files (.DS_Store, editor swap files …) must not become
+            # usable:true paper entries in the manifest — apply the same
+            # suffix filter scan_local_papers uses. Directories pass through:
+            # they may hold tex bundles and are inspected downstream.
+            if entry.is_file() and (
+                entry.name.startswith(".")
+                or entry.suffix.lower() not in PAPER_SUFFIXES
+            ):
+                continue
             source_rel = _relative_to_project(entry, raw_root)
             recovered = normalized_handoffs.get(source_rel, {})
             recovered_title = recovered.get("title", "")

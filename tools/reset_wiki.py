@@ -133,11 +133,15 @@ def execute(project_root: Path, scopes: list[str]) -> dict:
         reset += 1
 
     if "checkpoints" in scopes:
-        cp_dir = wiki / ".checkpoints"
-        if cp_dir.exists():
-            for cp_file in cp_dir.glob("*.json"):
-                cp_file.unlink()
-                deleted += 1
+        # Two checkpoint locations exist: wiki/.checkpoints/ (skill state) and
+        # the project-root .checkpoints/ where /init writes its manifest
+        # (init-sources.json — the single source of truth for ingest order).
+        # Leaving the latter behind would mislead the next /init resume.
+        for cp_dir in (wiki / ".checkpoints", wiki.parent / ".checkpoints"):
+            if cp_dir.exists():
+                for cp_file in cp_dir.glob("*.json"):
+                    cp_file.unlink()
+                    deleted += 1
 
     return {"deleted_files": deleted, "reset_files": reset}
 

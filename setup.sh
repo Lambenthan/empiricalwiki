@@ -30,15 +30,6 @@ ok()    { echo -e "${GREEN}[OK]${NC}    $1"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 fail()  { echo -e "${RED}[FAIL]${NC}  $1"; }
 
-# Cross-platform sed -i (macOS BSD sed vs GNU sed)
-_sed_i() {
-  if [[ "$OSTYPE" == darwin* ]]; then
-    sed -i '' "$@"
-  else
-    sed -i "$@"
-  fi
-}
-
 # ── Language selection ──────────────────────────────────────────────
 LANG_CODE="en"
 _ARGS=("$@")
@@ -95,15 +86,22 @@ if command -v claude &>/dev/null; then
 else
     warn "Claude Code not found."
     echo ""
-    echo "  Claude Code is required to use ΩmegaWiki skills."
+    echo "  Claude Code is required to use EmpiricalWiki skills."
     echo "  Install with:"
     echo "    npm install -g @anthropic-ai/claude-code"
     echo ""
-    read -p "  Continue setup without Claude Code? [y/N] " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "  Install Claude Code first, then re-run setup.sh"
-        exit 1
+    # Only prompt when a human is attached. Agents (Codex/Cursor running this
+    # script per the README paste block) have no tty: `read` hits EOF, returns
+    # non-zero, and set -e would kill the whole setup silently.
+    if [ -t 0 ]; then
+        read -p "  Continue setup without Claude Code? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "  Install Claude Code first, then re-run setup.sh"
+            exit 1
+        fi
+    else
+        warn "Non-interactive shell: continuing without Claude Code (install it later)."
     fi
 fi
 
@@ -113,7 +111,7 @@ echo ""
 info "Setting up Python environment..."
 
 if [ -n "$VIRTUAL_ENV" ] || { [ -n "$CONDA_DEFAULT_ENV" ] && [ "$CONDA_DEFAULT_ENV" != "base" ]; }; then
-    warn "Active environment detected; setup always installs OmegaWiki into .venv"
+    warn "Active environment detected; setup always installs EmpiricalWiki into .venv"
 fi
 
 if [ -d ".venv" ]; then
@@ -156,11 +154,18 @@ else
     ok "Created .claude/settings.local.json"
 fi
 
+# Seed the wiki scaffold (index.md / log.md / graph files). These live only
+# in the user's working tree (gitignored), so a fresh clone lacks them.
+# `init` is write-if-missing — it never touches an existing wiki.
+"$VENV_PYTHON" tools/research_wiki.py init wiki >/dev/null
+ok "Wiki scaffold ready (index.md / log.md / graph)"
+
 # ── Step 3b: Activate language files ───────────────────────────────
 echo ""
 info "Activating language: $LANG_CODE"
 cp "$I18N_DIR/CLAUDE.md" CLAUDE.md
 for src in "$I18N_DIR/skills"/*/SKILL.md; do
+    [ -e "$src" ] || continue  # glob may not match; without this the literal '*' creates a junk dir
     skill_dir=$(dirname "$src")
     name=$(basename "$skill_dir")
     mkdir -p ".claude/skills/$name"

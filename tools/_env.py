@@ -1,4 +1,4 @@
-"""Shared environment loader for OmegaWiki tools.
+"""Shared environment loader for EmpiricalWiki tools.
 
 Loads environment variables from .env files so that API keys configured
 by the user are available even when Claude Code spawns a fresh shell.
@@ -27,7 +27,10 @@ def load() -> None:
         return
     _LOADED = True
 
-    for env_path in [pathlib.Path.home() / ".env", pathlib.Path(".env")]:
+    # Project .env resolves relative to this file (= <project>/tools/../.env),
+    # not the CWD — tools must find it no matter where they are invoked from.
+    project_env = pathlib.Path(__file__).resolve().parent.parent / ".env"
+    for env_path in [pathlib.Path.home() / ".env", project_env]:
         if not env_path.exists():
             continue
         try:
@@ -38,6 +41,10 @@ def load() -> None:
                 key, _, value = line.partition("=")
                 key = key.strip()
                 value = value.strip()
+                # Strip a matching pair of surrounding quotes:
+                # KEY="secret" must yield secret, not "secret".
+                if len(value) >= 2 and value[0] in "\"'" and value[-1] == value[0]:
+                    value = value[1:-1]
                 # Never override existing env vars
                 if key and key not in os.environ:
                     os.environ[key] = value

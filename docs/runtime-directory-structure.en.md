@@ -3,8 +3,10 @@
 > On-demand reference for the repo layout. The main `CLAUDE.md` keeps only the schema and rules that should stay in immediate context.
 
 ```text
+CLAUDE.md              ← runtime schema (repo root)
+AGENTS.md              ← entry point for any coding agent (points to CLAUDE.md)
+
 wiki/
-├── CLAUDE.md          ← runtime schema
 ├── index.md           ← content catalog (YAML)
 ├── log.md             ← chronological log (append-only)
 ├── papers/            ← structured empirical paper cards
@@ -39,11 +41,25 @@ raw/
 ├── notes/             ← user-owned .md notes
 └── web/               ← user-owned HTML / Markdown
 
+tools/
+├── research_wiki.py   ← wiki engine (slug / add-edge / rebuild-* / checkpoint)
+├── lint.py            ← structural validation (--fix / --suggest)
+├── stata-templates/   ← preset .do skeletons (TWFE / DID / PSM / IV / RDD)
+├── golden_check.py    ← ingest-quality regression checker (with tests/golden/)
+├── view.sh            ← local website view via Quartz
+├── update_demo.sh     ← refresh the demo branch without switching branches
+└── fetch_*.py / discover.py / remote.py / reset_wiki.py / prepare_paper_source.py
+
+tests/golden/          ← benchmark papers with expected-extraction checklists
+
+.claude/skills/        ← 29 skills (one SKILL.md per directory)
+
 config/
 ├── server.yaml        ← remote GPU server config (optional, needed for /exp-run --env remote)
 ├── server.yaml.example
-├── .env.example
 └── settings.local.json.example
+
+.env.example           ← environment template (repo root; setup copies it to .env)
 ```
 
 ## Fast Reminders

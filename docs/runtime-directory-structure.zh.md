@@ -3,8 +3,10 @@
 > 按需读取的仓库布局参考。主 `CLAUDE.md` 只保留需要常驻上下文的 schema 与约束。
 
 ```text
+CLAUDE.md              ← runtime schema（仓库根目录）
+AGENTS.md              ← 任意 coding agent 的入口（指向 CLAUDE.md）
+
 wiki/
-├── CLAUDE.md          ← runtime schema
 ├── index.md           ← 内容目录（YAML）
 ├── log.md             ← 时序日志（append-only）
 ├── papers/            ← 实证论文结构化卡片
@@ -39,11 +41,25 @@ raw/
 ├── notes/             ← 用户自有 .md 笔记
 └── web/               ← 用户自有 HTML / Markdown
 
+tools/
+├── research_wiki.py   ← wiki 引擎（slug / add-edge / rebuild-* / checkpoint）
+├── lint.py            ← 结构校验（--fix / --suggest）
+├── stata-templates/   ← 预置 do 模板（TWFE / DID / PSM / IV / RDD）
+├── golden_check.py    ← ingest 质量回归断言（配 tests/golden/）
+├── view.sh            ← Quartz 本地网站视图
+├── update_demo.sh     ← 不切分支更新 demo 分支
+└── fetch_*.py / discover.py / remote.py / reset_wiki.py / prepare_paper_source.py
+
+tests/golden/          ← 基准论文期望抽取清单
+
+.claude/skills/        ← 29 个 skill（每个目录一个 SKILL.md）
+
 config/
 ├── server.yaml        ← 远程 GPU 服务器配置（可选，/exp-run --env remote 时需要）
 ├── server.yaml.example
-├── .env.example
 └── settings.local.json.example
+
+.env.example           ← 环境变量模板（仓库根目录；setup 复制为 .env）
 ```
 
 ## 快速提醒

@@ -345,10 +345,13 @@ def main() -> None:
 
     except (APIError, AuthenticationError, RateLimitError, NotFoundError) as exc:
         _error_exit(f"DeepXiv API error: {exc}")
-    except ConnectionError as exc:
-        _error_exit(f"Connection error: {exc}")
     except ValueError as exc:
         _error_exit(f"Invalid input: {exc}")
+    except Exception as exc:
+        # requests' ConnectionError/Timeout are NOT subclasses of the builtin
+        # ConnectionError — without this catch-all, network failures escape
+        # the JSON error contract as raw tracebacks.
+        _error_exit(f"Connection error: {exc}")
 
 
 if __name__ == "__main__":

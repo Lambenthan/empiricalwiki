@@ -16,17 +16,24 @@
 
 ```bash
 # 1. 开一个一次性沙盒（不要碰自己的真 wiki）
-git worktree add /tmp/golden-run main && cd /tmp/golden-run
+#    --detach 必须加：main 已被你的主工作区占用，直接 checkout 同分支会被 git 拒绝
+git worktree add --detach /tmp/golden-run main && cd /tmp/golden-run
 python3 tools/research_wiki.py init wiki
 
-# 2. 用待测版本的 skill 重新 ingest 基准论文（在 Claude Code 里）
+# 2. 把基准论文 PDF 拷进沙盒（raw/ 内容不进 git，worktree 里没有）
+cp <你的基准论文 PDF> raw/papers/
+
+# 3. 用待测版本的 skill 重新 ingest（在 Claude Code 里）
 #    /empirical-ingest raw/papers/<代飞 2025 的 PDF>
 
-# 3. 机器断言
+# 4. 机器断言
 python3 tools/golden_check.py --wiki wiki --golden tests/golden/daifei-2025.golden.json
 
-# 4. 人工抽查：与 demo 分支上已校验的页面并排对比
-git show demo:wiki/variables/patient-capital.md | less
+# 5. 人工抽查：与 demo 分支上已校验的页面并排对比（fresh clone 用 origin/demo）
+git show origin/demo:wiki/variables/patient-capital.md | less
+
+# 6. 收尾
+git worktree remove --force /tmp/golden-run
 ```
 
 ## 断言设计（为什么不比对 slug）

@@ -26,8 +26,14 @@ def load_edges(wiki: Path) -> list[dict]:
     edges = []
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
-        if line:
+        if not line:
+            continue
+        try:
             edges.append(json.loads(line))
+        except json.JSONDecodeError:
+            # dedup_edges deliberately preserves malformed lines; skip them
+            # here the same way every other loader does.
+            continue
     return edges
 
 
