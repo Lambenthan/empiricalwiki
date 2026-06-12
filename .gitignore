@@ -55,6 +55,8 @@ wiki/.trash/
 wiki/.claude/
 
 # User wiki content (treat as private test data; users build their own wiki locally)
+# Exception: preset schema cards (curated reference content shipped with the repo)
+# are whitelisted one by one below the ignore rules.
 wiki/papers/*.md
 wiki/variables/*.md
 wiki/datasets/*.md
@@ -77,6 +79,10 @@ wiki/Summary/*.md
 wiki/foundations/*.md
 wiki/outputs/*
 !wiki/**/.gitkeep
+
+# Preset schema cards — shipped with the repo as starter content
+!wiki/datasets/csmar.md
+!wiki/datasets/hua-zheng-esg.md
 
 # Book project (《EmpiricalWiki 实战手册》)
 # manim 生产脚本与文献清单不公开；章节正文和 GIF 公开
