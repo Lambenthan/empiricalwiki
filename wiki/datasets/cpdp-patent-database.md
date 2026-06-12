@@ -25,7 +25,7 @@ date_updated: 2026-06-12
 
 ## Fields
 
-[[代飞-2025-耐心资本-双元创新-管理者短视]] 关键字段：申请人、申请年、IPC 主分类号，用于构造双元创新指标（按 IPC 与公司既有技术存量的重叠度区分探索式 / 利用式）。
+代飞-2025-耐心资本-双元创新-管理者短视 关键字段：申请人、申请年、IPC 主分类号，用于构造双元创新指标（按 IPC 与公司既有技术存量的重叠度区分探索式 / 利用式）。
 
 ## Merge Keys
 
@@ -50,7 +50,7 @@ date_updated: 2026-06-12
 
 ## Related Variables
 
-- [[exploratory-innovation]]、[[exploitative-innovation]] 直接构造自专利 IPC 分类。
+- exploratory-innovation、exploitative-innovation 直接构造自专利 IPC 分类。
 
 ## Sources
 

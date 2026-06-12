@@ -33,7 +33,7 @@ date_updated: 2026-06-12
 
 ## Fields
 
-[[唐亮-2025-耐心资本-esg表现]] 主要使用：
+唐亮-2025-耐心资本-esg表现 主要使用：
 
 - ESG 综合评分（连续，论文中已做 0–1 标准化）。
 - ESG 等级（九档赋值 9–1）。
@@ -67,12 +67,12 @@ date_updated: 2026-06-12
 
 ## Project Files
 
-本项目暂未导入华证 ESG 数据；复现 [[唐亮-2025-耐心资本-esg表现]] 需经上述渠道获取。
+本项目暂未导入华证 ESG 数据；复现 唐亮-2025-耐心资本-esg表现 需经上述渠道获取。
 
 ## Related Variables
 
-- 配套被解释变量：[[esg-performance]]（综合评分与等级 + E/S/G 三分项）。
-- 相关环境与可持续测度：[[environmental-performance]] · [[green-transformation]] · [[greenwashing]]。
+- 配套被解释变量：esg-performance（综合评分与等级 + E/S/G 三分项）。
+- 相关环境与可持续测度：environmental-performance · green-transformation · greenwashing。
 
 ## Sources
 
