@@ -22,8 +22,11 @@
 
 ## What's New
 
-**2026-06 — Agent-native onboarding**
+**2026-06 — Preset content, Stata templates, demo branch, agent-native onboarding**
 
+- **The wiki is no longer empty out of the box.** 14 preset schema cards now ship with the repo: 9 `datasets/` cards (CSMAR, Wind, CNRDS, 华证 ESG, DIB, iFinD, WinGo, CCER, patent sources — each with module inventory, merge keys, cleaning pitfalls, access channels) and 5 `identification/` strategy cards (staggered DID with modern estimators, PSM, IV, RDD, TWFE — each with assumptions, diagnostics, and the ways referees attack them). Every institutional fact web-verified, sources attached.
+- **Stata template library.** [`tools/stata-templates/`](tools/stata-templates/) holds five `.do` skeletons (TWFE / staggered DID / PSM / IV / RDD) with built-in `// CHECK:` review points, paired one-to-one with the strategy cards and wired into `/stata-plan --write-do`.
+- **A browsable demo.** The [`demo` branch](../../tree/demo) carries a complete worked example: 23 patient-capital papers compiled into variables, mechanisms, identification strategies, and one cross-linked graph. See what you're building before you build it.
 - **Setup is now something you hand to your agent, not something you follow.** The [Quick Start](#quick-start) opens with a copy-paste block for Claude Code / Codex / Cursor — your agent clones, configures, verifies, and reports back. A new [`AGENTS.md`](AGENTS.md) makes the repo operable by any coding agent, with `CLAUDE.md` as the single authoritative schema.
 
 **2026-05 — Theory layer + local website view**
@@ -486,8 +489,11 @@ Then run `claude` as usual. / 保存后正常运行 `claude` 即可。
 
 ### 最新更新
 
-**2026-06 — Agent-native 上手方式**
+**2026-06 — 预置内容、Stata 模板库、demo 分支、Agent-native 上手**
 
+- **开箱不再是空仓库。** 14 张预置 schema 卡随仓库发行：9 张 `datasets/` 卡（CSMAR、Wind、CNRDS、华证 ESG、DIB、同花顺 iFinD、WinGo、CCER、专利来源——每张含模块清单、合并键、清洗陷阱、获取渠道）+ 5 张 `identification/` 策略卡（交错 DID 与现代估计量、PSM、IV、RDD、双向固定效应——每张写明假设、诊断与审稿人的攻击点）。所有机构事实逐条联网核实并附来源。
+- **Stata 模板库。** [`tools/stata-templates/`](tools/stata-templates/) 五套带 `// CHECK:` 复核点的 do 骨架（TWFE / 交错 DID / PSM / IV / RDD），与策略卡一一配套，并接入 `/stata-plan --write-do`。
+- **可浏览的 demo。** [`demo` 分支](../../tree/demo)封存完整成品示例：23 篇耐心资本文献编译成变量、机制、识别策略与一张互链图谱——动手之前先看看建成后长什么样。
 - **安装步骤不再是给你看的，是给你的 agent 看的。** [快速开始](#快速开始)现在以一段可直接粘贴给 Claude Code / Codex / Cursor 的指令块开头——agent 替你 clone、配置、自检、汇报。新增 [`AGENTS.md`](AGENTS.md)，让任何 coding agent 都能直接操作本仓库，`CLAUDE.md` 仍是唯一权威 schema。
 
 **2026-05 — 理论层 + 本地网站展示**
