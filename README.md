@@ -22,6 +22,10 @@
 
 ## What's New
 
+**2026-06 — Agent-native onboarding**
+
+- **Setup is now something you hand to your agent, not something you follow.** The [Quick Start](#quick-start) opens with a copy-paste block for Claude Code / Codex / Cursor — your agent clones, configures, verifies, and reports back. A new [`AGENTS.md`](AGENTS.md) makes the repo operable by any coding agent, with `CLAUDE.md` as the single authoritative schema.
+
 **2026-05 — Theory layer + local website view**
 
 - **Theory-modeling layer.** Two new page types — `assumptions` (model primitives) and `propositions` (theorems/results) — and a `/theory-ingest` skill that compiles a modeling paper into its assumptions, propositions, solution concept, and testable implications. Theory and empirics now sit on **one shared graph**, bridged through `mechanisms` and `hypotheses`: the result a theory paper *proves* / *predicts* is the very mechanism / hypothesis an empirical paper *tests*. (Worked example: Stein 1988's managerial-myopia model now links straight to the A-share papers that test it.) See [`docs/runtime-theory-skeleton.zh.md`](docs/runtime-theory-skeleton.zh.md).
@@ -40,7 +44,7 @@
 
 ## What is EmpiricalWiki?
 
-Andrej Karpathy proposed LLM-Wiki: an LLM that **builds and maintains a persistent, structured wiki** from your sources — knowledge that compounds with every paper you feed it, instead of being rediscovered on every RAG query.
+Andrej Karpathy's [llm-wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) proposed the pattern: an LLM that **builds and maintains a persistent, structured wiki** from your sources — knowledge that compounds with every paper you feed it, instead of being rediscovered on every RAG query. The gist is intentionally abstract and invites domain-specific instantiation; **EmpiricalWiki is that instantiation for empirical economics, accounting, finance, and management.**
 
 **EmpiricalWiki takes that idea and bends it into a single shape: empirical research in accounting, finance, management, and economics.** The general LLM-wiki vision is too abstract for someone whose daily work is "怎么测耐心资本"、"哪个 IV 干净"、"双向 FE 还是公司 FE"、"Sasabuchi 拐点显著吗". EmpiricalWiki replaces the generic `entity / concept / synthesis` taxonomy with **10 entity types that map directly onto the empirical workflow** — variables, datasets, models, mechanisms, hypotheses, identification, robustness, heterogeneity, tables, and papers.
 
@@ -93,6 +97,18 @@ Every skill reads from and writes back to the same wiki. Knowledge compounds —
 ## Quick Start
 
 **Prerequisites:** Python 3.9+, Node.js 18+
+
+**The fastest way: don't follow these steps yourself — hand them to your agent.** Copy the block below into Claude Code (or Codex / Cursor) and let it do the setup:
+
+```text
+Set up EmpiricalWiki for me:
+1. Clone https://github.com/Lambenthan/empiricalwiki.git and cd into it.
+2. Run ./setup.sh --lang zh   (Windows: powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Lang zh; use --lang en for English).
+3. Verify the setup: .venv/ exists, .env was created, .claude/settings.local.json is present.
+4. Then tell me: where to drop my PDFs, and the exact command to ingest my first paper.
+```
+
+Prefer to do it by hand? Same steps below.
 
 ```bash
 # 1. Get the project
@@ -338,6 +354,8 @@ EmpiricalWiki ships in English and Chinese. The Chinese version is recommended f
 - [ ] Pre-built Stata template library (PSM / DID / IV / 双向 FE)
 - [ ] CSMAR / WRDS / 华证 ESG schema cards in `datasets/`
 - [ ] Demo wiki for non-PC topics (managerial myopia, ESG performance, ...)
+- [ ] Cross-project memory consolidation — when a research project wraps up, `/refine` distills what worked (variable variants, identification choices, dead ends) back into the wiki so the next project starts warmer
+- [ ] Query layer exposed as an MCP server, so any agent — not just the one in this repo — can search the wiki
 - [ ] Multi-user collaboration
 
 ## Contributing
@@ -465,6 +483,10 @@ Then run `claude` as usual. / 保存后正常运行 `claude` 即可。
 
 ### 最新更新
 
+**2026-06 — Agent-native 上手方式**
+
+- **安装步骤不再是给你看的，是给你的 agent 看的。** [快速开始](#快速开始)现在以一段可直接粘贴给 Claude Code / Codex / Cursor 的指令块开头——agent 替你 clone、配置、自检、汇报。新增 [`AGENTS.md`](AGENTS.md)，让任何 coding agent 都能直接操作本仓库，`CLAUDE.md` 仍是唯一权威 schema。
+
 **2026-05 — 理论层 + 本地网站展示**
 
 - **理论建模层。** 新增两类页面 —— `assumptions`（模型原语）与 `propositions`（命题/定理），以及 `/theory-ingest` skill，把一篇建模论文消化成它的假设、命题、解概念与可检验推论。理论与实证现在同处**一张图谱**，通过 `mechanisms` 与 `hypotheses` 接桥：一篇理论论文所**证明 / 预测**的机制和假设，正是实证论文所**检验**的那一个。（实例：Stein 1988 的管理者短视模型，直接连到检验它的中国 A 股论文。）详见 [`docs/runtime-theory-skeleton.zh.md`](docs/runtime-theory-skeleton.zh.md)。
@@ -507,6 +529,18 @@ EmpiricalWiki 严格遵循 Karpathy 原始 gist 的三层结构：
 ### 快速开始
 
 **前置条件：** Python 3.9+, Node.js 18+
+
+**最快的方式：这些步骤不用你自己做，交给你的 agent。** 把下面这段话整体粘贴给 Claude Code（或 Codex / Cursor），让它替你完成配置：
+
+```text
+帮我配置 EmpiricalWiki：
+1. clone https://github.com/Lambenthan/empiricalwiki.git 并进入目录。
+2. 运行 ./setup.sh --lang zh（Windows 用 powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Lang zh）。
+3. 检查配置结果：.venv/ 已创建、.env 已生成、.claude/settings.local.json 存在。
+4. 完成后告诉我：论文 PDF 该放进哪个目录，以及消化第一篇论文的确切命令。
+```
+
+想手动安装？下面是同样的步骤。
 
 ```bash
 git clone https://github.com/Lambenthan/empiricalwiki.git && cd empiricalwiki
