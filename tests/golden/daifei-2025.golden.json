@@ -1,0 +1,24 @@
+{
+  "description": "代飞 (2025) 耐心资本与双元创新——标准实证 ingest 基准。校验值取自 demo 分支已人工核对的抽取结果（14 条边）。",
+  "ingest_skill": "/empirical-ingest",
+  "paper_title_keywords": ["耐心资本", "双元创新"],
+  "min_edge_counts": {
+    "operationalizes": 4,
+    "uses_dataset": 2,
+    "estimates_model": 1,
+    "tests_mechanism": 1,
+    "tests_hypothesis": 3,
+    "addresses_endogeneity_with": 2,
+    "uses_robustness_check": 1
+  },
+  "required_pages": [
+    { "type": "variables", "keyword": "耐心资本" },
+    { "type": "variables", "keyword": "探索式创新" },
+    { "type": "variables", "keyword": "利用式创新" },
+    { "type": "variables", "keyword": "管理者短视" },
+    { "type": "datasets", "keyword": "CSMAR" },
+    { "type": "identification", "keyword": "工具变量" },
+    { "type": "mechanisms", "keyword": "管理者短视" },
+    { "type": "robustness", "keyword": "Sasabuchi" }
+  ]
+}

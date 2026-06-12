@@ -43,11 +43,17 @@
 
 ## 页面类型
 
-实证研究核心类型：`papers`、`variables`、`datasets`、`models`、`mechanisms`、`hypotheses`、`identification`、`robustness`、`heterogeneity`、`tables`。
+实证研究核心类型：`papers`、`variables`、`datasets`、`models`、`mechanisms`、`hypotheses`、`identification`、`robustness`、`heterogeneity`。`/empirical-ingest` 自动产出这九类。
 
 理论建模核心类型：`assumptions`（模型原语：参与人/偏好/信息/时序/约束）、`propositions`（形式化结论：命题/定理/引理）。`papers` 用 `paper_kind: empirical|theory|both` 区分范式，决定 ingest 走 `/empirical-ingest` 还是 `/theory-ingest`。
 
-保留的通用研究 wiki 类型：`concepts`、`topics`、`people`、`ideas`、`experiments`、`claims`、`Summary`、`foundations`。
+按需类型（有模板与目录，但只在特定 skill 或用户明确要求时才创建页面，平时为空是正常状态）：
+
+- `tables` — 仅当用户要求逐表复现某篇论文时建页；日常 ingest 把关键表格结论写进论文卡即可。
+- `concepts`、`people`、`claims` — 由通用 `/ingest` 与 `/novelty`、`/review` 维护；纯实证流程可能始终为空。
+- `ideas`、`experiments` — 由 `/ideate`、`/exp-design`、`/exp-run` 维护；经管实证优先用 `models/` + `identification/` + `robustness/`，`experiments/` 留给计算实验与仿真。
+- `topics`、`Summary` — 由 `/prefill`、`/survey` 维护。
+- `foundations` — 由 `/prefill` 预填教科书背景，终端节点不写反向链接。
 
 页面模板看 `docs/runtime-page-templates.zh.md`；理论建模 6 槽位骨架看 `docs/runtime-theory-skeleton.zh.md`；graph/index/log 参考看 `docs/runtime-support-files.zh.md`。
 
@@ -132,6 +138,7 @@
 - **skill 的用户可见参数归用户所有**：skill 的 `argument-hint` 中列出的 flag 与取值属于用户命令，而不是 agent 可自行决定的策略开关。不得仅根据仓库状态擅自补出、切换或删除这些参数。若用户未提供某个参数，只有在该 skill 明确写出省略时的默认或推导规则时，才可使用该默认或推导值；否则应保持未设置，必要时询问用户。不是用户可见参数的内部派生设置，skill 仍可自行推断。
 - **INIT MODE 交接由 manifest 驱动**：当 `/init` 写出 `.checkpoints/init-sources.json` 后，该 manifest 就是 ingest 顺序与规范来源路径的唯一真相来源。预处理后的本地输入应指向 `raw/tmp/`；外部引入论文应指向 `raw/discovered/`。
 - **graph/ 自动生成**：不得手动编辑 `graph/` 下的文件，仅通过 `tools/research_wiki.py` 维护。
+- **严禁在工作仓库切换到 demo 分支**：wiki 内容在 main 上是被忽略的工作区文件、在 demo 上是被跟踪文件，`git switch demo` 再切回会让 git 删光工作区 wiki。更新 demo 一律用 `tools/update_demo.sh`（plumbing 实现，不动 checkout）。
 - **实证抽取优先**：阅读实证论文时，先抽取变量、数据来源、模型设定、理论机制、异质性、稳健性和识别策略，再写通用概念或 idea。
 - **理论抽取优先**：阅读理论建模论文（`paper_kind: theory`）时，对着 `docs/runtime-theory-skeleton.zh.md` 的 6 槽位先抽取假设/原语、命题/定理、解概念、可检验推论，再写通用概念或 idea。形式化陈述逐字引用，禁止释义改写成立条件。
 - **双向链接**：写正向链接时同步写反向链接。
