@@ -22,7 +22,9 @@
 
 ## What's New
 
-**2026-06 — Preset content, Stata templates, demo branch, agent-native onboarding**
+**2026-06 — Claude Code in the browser, preset content, Stata templates, demo branch, agent-native onboarding**
+
+- **Talk to Claude Code inside the local site.** `tools/view.sh` now ships a chat panel in the right sidebar (design follows [Claudian](https://github.com/YishenTu/claudian)): run any skill, answer Claude's questions by clicking, switch model / thinking / permission — all without touching a terminal. Pages written during a chat turn hot-sync into the site. Local-only (`127.0.0.1`), powered by your own Claude Code login.
 
 - **The wiki is no longer empty out of the box.** 14 preset schema cards now ship with the repo: 9 `datasets/` cards (CSMAR, Wind, CNRDS, 华证 ESG, DIB, iFinD, WinGo, CCER, patent sources — each with module inventory, merge keys, cleaning pitfalls, access channels) and 5 `identification/` strategy cards (staggered DID with modern estimators, PSM, IV, RDD, TWFE — each with assumptions, diagnostics, and the ways referees attack them). Every institutional fact web-verified, sources attached.
 - **Stata template library.** [`tools/stata-templates/`](tools/stata-templates/) holds five `.do` skeletons (TWFE / staggered DID / PSM / IV / RDD) with built-in `// CHECK:` review points, paired one-to-one with the strategy cards and wired into `/stata-plan --write-do`.
@@ -487,7 +489,9 @@ Then run `claude` as usual. / 保存后正常运行 `claude` 即可。
 
 ### 最新更新
 
-**2026-06 — 预置内容、Stata 模板库、demo 分支、Agent-native 上手**
+**2026-06 — 浏览器里直接用 Claude Code、预置内容、Stata 模板库、demo 分支、Agent-native 上手**
+
+- **本地站点内嵌 Claude Code 对话面板。** `tools/view.sh` 现在自带右栏对话页签（设计参考 [Claudian](https://github.com/YishenTu/claudian)）：跑任何 skill、点选回答 Claude 的提问、切模型/思考/权限档位，全程不碰终端。对话中写入的页面自动热同步进站点。仅绑定本机（`127.0.0.1`），用你自己的 Claude Code 登录。
 
 - **开箱不再是空仓库。** 14 张预置 schema 卡随仓库发行：9 张 `datasets/` 卡（CSMAR、Wind、CNRDS、华证 ESG、DIB、同花顺 iFinD、WinGo、CCER、专利来源——每张含模块清单、合并键、清洗陷阱、获取渠道）+ 5 张 `identification/` 策略卡（交错 DID 与现代估计量、PSM、IV、RDD、双向固定效应——每张写明假设、诊断与审稿人的攻击点）。所有机构事实逐条联网核实并附来源。
 - **Stata 模板库。** [`tools/stata-templates/`](tools/stata-templates/) 五套带 `// CHECK:` 复核点的 do 骨架（TWFE / 交错 DID / PSM / IV / RDD），与策略卡一一配套，并接入 `/stata-plan --write-do`。

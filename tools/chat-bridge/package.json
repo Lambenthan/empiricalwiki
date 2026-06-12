@@ -1,0 +1,9 @@
+{
+  "name": "ew-chat-bridge",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "*"
+  }
+}

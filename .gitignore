@@ -131,5 +131,9 @@ media/
 # JetBrains / VS Code workspace files
 *.code-workspace
 
+# Chat bridge dependencies (Agent SDK install is local-only; a 200MB binary
+# once slipped into history through node_modules — never again)
+tools/chat-bridge/node_modules/
+
 # Quartz local site build (clone + node_modules + output, all local)
 site/

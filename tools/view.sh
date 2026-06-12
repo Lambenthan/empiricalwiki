@@ -7,11 +7,14 @@
 # wiki/ is modified.
 #
 # Usage:
-#   tools/view.sh            # build + serve at http://localhost:8080
+#   tools/view.sh            # build + serve at http://localhost:8080 (+ Claude 对话挂件)
 #   tools/view.sh --build    # build only (output in site/.quartz/public)
-#   tools/view.sh --update    # force re-pull Quartz, then build + serve
+#   tools/view.sh --update   # force re-pull Quartz, then build + serve
+#   tools/view.sh --no-chat  # serve without starting the Claude chat bridge
 #
-# Requires: Node.js (https://nodejs.org) and git.
+# Requires: Node.js (https://nodejs.org) and git. The chat bridge additionally
+# requires a logged-in local Claude Code (`claude` on PATH) — without it the
+# site still serves, just read-only.
 
 set -euo pipefail
 
@@ -25,10 +28,14 @@ QUARTZ_REF="v4.5.2"
 SITE_TITLE="EmpiricalWiki — 实证 × 理论研究 wiki"
 
 mode="serve"
-case "${1:-}" in
-  --build) mode="build" ;;
-  --update) mode="update" ;;
-esac
+nochat=0
+for arg in "$@"; do
+  case "$arg" in
+    --build) mode="build" ;;
+    --update) mode="update" ;;
+    --no-chat) nochat=1 ;;
+  esac
+done
 
 command -v node >/dev/null 2>&1 || { echo "✗ 需要先安装 Node.js: https://nodejs.org"; exit 1; }
 command -v git  >/dev/null 2>&1 || { echo "✗ 需要 git"; exit 1; }
@@ -69,6 +76,31 @@ if [ -f "$QZ/quartz.layout.ts" ]; then
   # tag hub-nodes and spreading nodes apart (higher repel, longer links).
   perl -0pi -e 's/Component\.Graph\(\)/Component.Graph({ localGraph: { depth: 2, showTags: false }, globalGraph: { showTags: false, repelForce: 0.8, linkDistance: 35, scale: 1.05 } })/' "$QZ/quartz.layout.ts" || true
 fi
+# --- Claude 对话挂件 -----------------------------------------------------------
+# Right-sidebar panel that talks to your LOCAL Claude Code through
+# tools/chat-bridge (Agent SDK, same core design as the Claudian Obsidian
+# plugin). Source of truth is tools/quartz-ext/ (tracked); installed into the
+# gitignored Quartz clone on every run so it survives re-clone / rebuild.
+EXT="$ROOT/tools/quartz-ext"
+if [ -d "$EXT" ] && [ -d "$QZ/quartz/components" ]; then
+  cp "$EXT/EwChat.tsx"        "$QZ/quartz/components/EwChat.tsx"
+  cp "$EXT/ewchat.inline.ts"  "$QZ/quartz/components/scripts/ewchat.inline.ts"
+  cp "$EXT/ewchat.scss"       "$QZ/quartz/components/styles/ewchat.scss"
+  # Register the component in components/index.ts (idempotent).
+  IDX="$QZ/quartz/components/index.ts"
+  if [ -f "$IDX" ] && ! grep -q "EwChat" "$IDX"; then
+    perl -0pi -e 's{import Comments from "\./Comments"}{import Comments from "./Comments"\nimport EwChat from "./EwChat"}' "$IDX"
+    perl -0pi -e 's{\n  Comments,\n}{\n  Comments,\n  EwChat,\n}' "$IDX"
+  fi
+  # Mount as the FIRST right-sidebar item: it switches the rail between the
+  # page views (Graph / ToC / Backlinks) and the Claude chat.
+  if ! grep -q "Component.EwChat()" "$QZ/quartz.layout.ts"; then
+    perl -0pi -e 's/(right: \[\s*)(Component\.Graph)/${1}Component.EwChat(),\n    $2/' "$QZ/quartz.layout.ts" || true
+    perl -0pi -e 's/right: \[\]/right: [Component.EwChat()]/g' "$QZ/quartz.layout.ts" || true
+  fi
+  echo "✓ Claude 对话挂件已安装"
+fi
+
 # Quartz traps the mouse wheel over the left sidebar (explorer sets
 # overscroll-behavior: contain). Override it so the page scrolls when the
 # explorer is at its boundary. Appended once (marker-guarded), compiled by build.
@@ -125,6 +157,23 @@ if [ "$mode" = "build" ]; then
   npx quartz build
   echo "✓ 站点已构建到 site/.quartz/public/"
 else
+  # --- Claude chat bridge (auto-start) ------------------------------------
+  # Starts alongside the site so the chat panel works out of the box. Needs a
+  # logged-in local `claude`; otherwise the site runs read-only.
+  BRIDGE_PID=""
+  if [ "$nochat" -eq 0 ] && command -v claude >/dev/null 2>&1; then
+    BRIDGE="$ROOT/tools/chat-bridge"
+    if [ ! -d "$BRIDGE/node_modules/@anthropic-ai/claude-agent-sdk" ]; then
+      echo "↻ 首次运行:安装对话桥接依赖(Agent SDK)..."
+      ( cd "$BRIDGE" && npm install --no-audit --no-fund )
+    fi
+    CLAUDE_BIN="$(command -v claude)" node "$BRIDGE/server.mjs" &
+    BRIDGE_PID=$!
+    trap '[ -n "$BRIDGE_PID" ] && kill "$BRIDGE_PID" 2>/dev/null || true' EXIT INT TERM
+    echo "✓ Claude 对话桥接已启动 (127.0.0.1:8788),站点右栏「Claude」页签即可对话"
+  elif [ "$nochat" -eq 0 ]; then
+    echo "⚠ 未找到 claude 命令,跳过对话挂件后端(站点只读)。安装 Claude Code 后重跑即可启用。"
+  fi
   echo "▶ 启动本地预览 → http://localhost:8080  (Ctrl-C 退出)"
   npx quartz build --serve
 fi

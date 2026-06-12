@@ -28,13 +28,27 @@ Go to `http://localhost:8080`. Press `Ctrl-C` to stop the preview.
 - **Right** backlinks per page (who references it).
 - **Graph view**: the whole knowledge network; the theory↔empirics bridge is visible at a glance.
 - **Top search**: full-text.
+- **"Claude" tab in the right rail**: talk to your local Claude Code directly (next section).
+
+## Claude Code in the browser (no terminal needed)
+
+Switch the right rail from「页面」to「Claude」and you get a full chat panel backed by your **local** Claude Code (same login, same skills). The core design follows [Claudian](https://github.com/YishenTu/claudian), the open-source Obsidian plugin that embeds Claude Code:
+
+- Type any skill (`/ask`, `/empirical-ingest raw/papers/x.pdf`, …) or just ask questions.
+- Multi-tab, session resume, fork-from-here; footer pills switch model, thinking, and permission level (full / confirm-each / plan-only).
+- When Claude needs your call (options, plan approval), you click inside the panel.
+- **Write-through sync**: pages written during a chat turn are synced into the site and hot-rebuilt — refresh and they're there.
+
+Requires a logged-in local Claude Code (`claude` on PATH). Without it the site still runs, read-only. The bridge binds to `127.0.0.1` only.
 
 ## Other modes
 
 ```bash
-tools/view.sh           # build + local preview (default)
+tools/view.sh           # build + local preview (default; auto-starts the chat bridge)
 tools/view.sh --build   # build only; output in site/.quartz/public/ (upload to any static host)
 tools/view.sh --update  # force-update the Quartz version, then build + preview
+tools/view.sh --no-chat # read-only site, skip the chat bridge
+tools/chat.sh           # start the bridge standalone (rarely needed)
 ```
 
 To publish online: upload `site/.quartz/public/` to GitHub Pages / Vercel / Netlify (all free).
