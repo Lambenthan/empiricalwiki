@@ -33,7 +33,7 @@ _script_dir = os.path.dirname(os.path.abspath(__file__))
 for _parent in [_script_dir, os.path.join(_script_dir, '..', '..'), os.getcwd()]:
     _env_path = os.path.join(os.path.realpath(_parent), '.env')
     if os.path.isfile(_env_path):
-        with open(_env_path) as _f:
+        with open(_env_path, encoding="utf-8") as _f:
             for _line in _f:
                 _line = _line.strip()
                 if _line and not _line.startswith('#') and '=' in _line:
